@@ -1,0 +1,172 @@
+/* =======================================
+   CUSTOMER SEGMENTATION (admin + cashier)
+   ======================================= */
+#customer-segmentation-page .cs-seg-stats{
+    display:grid; grid-template-columns:repeat(4, minmax(0, 1fr));
+    gap:14px; margin-bottom:18px;
+}
+#customer-segmentation-page .cs-seg-stat{
+    background:#fff; border:1px solid var(--ph-border-soft, #eef0f6);
+    border-radius:16px; padding:16px 18px;
+    display:flex; align-items:center; gap:14px;
+    box-shadow:0 2px 8px rgba(23,26,43,.06);
+}
+#customer-segmentation-page .cs-seg-stat strong{
+    display:block; font-size:1.25rem; color:#1e3a8a; line-height:1.15;
+}
+#customer-segmentation-page .cs-seg-stat span{
+    color:#6b7280; font-size:.78rem; font-weight:600;
+}
+#customer-segmentation-page .cs-seg-icon{
+    width:46px; height:46px; border-radius:14px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:1.05rem;
+}
+#customer-segmentation-page .cs-seg-blue{ background:#2563eb; }
+#customer-segmentation-page .cs-seg-green{ background:#10b981; }
+#customer-segmentation-page .cs-seg-amber{ background:#f59e0b; }
+#customer-segmentation-page .cs-seg-violet{ background:#8b5cf6; }
+#customer-segmentation-page .cs-seg-main,
+#customer-segmentation-page .cs-seg-charts .chart-card{
+    border-radius:18px; box-shadow:0 8px 24px rgba(23,26,43,.06);
+}
+#customer-segmentation-page .cs-seg-main{ margin-bottom:16px; }
+#customer-segmentation-page .cs-seg-toolbar{
+    display:flex; flex-wrap:wrap; justify-content:space-between;
+    align-items:flex-end; gap:12px; margin-bottom:16px;
+}
+#customer-segmentation-page .cs-seg-toolbar h3{ margin:0; color:#1e3a8a; font-size:1.05rem; }
+#customer-segmentation-page .cs-seg-toolbar h3 span,
+#customer-segmentation-page .chart-card h3 span{
+    color:#9ca3af; font-weight:500; font-size:.82rem;
+}
+#customer-segmentation-page #segmentEngineBadge{
+    margin-top:6px; font-size:12.5px; color:#64748b;
+}
+#customer-segmentation-page .ph-select-wrap{
+    display:flex; gap:10px; align-items:center;
+    background:#f8fafc; padding:6px 6px 6px 14px; border-radius:12px;
+    border:1px solid #eef0f6;
+}
+#customer-segmentation-page .ph-select-wrap label{
+    font-weight:700; color:#4b5563; font-size:12px; margin:0;
+}
+#customer-segmentation-page #segmentCountTop{
+    height:36px; padding:0 10px; border-radius:8px;
+    border:1px solid #d1d5db; background:#fff; font-weight:700; color:#1e3a8a;
+}
+#customer-segmentation-page .cs-seg-split{
+    display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);
+    gap:22px; align-items:center;
+}
+#customer-segmentation-page .cs-seg-chart{
+    position:relative; width:100%; height:320px; overflow:hidden;
+}
+#customer-segmentation-page .chart-card h3{
+    margin:0 0 10px; color:#1e3a8a; font-size:1rem;
+}
+#customer-segmentation-page #segmentLegend{
+    display:flex; flex-wrap:wrap; justify-content:center; gap:12px;
+    margin-top:14px; padding-top:14px; border-top:1px solid #f1f5f9;
+}
+#customer-segmentation-page .cs-seg-legend-item{
+    display:flex; align-items:center; gap:7px;
+    font-size:13px; color:#475569; font-weight:600;
+}
+#customer-segmentation-page .cs-seg-dot{
+    width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; vertical-align:middle;
+}
+#customer-segmentation-page .table-wrap{ overflow-x:auto; }
+#customer-segmentation-page .cs-seg-table{ width:100%; border-collapse:collapse; font-size:14px; }
+#customer-segmentation-page .cs-seg-table th{
+    text-align:left; padding:10px 12px; color:#6b7280; font-size:11px;
+    font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+    border-bottom:1px solid #eef0f6;
+}
+#customer-segmentation-page .cs-seg-table td{
+    padding:11px 12px; border-bottom:1px solid #f3f4f6; color:#334155;
+}
+#customer-segmentation-page .cs-seg-table tr:last-child td{ border-bottom:none; }
+#customer-segmentation-page .cs-seg-table td:first-child{ font-weight:700; color:#1e3a8a; }
+#customer-segmentation-page .btn-view-segment{
+    width:auto !important; margin:0 !important;
+    padding:6px 12px !important; font-size:12px !important;
+    background:#2563eb !important; box-shadow:none !important;
+}
+#customer-segmentation-page .cs-seg-charts{
+    display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px;
+}
+#customer-segmentation-page .cs-seg-viewonly{
+    display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px;
+    background:#eef2ff; color:#3730a3; font-size:11px; font-weight:700; vertical-align:middle;
+}
+#customer-segmentation-page .cs-seg-locked{
+    background:#f8fafc; border:1px solid #eef0f6; border-radius:12px;
+    padding:8px 14px; font-size:13px; font-weight:700; color:#1e3a8a;
+}
+#addPointsModalBackdrop.cs-seg-modal,
+#segMembersModalBackdrop.cs-seg-modal{
+    z-index:2600;
+}
+#addPointsModalBackdrop.cs-seg-modal[style*="flex"],
+#segMembersModalBackdrop.cs-seg-modal[style*="flex"]{
+    display:flex !important;
+}
+#addPointsModalBackdrop .cs-seg-modal-card,
+#segMembersModalBackdrop .cs-seg-modal-card{
+    background:#fff; border-radius:18px; padding:22px;
+    width:100%; max-width:400px;
+    box-shadow:0 20px 50px rgba(15,23,42,.25);
+    border:1px solid #eef0f6;
+}
+#segMembersModalBackdrop .cs-seg-modal-card{ max-width:560px; }
+#addPointsModalBackdrop .cs-seg-modal-head,
+#segMembersModalBackdrop .cs-seg-modal-head{
+    display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:4px;
+}
+#addPointsModalBackdrop .cs-seg-modal-head h3,
+#segMembersModalBackdrop .cs-seg-modal-head h3{ margin:0; color:#1e3a8a; font-size:1.05rem; }
+#addPointsModalBackdrop #addPointsCancelBtn,
+#segMembersModalBackdrop #segMembersCloseBtn{
+    width:28px !important; height:28px; margin:0 !important; padding:0 !important;
+    background:#f1f5f9 !important; color:#475569 !important; box-shadow:none !important;
+    border-radius:8px !important; justify-content:center;
+}
+#addPointsModalBackdrop .cs-seg-modal-sub,
+#segMembersModalBackdrop .cs-seg-modal-sub{ color:#64748b; margin:0 0 16px; font-size:13px; }
+#addPointsModalBackdrop label{
+    display:block; font-size:12px; font-weight:700; color:#4b5563; margin:0 0 6px;
+}
+#addPointsModalBackdrop select,
+#addPointsModalBackdrop input[type="number"]{
+    width:100%; height:40px; padding:0 12px; margin-bottom:14px;
+    border:1px solid #d1d5db; border-radius:8px; box-sizing:border-box; background:#fff;
+}
+#addPointsModalBackdrop #addPointsModalMessage{
+    min-height:18px; margin:0 0 12px; font-weight:600; font-size:13px;
+}
+#addPointsModalBackdrop .cs-seg-modal-actions{ display:flex; gap:10px; }
+#addPointsModalBackdrop #addPointsCancelBtn2,
+#segMembersModalBackdrop #segMembersCloseBtn2{
+    flex:1; background:#f1f5f9 !important; color:#475569 !important; box-shadow:none !important;
+}
+#addPointsModalBackdrop #addPointsConfirmBtn{
+    flex:1; background:#059669 !important; box-shadow:none !important;
+}
+#segMembersModalBackdrop .cs-seg-members-wrap{ max-height:360px; overflow:auto; margin-bottom:12px; }
+#segMembersModalBackdrop .cs-seg-members-table{ width:100%; border-collapse:collapse; font-size:13px; }
+#segMembersModalBackdrop .cs-seg-members-table th{
+    text-align:left; padding:8px 10px; color:#6b7280; font-size:11px; text-transform:uppercase;
+    border-bottom:1px solid #eef0f6;
+}
+#segMembersModalBackdrop .cs-seg-members-table td{
+    padding:8px 10px; border-bottom:1px solid #f3f4f6; color:#334155;
+}
+@media (max-width: 1100px){
+    #customer-segmentation-page .cs-seg-stats{ grid-template-columns:1fr 1fr; }
+    #customer-segmentation-page .cs-seg-split,
+    #customer-segmentation-page .cs-seg-charts{ grid-template-columns:1fr; }
+}
+@media (max-width: 560px){
+    #customer-segmentation-page .cs-seg-stats{ grid-template-columns:1fr; }
+}

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PharmaLink — Customer Portal</title>
+    <link rel="stylesheet" href="/assets/theme.css?v=solid-ui13">
+    <link rel="stylesheet" href="/customer/css/customer.css?v=guest-shop3">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>PharmaLink</h2>
+            <span class="role">CUSTOMER</span>
+        </div>
+        <div class="sidebar-nav">
+            <div class="nav-item active" data-target="home"><i class="fas fa-house"></i><span>Home</span></div>
+            <div class="nav-item" data-target="products"><i class="fas fa-capsules"></i><span>Shop Products</span></div>
+            <div class="nav-item" data-target="prescription"><i class="fas fa-file-prescription"></i><span>Prescriptions</span></div>
+            <div class="nav-item" data-target="orders" data-order-type="online"><i class="fas fa-receipt"></i><span>My Orders</span></div>
+            <div class="nav-item" data-target="profile"><i class="fas fa-user"></i><span>Profile</span></div>
+        </div>
+        <a href="/api/auth/logout" class="nav-item" id="customerAuthLink" style="margin-top:auto;border-top:1px solid rgba(255,255,255,0.08);">
+            <i class="fas fa-sign-out-alt"></i><span style="margin-left:6px">Logout</span>
+        </a>
+    </div>
+
+    <div class="main">
+        <div class="header">
+            <h3>Customer Portal</h3>
+            <div class="header-right">
+                <div class="notification" id="customerNotificationBell">
+                    <i class="fas fa-bell"></i>
+                    <div id="notification-dropdown" class="staff-notif-dropdown"></div>
+                </div>
+                <div class="header-profile" id="headerProfileTrigger" title="View Profile" onclick="document.querySelector('.nav-item[data-target=&quot;profile&quot;]')?.click()">
+                    <img id="headerProfileAvatar" src="https://cdn-icons-png.flaticon.com/512/2922/2922510.png" alt="Profile">
+                    <span id="headerWelcomeName">Welcome, Customer</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="content">
+<section id="home" class="active">
+<div class="dash-header">
+    <div>
+        <h2>Welcome back, <span id="homeFirstName">Customer</span>!</h2>
+        <p class="subtitle">A snapshot of your orders, items, and recent transactions.</p>
+    </div>
+</div>
+<div class="dash-stats">
+    <div class="dash-stat">
+        <div class="dash-stat-icon dash-stat-blue"><i class="fas fa-receipt"></i></div>
+        <div>
+            <span>Completed orders</span>
+            <strong id="homeStatOrders">0</strong>
+        </div>
+    </div>
+    <div class="dash-stat">
+        <div class="dash-stat-icon dash-stat-green"><i class="fas fa-money-bill-wave"></i></div>
+        <div>
+            <span>Total spent</span>
+            <strong id="homeStatSpent">₱0.00</strong>
+        </div>
+    </div>
+    <div class="dash-stat">
+        <div class="dash-stat-icon dash-stat-amber"><i class="fas fa-star"></i></div>
+        <div>
+            <span>Loyalty points</span>
+            <strong id="homeStatPoints">0</strong>
+        </div>
+    </div>
+    <div id="dashboard-datetime" class="dash-stat dash-stat-time">
+        <div class="dash-stat-icon dash-stat-slate"><i class="fas fa-clock"></i></div>
+        <div>
+            <span>Today</span>
+            <strong id="live-clock">—</strong>
+        </div>
+    </div>
+</div>
+<div class="dash-body">
+    <div class="dash-recent">
+        <div class="dash-recent-head">
+            <div>
+                <h3>Items you've ordered</h3>
+                <p>Most purchased medicines from your account</p>
+            </div>
+        </div>
+        <div class="dash-table-wrap">
+            <table class="dash-table dash-table-items">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Qty</th>
+                        <th>Spent</th>
+                        <th>Last ordered</th>
+                    </tr>
+                </thead>
+                <tbody id="homeOrderedItems">
+                    <tr><td colspan="4" class="dash-empty-cell">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="quick-actions">
+        <div class="dash-recent-head">
+            <div>
+                <h3>Quick actions</h3>
+                <p>Go to a page</p>
+            </div>
+        </div>
+        <div class="dash-qa-list">
+            <button type="button" class="quick-action-btn dash-qa-shop" onclick="document.querySelector('.nav-item[data-target=products]').click()"><i class="fas fa-capsules"></i><span>Shop Now</span></button>
+            <button type="button" class="quick-action-btn dash-qa-orders" onclick="document.querySelector('.nav-item[data-target=orders]').click()"><i class="fas fa-receipt"></i><span>View Orders</span></button>
+            <button type="button" class="quick-action-btn dash-qa-rx" onclick="document.querySelector('.nav-item[data-target=prescription]').click()"><i class="fas fa-file-prescription"></i><span>Prescription</span></button>
+            <button type="button" class="quick-action-btn dash-qa-profile" onclick="document.querySelector('.nav-item[data-target=profile]').click()"><i class="fas fa-user"></i><span>My Profile</span></button>
+        </div>
+    </div>
+</div>
+<div class="dash-logs">
+    <div class="dash-recent-head">
+        <div>
+            <h3>Transaction logs</h3>
+            <p>Online orders and walk-in sales</p>
+        </div>
+        <a href="javascript:void(0)" onclick="document.querySelector('.nav-item[data-target=orders]').click()">View all</a>
+    </div>
+    <div class="dash-table-wrap dash-logs-scroll">
+        <table class="dash-table dash-table-logs">
+            <thead>
+                <tr>
+                    <th>Txn ID</th>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Payment</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="homeTxnLogs">
+                <tr><td colspan="7" class="dash-empty-cell">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</section>
+
+<section id="products">
+<div class="products-header">
+    <h2>Shop Products</h2>
+    <p class="subtitle">Browse available medicines and add them to your pickup cart.</p>
+    <p id="guestShopNote" class="guest-shop-note" hidden>You're browsing as a guest. Log in to add items to cart and place a pickup order.</p>
+</div>
+<div class="shop-toolbar">
+    <div class="shop-search">
+        <i class="fas fa-search"></i>
+        <input type="text" id="searchInput" placeholder="Search by brand, generic name, or form..." autocomplete="off">
+    </div>
+    <label class="shop-cat-label" for="categoryFilter">Category</label>
+    <select id="categoryFilter">
+        <option value="">All Categories</option>
+    </select>
+</div>
+<div class="products-container">
+    <div class="product-grid-wrapper">
+        <div class="product-grid" id="productGrid">
+            <p class="shop-empty">Loading products...</p>
+        </div>
+    </div>
+    <aside class="cart-panel" id="cart-panel">
+        <div class="cart-header">
+            <h3><i class="fas fa-bag-shopping"></i> Your Cart</h3>
+            <button type="button" id="clear-cart-btn">Clear</button>
+        </div>
+        <p id="emptyCartMessage">Your cart is empty. Add medicines to request a pickup order.</p>
+        <table class="cart-table"><tbody id="cart-items"></tbody></table>
+        <div class="summary">
+            <p>Subtotal <strong>₱<span id="subtotalDisplay">0.00</span></strong></p>
+            <p>Total <strong>₱<span id="total-price">0.00</span></strong></p>
+        </div>
+        <label for="checkoutPaymentMethod">Pay in-store with</label>
+        <select id="checkoutPaymentMethod">
+            <option value="cash">Cash</option>
+            <option value="gcash">GCash</option>
+            <option value="maya">Maya</option>
+            <option value="card">Card (Debit/Credit)</option>
+            <option value="bank">Bank Transfer</option>
+        </select>
+        <button type="button" id="checkout-btn" disabled>Submit Order for Pickup</button>
+        <p class="shop-pay-hint">Choose how you will pay when you pick up. The cashier will collect this at the counter.</p>
+    </aside>
+</div>
+</section>
+
+<section id="prescription">
+<div class="prescription-header">
+    <h2>Upload Prescription</h2>
+    <p class="subtitle">Scan or upload a prescription to see the text, items, and prices.</p>
+</div>
+<div class="rx-layout">
+    <div class="upload-box rx-drop" id="rxDropzone">
+        <div class="rx-drop-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+        <h3>Drop your prescription here</h3>
+        <p>JPG, PNG, WEBP, or PDF, up to 5MB. You can also take a photo with your camera.</p>
+        <form id="prescriptionUploadForm" enctype="multipart/form-data">
+            <input type="file" id="prescriptionFile" name="prescription_file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" required>
+            <input type="file" id="prescriptionCameraCapture" accept="image/*" capture="environment">
+            <div class="rx-actions">
+                <label for="prescriptionFile" class="rx-choose"><i class="fas fa-folder-open"></i> Choose File</label>
+                <button type="button" id="rxCameraBtn" class="rx-choose"><i class="fas fa-camera"></i> Use Camera</button>
+                <button type="submit" class="rx-upload"><i class="fas fa-upload"></i> Upload</button>
+            </div>
+            <p class="rx-filename" id="rxFileName">No file selected</p>
+        </form>
+        <p id="prescriptionUploadMsg" class="rx-msg"></p>
+    </div>
+</div>
+<div class="rx-history">
+    <div class="rx-history-head">
+        <h3>Scan History</h3>
+        <p>Extracted text, matched items, and prices. Add to cart if the medicine is in stock.</p>
+    </div>
+    <div id="prescriptionHistoryBody" class="rx-history-list">
+        <div class="rx-empty">Loading...</div>
+    </div>
+</div>
+<div id="rxCameraOverlay" class="rx-modal" style="display:none;">
+    <div class="rx-modal-card rx-camera-card" role="dialog" aria-modal="true" aria-labelledby="rxCameraTitle">
+        <div class="rx-modal-head">
+            <h3 id="rxCameraTitle">Take a photo of your prescription</h3>
+            <button id="rxCameraClose" type="button" class="rx-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <video id="rxCameraVideo" autoplay playsinline muted></video>
+        <canvas id="rxCameraCanvas" hidden></canvas>
+        <p id="rxCameraHint" class="rx-modal-file">Hold the Rx steady, then capture.</p>
+        <div class="rx-camera-actions">
+            <button type="button" id="rxCameraSnap" class="rx-upload"><i class="fas fa-camera"></i> Capture</button>
+            <button type="button" id="rxCameraCancel" class="rx-choose">Cancel</button>
+        </div>
+    </div>
+</div>
+</section>
+
+<section id="orders">
+<div class="orders-header">
+    <h2>My Orders</h2>
+    <p class="subtitle">Track your online orders and in-store purchases.</p>
+</div>
+<div class="mo-stats">
+    <div class="mo-stat">
+        <div class="mo-stat-icon mo-stat-blue"><i class="fas fa-receipt"></i></div>
+        <div>
+            <strong id="moStatCount">0</strong>
+            <span>In this list</span>
+        </div>
+    </div>
+    <div class="mo-stat">
+        <div class="mo-stat-icon mo-stat-amber"><i class="fas fa-clock"></i></div>
+        <div>
+            <strong id="moStatOpen">0</strong>
+            <span>In progress</span>
+        </div>
+    </div>
+    <div class="mo-stat">
+        <div class="mo-stat-icon mo-stat-green"><i class="fas fa-coins"></i></div>
+        <div>
+            <strong id="moStatSpent">₱0.00</strong>
+            <span>Total in view</span>
+        </div>
+    </div>
+</div>
+<div class="mo-toolbar">
+    <div class="mo-filters">
+        <label>From
+            <input type="date" id="order_start_date">
+        </label>
+        <label>To
+            <input type="date" id="order_end_date">
+        </label>
+        <label class="mo-search">Search
+            <input type="search" id="order_search" placeholder="Order ID, status, payment..." autocomplete="off">
+        </label>
+        <button type="button" id="apply_order_filter_btn" class="mo-filter-btn"><i class="fas fa-filter"></i> Apply</button>
+    </div>
+    <div class="mo-tabs">
+        <button type="button" class="order-type-tab active" data-type="online"><i class="fas fa-globe"></i> Online Orders</button>
+        <button type="button" class="order-type-tab" data-type="walkin"><i class="fas fa-store"></i> Walk-in Sales</button>
+    </div>
+</div>
+<div class="mo-table-card">
+    <div class="mo-table-wrap">
+        <table class="mo-table">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Date</th>
+                    <th>Payment</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="ordersTableBody">
+                <tr><td colspan="6" class="mo-empty-cell">Select My Orders to load.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</section>
+
+<section id="profile">
+<div class="customer-profile-page">
+    <div class="customer-profile-header"><div><h2>My Profile</h2><p>Manage your account information and login password.</p></div></div>
+    <div class="customer-profile-layout">
+        <aside class="profile-summary-card">
+            <div class="profile-avatar-wrap">
+                <img id="profilePreview" src="https://cdn-icons-png.flaticon.com/512/2922/2922510.png" alt="Profile photo">
+                <label for="profile_image_input" class="profile-photo-btn" title="Change profile picture"><i class="fas fa-camera"></i></label>
+                <input type="file" id="profile_image_input" name="profile_image" accept="image/png,image/jpeg,image/webp" form="customerProfileForm">
+            </div>
+            <h3 id="profileCardName">Customer</h3>
+            <p class="profile-username">@<span id="profileUsername">customer</span></p>
+            <div class="profile-pill-row">
+                <span class="profile-pill profile-pill-blue"><i class="fas fa-id-card"></i><span id="profileType">Regular</span> Customer</span>
+                <span class="profile-pill profile-pill-gold"><i class="fas fa-star"></i><span id="profilePoints">0.00</span> Points</span>
+            </div>
+        </aside>
+        <div class="profile-main-col">
+        <div class="profile-details-card">
+            <form id="customerProfileForm" enctype="multipart/form-data">
+            <div class="profile-card-head">
+                <div><h3>Account Details</h3><p>Click Edit Profile to update your contact information.</p></div>
+                <div class="profile-action-row">
+                    <button type="button" id="profile_editBtn" class="profile-btn profile-btn-primary"><i class="fas fa-pen"></i>Edit Profile</button>
+                    <button type="submit" id="profile_saveBtn" class="profile-btn profile-btn-success" hidden><i class="fas fa-check"></i>Save Changes</button>
+                    <button type="button" id="profile_cancelBtn" class="profile-btn profile-btn-muted" hidden><i class="fas fa-xmark"></i> Cancel</button>
+                </div>
+            </div>
+                <div class="profile-form-grid">
+                    <label><span>First Name</span><input type="text" name="first_name" class="p-input" disabled required></label>
+                    <label><span>Middle Name</span><input type="text" name="middle_name" class="p-input" disabled></label>
+                    <label><span>Last Name</span><input type="text" name="last_name" class="p-input" disabled required></label>
+                    <label><span>Email</span><input type="email" name="email" class="p-input" disabled required></label>
+                    <label class="profile-field-wide"><span>Phone</span><input type="text" name="phone_number" class="p-input" disabled></label>
+                    <label class="profile-field-wide"><span>Address</span><textarea name="address" class="p-input" disabled></textarea></label>
+                </div>
+                <p id="profileFormMsg" class="profile-form-msg" aria-live="polite"></p>
+            </form>
+        </div>
+        <div class="profile-password-card">
+            <div class="profile-card-head">
+                <div>
+                    <h3><i class="fas fa-lock"></i> Change Password</h3>
+                    <p>This only updates your login password. It does not change your name, email, or contact info.</p>
+                </div>
+            </div>
+            <form id="customerPasswordForm">
+                <label>
+                    <span>Current password</span>
+                    <input type="password" name="current_password" autocomplete="current-password" required>
+                </label>
+                <label>
+                    <span>New password</span>
+                    <input type="password" name="new_password" autocomplete="new-password" placeholder="8+ chars, upper, lower, number, symbol" required>
+                </label>
+                <div id="pwHints" class="pw-hints"></div>
+                <label>
+                    <span>Confirm new password</span>
+                    <input type="password" name="confirm_password" autocomplete="new-password" required>
+                </label>
+                <button type="submit" class="profile-btn profile-btn-danger"><i class="fas fa-key"></i> Update Password</button>
+                <p id="passwordFormMsg" class="profile-form-msg" aria-live="polite"></p>
+            </form>
+        </div>
+        </div>
+    </div>
+</div>
+</section>
+        </div>
+    </div>
+
+    <div id="receiptModal" class="modal">
+        <div class="modal-content" style="width:360px; position:relative;">
+            <button id="closeReceiptModal" style="position:absolute; top:10px; right:14px; background:none; border:none; font-size:1.4em; cursor:pointer; color:#888;">&times;</button>
+            <div id="receiptContent"></div>
+        </div>
+    </div>
+    <div id="orderDetailsModal" class="mo-modal" style="display:none;">
+        <div class="mo-modal-card">
+            <button type="button" id="closeOrderDetailsModal" class="mo-modal-close" aria-label="Close">&times;</button>
+            <div id="orderDetailsContent"></div>
+        </div>
+    </div>
+
+    <script>
+        window.CUSTOMER_ID = null;
+        window.GLOBAL_UNIQUE_TOKEN_FROM_PHP_SESSION = 'no_token';
+    </script>
+    <script src="/assets/theme.js?v=solid-ui10"></script>
+    <script src="/assets/profile-validate.js?v=pv1"></script>
+    <script src="/customer/js/customer-boot.js?v=hdr-name1"></script>
+    <script src="/assets/activity-clicks.js?v=click1"></script>
+</body>
+</html>

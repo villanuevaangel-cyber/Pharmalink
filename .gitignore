@@ -1,0 +1,25 @@
+# Supabase / DB credentials — never commit real credentials
+.env
+config/config.php
+
+# Email/SMTP credentials — never commit real credentials
+config/mail_config.php
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Uploaded runtime files (keep the folder structure, ignore actual uploads)
+uploads/prescriptions/*
+uploads/profile_pictures/*
+!uploads/prescriptions/.gitkeep
+!uploads/profile_pictures/.gitkeep
+
+cache/*
+!cache/.gitkeep

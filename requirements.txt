@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+psycopg2-binary
+bcrypt
+python-dotenv
+python-multipart
+itsdangerous
+apscheduler
+rapidocr-onnxruntime
+openpyxl
+fpdf2

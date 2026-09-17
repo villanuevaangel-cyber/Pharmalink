@@ -1,0 +1,187 @@
+@import url('../../assets/theme.css');
+/* Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Body */
+body {
+  font-family: 'Poppins', sans-serif;
+  display: flex;
+  background: #f4f4f4;
+  min-height: 100vh;
+}
+
+/* Sidebar (same as POS) */
+.sidebar {
+  width: 220px;
+  height: 100vh;
+  background-color: #111;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  padding-top: 20px;
+  position: fixed;
+}
+
+.sidebar h2 {
+  text-align: center;
+  width: 100%;
+  margin-bottom: 30px;
+  font-size: 20px;
+}
+
+.sidebar a {
+  color: white;
+  text-decoration: none;
+  padding: 12px 20px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  transition: 0.3s;
+}
+
+.sidebar a:hover {
+  background-color: #333;
+}
+
+.sidebar a.active {
+  background-color: #0077b6;
+}
+
+.sidebar .logout {
+  margin-top: auto;
+  background-color: #ff4b5c;
+}
+
+/* Main content */
+.main-content {
+  margin-left: 220px;
+  padding: 30px 20px;
+  width: calc(100% - 220px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Header */
+header {
+  width: 100%;
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+header h1 {
+  color: #1e3a8a;
+  font-size: 28px;
+}
+
+/* Cards (POS-style) */
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+  margin-bottom: 30px;
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  padding: 20px;
+  flex: 1 1 200px;
+  min-width: 200px;
+  max-width: 250px;
+  text-align: center;
+}
+
+.card h3 {
+  font-size: 16px;
+  color: #1e3a8a;
+  margin-bottom: 10px;
+}
+
+.card .value {
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.change.up {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.change.down {
+  color: #b93232;
+  font-weight: 600;
+}
+
+/* Charts (POS-style) */
+.charts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+}
+
+.chart-box {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  padding: 20px;
+  flex: 1 1 400px;
+  min-width: 300px;
+  max-width: 600px;
+}
+
+/* POS-style buttons for future actions */
+button {
+  border: none;
+  background: #2563eb;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+button:hover {
+  background: #1d4ed8;
+}
+
+.add-btn {
+  background: #16a34a;
+  margin-bottom: 10px;
+}
+
+.checkout {
+  background: #16a34a;
+}
+
+.checkout:hover {
+  background: #15803d;
+}
+
+/* Responsive */
+@media screen and (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    padding: 20px;
+  }
+  .cards, .charts {
+    flex-direction: column;
+    align-items: center;
+  }
+  .card, .chart-box {
+    max-width: 90%;
+  }
+}

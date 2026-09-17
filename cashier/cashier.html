@@ -1,0 +1,2974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
+    <link rel="stylesheet" href="/assets/theme.css?v=solid-ui13">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=sales-log3">
+    <link rel="stylesheet" href="/shared/css/segmentation.css?v=seg4">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+
+<body>
+<!-- SIDEBAR NAVIGATION -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <h2>PharmaLink</h2>
+    <span class="role">CASHIER</span>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-item active" data-page="dashboard-page">
+      <i class="fas fa-home"></i><span>Dashboard</span>
+    </div>
+    <div class="nav-item" data-page="pos-page">
+      <i class="fas fa-cash-register"></i><span>Point of Sale</span>
+    </div>
+    <div class="nav-item" data-page="sales-report-page">
+      <i class="fas fa-file-invoice-dollar"></i><span>Sales Report</span>
+    </div>
+    <div class="nav-item" data-page="customer-segmentation-page">
+      <i class="fas fa-users"></i><span>Customer Segmentation</span>
+    </div>
+    <div class="nav-item" data-page="profile-page">
+      <i class="fas fa-user"></i><span>Profile</span>
+    </div>
+  </div>
+  <a href="/api/auth/logout" class="nav-item" style="margin-top:auto;border-top:1px solid rgba(255,255,255,0.04);">
+    <i class="fas fa-sign-out-alt"></i><span style="margin-left:6px">Logout</span>
+  </a>
+  </div>
+  
+
+
+<!-- MAIN CONTENT -->
+    <div class="main">
+<div class="header">
+    <h3>Cashier/Pharmacist Portal</h3>
+    <div class="header-right">
+        <div class="notification" id="staffNotificationBell">
+    <i class="fas fa-bell"></i>
+    <div id="staff-notification-dropdown" class="staff-notif-dropdown"></div>
+</div>
+        <div class="header-profile" id="headerProfileTrigger" title="View Profile" onclick="document.querySelector('.nav-item[data-page=&quot;profile-page&quot;]')?.click()">
+            <img id="headerProfileAvatar" src="https://cdn-icons-png.flaticon.com/512/2922/2922510.png" alt="Profile">
+            <span id="headerWelcomeName">Welcome, Cashier</span>
+        </div>
+    </div>
+</div>
+
+    <div class="content">
+
+  
+
+    
+  <div id="dashboard-page" class="page active">
+        <div class="cs-dash-header">
+            <div class="dashboard-header">
+                <h2>Dashboard Overview</h2>
+                <p class="subtitle">Monitor daily sales, transactions, and inventory status.</p>
+            </div>
+            <div id="dashboard-datetime" class="cs-dash-clock">
+                <span>Today</span>
+                <div id="live-clock"></div>
+            </div>
+        </div>
+
+        <div class="date-filter-container cs-dash-toolbar">
+            <label for="startDate">Start Date
+                <input type="date" id="startDate" name="startDate">
+            </label>
+            <label for="endDate">End Date
+                <input type="date" id="endDate" name="endDate">
+            </label>
+            <button type="button" id="applyFilterBtn" class="btn btn-primary"><i class="fas fa-filter"></i> Apply Filter</button>
+        </div>
+
+    <div class="stats-cards cs-dash-stats">
+        <div class="stat-card" title="Number of completed transactions in the selected date range">
+            <div class="stat-icon cs-icon-blue"><i class="fas fa-shopping-cart"></i></div>
+            <div class="stat-content">
+                <h3 id="stat-transactions">0</h3><p>Total Transactions</p>
+            </div>
+        </div>
+        <div class="stat-card" title="Total peso sales for the selected period">
+            <div class="stat-icon cs-icon-green"><i class="fas fa-peso-sign"></i></div>
+            <div class="stat-content">
+                <h3 id="stat-sales">₱0.00</h3><p>Total Sales</p>
+            </div>
+        </div>
+        <div class="stat-card" title="Total units/items sold (not just peso amount)">
+            <div class="stat-icon cs-icon-teal"><i class="fas fa-pills"></i></div>
+            <div class="stat-content">
+                <h3 id="stat-items-sold">0</h3><p>Items Sold</p>
+            </div>
+        </div>
+        <div class="stat-card" title="Active drugs with stock at or below minimum (excludes out-of-stock)">
+            <div class="stat-icon cs-icon-amber"><i class="fas fa-warehouse"></i></div>
+            <div class="stat-content">
+                <h3 id="stat-low-stock">0</h3><p>Low Stock Items</p>
+            </div>
+        </div>
+        <div class="stat-card" title="Active drugs with zero stock across all lots">
+            <div class="stat-icon cs-icon-red"><i class="fas fa-circle-xmark"></i></div>
+            <div class="stat-content">
+                <h3 id="stat-out-stock">0</h3><p>Out of Stock</p>
+            </div>
+        </div>
+        <div class="stat-card" title="Online orders awaiting processing">
+            <div class="stat-icon cs-icon-violet"><i class="fas fa-clock"></i></div>
+            <div class="stat-content">
+                <h3 id="stat-pending-orders">0</h3><p>Pending Orders</p>
+            </div>
+        </div>
+    </div>
+    <div class="dashboard-grid cs-dash-grid">
+        <div class="chart-card">
+            <h3>Daily Sales Performance</h3>
+            <div class="cs-chart-wrap">
+                <canvas id="dailySalesChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h3>Top Selling Medicines</h3>
+            <div class="cs-chart-wrap">
+                <canvas id="topMedicinesChart"></canvas>
+            </div>
+        </div>
+
+<div class="table-card">
+    <h3>Recent Transactions</h3>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr><th>Date</th><th>Time</th><th>Customer</th><th>Amount</th><th>Status</th></tr>
+            </thead>
+            <tbody id="recentTransactionsBody">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+        <div class="table-card">
+            <h3>Pending Prescriptions</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>Patient</th><th>Medicine</th><th>Status</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>John Doe</td><td>Amoxicillin</td><td><span class="status pending">Pending</span></td><td><button type="button" class="btn-process"><i class="fas fa-check"></i> Process</button></td></tr>
+                        <tr><td>Jane Smith</td><td>Paracetamol</td><td><span class="status in-progress">In Progress</span></td><td><button type="button" class="btn-complete"><i class="fas fa-check-double"></i> Complete</button></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        </div>
+</div>
+<div id="pos-page" class="page">
+    <div class="dashboard-header">
+        <h2>Point of Sale</h2>
+        <p class="subtitle">Process transactions and manage customer purchases efficiently.</p>
+    </div>
+
+    <div class="pos-mode-selector">
+        <button type="button" id="mode-products-btn" class="btn pos-mode-btn active-mode">
+            <i class="fas fa-cash-register"></i> Standard Sale
+        </button>
+        <button type="button" id="mode-orders-btn" class="btn pos-mode-btn">
+            <i class="fas fa-list-alt"></i> Online Order Management <span id="pendingOrdersBadge">0</span>
+        </button>
+    </div>
+    <div class="pos-top">
+        <div class="pos-left">
+            <div id="standard-sale-content">
+              <div id="posTableWrapper">
+                <h3>Available Products</h3>
+<div class="filter-row">
+    <input type="text" id="searchInput" placeholder="Search products...">
+    <select id="categoryFilter"></select>
+    <input type="text" id="barcodeManualInput" placeholder="Scan or type barcode, then Enter" autocomplete="off">
+    <button type="button" id="scanBarcodeBtn"><i class="fas fa-camera"></i> Scan Barcode</button>
+</div>
+
+                <table class="pos-inventory-table">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Brand Name</th>
+                            <th>Generic Name</th>
+                            <th>Dosage</th>
+                            <th>Form</th>
+                            <th>Stock</th>
+                            <th>Price</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="posInventoryBody">
+                        </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="online-order-content" style="display: none;">
+                <h3>Online Orders Queue</h3>
+                <p class="subtitle">Review prescriptions, process orders, or load "Ready for Pickup" transactions.</p>
+                <div class="table-wrapper">
+                    <table id="onlineOrdersTable" class="pos-inventory-table">
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Customer</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="onlineOrdersBody">
+
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            </div>
+        <div class="pos-right">
+            <div class="pos-cart-head">
+                <h3>Current Cart</h3>
+                <button type="button" id="removeAllCartIcon"
+                        class="btn btn-danger btn-sm"
+                        title="Remove All Items from Cart"
+                        onclick="clearCart()">
+                    <i class="fas fa-trash-can"></i> Clear Cart
+                </button>
+            </div>
+
+<div id="customer-inline">
+    <span>Customer: <strong id="selectedCustomer">Guest</strong></span>
+    <button type="button" id="selectCustomerBtn" title="Select Customer">
+        <i class="fa fa-pencil-alt"></i>
+    </button>
+</div>
+
+<div id="loyaltyPointsBox" style="display:none;">
+    <div class="pos-loyalty-pts">
+        <i class="fas fa-coins"></i> Available Points: <span id="availablePointsDisplay">0.00</span>
+    </div>
+    <label>
+        <input type="checkbox" id="applyPointsToggle">
+        Apply Points as Discount (Max ₱<span id="maxPointsDiscountDisplay">0.00</span>)
+    </label>
+</div>
+
+            <div id="customerModal" class="modal">
+                <div class="pos-modal-card">
+                    <h4>Select Customer (Optional)</h4>
+                    <input type="text" id="customerSearch" placeholder="Type customer name...">
+                    <ul id="customerList"></ul>
+                    <button type="button" id="closeModal"><i class="fas fa-xmark"></i> Close</button>
+                </div>
+            </div>
+
+            <table class="pos-cart-table">
+                <thead></thead>
+                <tbody id="cartTable"></tbody>
+            </table>
+
+            <div class="summary">
+                <p class="pos-total-row">Total: <span id="total">₱0.00</span></p>
+                <div class="pos-scpwd">
+                    <label for="scPwdToggle">
+                        <input type="checkbox" id="scPwdToggle">
+                        Apply Senior Citizen/PWD Discount
+                    </label>
+                </div>
+
+                <p class="pos-sum-line">Subtotal: <span id="subtotalDisplay">₱0.00</span></p>
+                <p class="pos-sum-line"><span id="taxLabel">Tax (0%):</span> <span id="taxDisplay">₱0.00</span></p>
+                <label for="discountInput">Discount (%):</label>
+                <input type="number" id="discountInput" placeholder="Enter % off" min="0" max="100" value="0">
+                <p class="pos-discount-line">Discount Applied: <span id="discountApplied">₱0.00</span></p>
+                <p id="pointsDiscountRow" style="display:none;">Points Discount: <span id="pointsDiscountDisplay">₱0.00</span></p>
+
+                <label for="paymentMethodSelect">Payment Method:</label>
+                <select id="paymentMethodSelect">
+                    <option value="cash">Cash</option>
+                    <option value="gcash">GCash</option>
+                    <option value="maya">Maya</option>
+                </select>
+
+                <div id="cashPaymentFields">
+                    <label>Cash:</label>
+                    <input type="number" id="cashInput" placeholder="Enter amount" min="0" step="0.01" inputmode="decimal">
+                    <p class="pos-sum-line">Change: <span id="change">₱0.00</span></p>
+                </div>
+                <div id="ewalletPaymentFields" style="display:none;">
+                    <div class="pos-pay-qr-box">
+                        <div id="posPayQr" aria-label="Customer payment QR code"></div>
+                        <p class="pos-pay-qr-title">I-scan ng customer ang <span id="ewalletMethodLabel">GCash</span> QR</p>
+                        <p class="pos-pay-qr-amt">₱<span id="ewalletTotalDisplay">0.00</span></p>
+                    </div>
+                    <label for="paymentReferenceInput">Reference No.</label>
+                    <div class="pos-ref-row">
+                        <input type="text" id="paymentReferenceInput" placeholder="Auto-generated, or type / scan">
+                        <button type="button" id="regenPaymentRefBtn" title="Generate a new reference and QR"><i class="fas fa-rotate"></i></button>
+                        <button type="button" id="scanPaymentQrBtn" title="Scan customer's GCash/Maya QR for the reference"><i class="fas fa-camera"></i></button>
+                    </div>
+                    <p class="pos-ewallet-hint">Reference number is generated automatically with the QR. Kung hindi ma-scan ng customer, i-scan ng cashier ang QR nila o i-type ang reference.</p>
+                </div>
+
+                <button type="button" id="confirmSale"><i class="fas fa-check"></i> Confirm Sale</button>
+            </div>
+        </div>
+        </div>
+
+<div id="barcodeScannerModal" class="modal">
+    <div class="pos-scan-card">
+        <div class="pos-scan-head">
+            <h3>Scan Product Barcode</h3>
+            <span id="closeBarcodeScannerModal">&times;</span>
+        </div>
+        <video id="barcodeScannerVideo" playsinline></video>
+        <p id="barcodeScannerStatus">Point the camera at a barcode, or type it below.</p>
+        <input type="text" id="barcodeModalManualInput" placeholder="Type barcode and press Enter">
+    </div>
+</div>
+        </div>
+        
+        
+        <!-- CUSTOMER SEGMENTATION PAGE -->
+
+<div id="customer-segmentation-page" class="page">
+
+  <div class="dashboard-header">
+    <h2>Customer Segmentation</h2>
+    <p class="subtitle">Read-only. These groups are set by Admin — you can view members, not change clustering or points.</p>
+  </div>
+
+  <div class="cs-seg-stats">
+    <div class="cs-seg-stat">
+      <div class="cs-seg-icon cs-seg-blue"><i class="fas fa-users"></i></div>
+      <div>
+        <strong id="segTotalCustomers">0</strong>
+        <span>Total Customers</span>
+      </div>
+    </div>
+    <div class="cs-seg-stat">
+      <div class="cs-seg-icon cs-seg-green"><i class="fas fa-user-check"></i></div>
+      <div>
+        <strong id="segActiveCustomers">0</strong>
+        <span>Active Buyers</span>
+      </div>
+    </div>
+    <div class="cs-seg-stat">
+      <div class="cs-seg-icon cs-seg-amber"><i class="fas fa-peso-sign"></i></div>
+      <div>
+        <strong id="segAvgSpend">₱0.00</strong>
+        <span>Avg. Spend / Customer</span>
+      </div>
+    </div>
+    <div class="cs-seg-stat">
+      <div class="cs-seg-icon cs-seg-violet"><i class="fas fa-star"></i></div>
+      <div>
+        <strong id="segTopType">—</strong>
+        <span>Top Customer Type</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-card cs-seg-main">
+    <div class="cs-seg-toolbar">
+      <div>
+        <h3>Customer Segments <span>— by real spend</span></h3>
+        <div id="segmentEngineBadge"></div>
+      </div>
+      <div class="ph-select-wrap">
+        <label for="segmentCountTop">Segments</label>
+        <select id="segmentCountTop">
+          <option value="2">2 Segments</option>
+          <option value="3" selected>3 Segments</option>
+          <option value="4">4 Segments</option>
+          <option value="5">5 Segments</option>
+        </select>
+      </div>
+    </div>
+    <div class="cs-seg-split">
+      <div>
+        <div class="cs-seg-chart">
+          <canvas id="customerSegmentationPie"></canvas>
+        </div>
+        <div id="segmentLegend"></div>
+      </div>
+      <div class="table-wrap">
+        <table class="cs-seg-table">
+          <thead>
+            <tr>
+              <th>Segment</th>
+              <th>Customers</th>
+              <th>Avg. Spend</th>
+              <th>Members</th>
+            </tr>
+          </thead>
+          <tbody id="segmentTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="cs-seg-charts">
+    <div class="chart-card">
+      <h3>Customer Type Distribution</h3>
+      <div class="cs-seg-chart">
+        <canvas id="customerTypeChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Purchase Frequency <span>(orders / customer)</span></h3>
+      <div class="cs-seg-chart">
+        <canvas id="purchaseFrequencyChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Spending Tier <span>(total ₱ / customer)</span></h3>
+      <div class="cs-seg-chart">
+        <canvas id="spendingTierChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<div id="sales-report-page" class="page">
+    <div class="dashboard-header">
+        <h2>Sales Report &amp; Transaction Logs</h2>
+        <p class="subtitle">Review completed POS sales, payment method, and transaction details.</p>
+    </div>
+
+    <div class="date-filter-container cs-dash-toolbar sr-toolbar">
+        <label for="srStartDate">Start Date
+            <input type="date" id="srStartDate">
+        </label>
+        <label for="srEndDate">End Date
+            <input type="date" id="srEndDate">
+        </label>
+        <label for="srPaymentFilter">Payment
+            <select id="srPaymentFilter">
+                <option value="">All methods</option>
+                <option value="cash">Cash</option>
+                <option value="gcash">GCash</option>
+                <option value="maya">Maya</option>
+            </select>
+        </label>
+        <label for="srSearch" class="sr-search">Search
+            <input type="text" id="srSearch" placeholder="Txn ID, customer, cashier, reference" autocomplete="off">
+        </label>
+        <button type="button" id="srApplyBtn"><i class="fas fa-filter"></i> Apply</button>
+        <button type="button" id="srPrintBtn" class="sr-print-btn"><i class="fas fa-print"></i> Print</button>
+    </div>
+
+    <div class="stats-cards cs-dash-stats sr-stats">
+        <div class="stat-card">
+            <div class="stat-icon cs-icon-blue"><i class="fas fa-receipt"></i></div>
+            <div class="stat-content"><h3 id="srCount">0</h3><p>Transactions</p></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon cs-icon-green"><i class="fas fa-peso-sign"></i></div>
+            <div class="stat-content"><h3 id="srTotal">₱0.00</h3><p>Total Sales</p></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon cs-icon-teal"><i class="fas fa-boxes"></i></div>
+            <div class="stat-content"><h3 id="srItems">0</h3><p>Items Sold</p></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon cs-icon-violet"><i class="fas fa-wallet"></i></div>
+            <div class="stat-content"><h3 id="srPayMix">—</h3><p>Cash / GCash / Maya</p></div>
+        </div>
+    </div>
+
+    <div class="table-card sr-table-card">
+        <h3>Transaction Logs</h3>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Txn ID</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Customer</th>
+                        <th>Cashier</th>
+                        <th>Payment</th>
+                        <th>Reference</th>
+                        <th>Amount</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="srTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="srDetailModal" class="sr-modal" hidden>
+    <div class="sr-modal-card" role="dialog" aria-labelledby="srDetailTitle">
+        <div class="sr-modal-head">
+            <h3 id="srDetailTitle">Transaction</h3>
+            <button type="button" id="srDetailClose" aria-label="Close">&times;</button>
+        </div>
+        <div id="srDetailBody" class="sr-modal-body"></div>
+    </div>
+</div>
+
+
+<!-- CASHIER PROFILE PAGE (REPLACEMENT SECTION) -->
+<div id="profile-page" class="page">
+  <div class="customer-profile-page">
+    <div class="customer-profile-header">
+        <div>
+            <h2>My Profile</h2>
+            <p>Manage your account information and login password.</p>
+        </div>
+    </div>
+
+    <div class="customer-profile-layout">
+        <aside class="profile-summary-card">
+            <div class="profile-avatar-wrap">
+                <img id="profile_avatar" src="https://cdn-icons-png.flaticon.com/512/2922/2922510.png" alt="Profile photo">
+                <label for="profile_avatar_input" class="profile-photo-btn" title="Change profile picture">
+                    <i class="fas fa-camera"></i>
+                </label>
+                <input type="file" id="profile_avatar_input" accept="image/png,image/jpeg,image/webp,image/gif">
+            </div>
+
+            <h3 id="profileCardName">Cashier</h3>
+            <p class="profile-username">@cashier</p>
+
+            <div class="profile-pill-row">
+                <span class="profile-pill profile-pill-blue"><i class="fas fa-cash-register"></i>Cashier/Pharmacist</span>
+            </div>
+        </aside>
+
+        <div class="profile-main-col">
+        <div class="profile-details-card">
+            <div class="profile-card-head">
+                <div>
+                    <h3>Account Details</h3>
+                    <p>Click Edit Profile to update your contact information.</p>
+                </div>
+                <div class="profile-action-row">
+                    <button type="button" id="profile_editBtn" class="profile-btn profile-btn-primary"><i class="fas fa-pen"></i>Edit Profile</button>
+                    <button type="button" id="saveBtn" class="profile-btn profile-btn-success" hidden><i class="fas fa-check"></i>Save Changes</button>
+                    <button type="button" id="profile_cancelBtn" class="profile-btn profile-btn-muted" hidden><i class="fas fa-xmark"></i> Cancel</button>
+                </div>
+            </div>
+
+            <div class="profile-form-grid">
+                <label>
+                    <span>First Name</span>
+                    <input type="text" id="first_name" class="p-input" value="" disabled required>
+                </label>
+                <label>
+                    <span>Middle Name</span>
+                    <input type="text" id="middle_name" class="p-input" value="" disabled>
+                </label>
+                <label>
+                    <span>Last Name</span>
+                    <input type="text" id="last_name" class="p-input" value="" disabled required>
+                </label>
+                <label>
+                    <span>Email</span>
+                    <input type="email" id="email" class="p-input" value="" disabled required>
+                </label>
+                <label class="profile-field-wide">
+                    <span>Phone</span>
+                    <input type="text" id="phone_number" class="p-input" value="" disabled>
+                </label>
+                <label class="profile-field-wide">
+                    <span>Address</span>
+                    <textarea id="address" class="p-input" disabled></textarea>
+                </label>
+            </div>
+
+            <p id="message" class="profile-form-msg" aria-live="polite"></p>
+        </div>
+
+        <div class="profile-password-card">
+            <div class="profile-card-head">
+                <div>
+                    <h3><i class="fas fa-lock"></i> Change Password</h3>
+                    <p>This only updates your login password. It does not change your name, email, or contact info.</p>
+                </div>
+            </div>
+            <form id="cashierPasswordForm">
+                <label>
+                    <span>Current password</span>
+                    <input type="password" id="current_password" autocomplete="current-password">
+                </label>
+                <label>
+                    <span>New password</span>
+                    <input type="password" id="new_password" autocomplete="new-password" placeholder="8+ chars, upper, lower, number, symbol">
+                </label>
+                <div id="pwHints" class="pw-hints"></div>
+                <label>
+                    <span>Confirm new password</span>
+                    <input type="password" id="confirm_password" autocomplete="new-password">
+                </label>
+                <button type="submit" id="changePasswordBtn" class="profile-btn profile-btn-danger"><i class="fas fa-key"></i> Update Password</button>
+                <p id="password-message" class="profile-form-msg" aria-live="polite"></p>
+            </form>
+        </div>
+        </div>
+    </div>
+  </div>
+</div>
+<!-- /#profile-page -->
+
+
+<!--- REVIEW ORDER MODAL -->
+
+<div id="orderReviewModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="reviewOrderTitle">Review Order #ORD-XXX</h2>
+            <span class="close" id="closeOrderReviewModal" onclick="document.getElementById('orderReviewModal').style.display='none'">&times;</span>
+        </div>
+        <p>Customer: <strong id="reviewCustomerName"></strong></p>
+        <p>Status: <span id="reviewOrderStatus"></span></p>
+        
+        <hr>
+        
+        <h3>Items Ordered:</h3>
+        <table id="reviewItemsTable" style="width:100%; border-collapse: collapse;">
+            <thead>
+                <tr>
+                    <th style="border-bottom: 1px solid #ccc;">Product</th>
+                    <th style="border-bottom: 1px solid #ccc; width: 60px;">Qty</th>
+                    <th style="border-bottom: 1px solid #ccc; width: 80px;">Stock</th>
+                    <th style="border-bottom: 1px solid #ccc; width: 80px;">Status</th>
+                </tr>
+            </thead>
+            <tbody id="reviewItemsBody">
+                </tbody>
+        </table>
+
+        <div id="prescriptionContainer" style="margin-top: 20px; text-align: center; border: 1px dashed #ccc; padding: 10px; display:none;">
+            <h4>Prescription Image:</h4>
+            <img id="prescriptionImage" src="" alt="Prescription" style="max-width: 100%; height: auto; cursor: pointer;">
+        </div>
+
+        <hr>
+
+        <div style="text-align: right; margin-top: 20px;">
+            <button id="processOrderBtn" class="btn-success" style="padding: 10px 20px; background: #5cb85c; color: white; border: none; cursor: pointer;"><i class="fas fa-box-open"></i> Set to Ready for Pickup</button>
+            <button id="cancelOrderBtn" class="btn-danger" style="padding: 10px 20px; background: #d9534f; color: white; border: none; cursor: pointer; margin-left: 10px;"><i class="fas fa-ban"></i> Cancel Order</button>
+        </div>
+
+        <p id="reviewMessage" style="color: red; margin-top: 10px;"></p>
+    </div>
+</div>
+
+
+<script src="/cashier/js/cashier-boot.js?v=hdr-name1"></script>
+<script>window.SEGMENTATION_MANAGE = false;</script>
+<script src="/shared/js/segmentation.js?v=seg2"></script>
+<script src="/assets/profile-validate.js?v=pv1"></script>
+<script>
+// =======================================================
+// 1. GLOBAL VARIABLES & CONSTANTS (Available to ALL functions)
+// =======================================================
+let cart = []; 
+const TAX_RATE = 0.12; // 12% Tax rate
+const POINTS_TO_PESO_RATE = 0.30; // 1 loyalty point = ₱0.30 discount (must match transactions.php)
+let taxLabel;
+let pointsDiscountValue = 0; // authoritative peso value of points currently applied, set inside updateCart()
+
+// Declare variables that will hold the DOM elements
+let tbody, cartTable, totalDisplay, subtotalDisplay, taxDisplay, cashInput, changeDisplay, discountInput, discountApplied, confirmSale;
+let selectedCustomer = null;
+
+let currentOnlineOrderId = null;
+let activePromos = []; // fetched once on load; matched against drug_id first, then category
+
+function findPromoForItem(drugId, category) {
+    // Priority order: exact single-drug promo > multi-product ("Specific
+    // Products") promo that includes this drug > category-wide promo >
+    // storewide promo (scope='all' in add_promo.php, which leaves drug_id,
+    // category, AND drug_ids all empty).
+    return activePromos.find(p => p.drug_id !== null && String(p.drug_id) === String(drugId))
+        || activePromos.find(p => Array.isArray(p.drug_ids) && p.drug_ids.some(id => String(id) === String(drugId)))
+        || activePromos.find(p => p.drug_id === null && p.category && p.category === category)
+        || activePromos.find(p => p.drug_id === null && !p.category && (!Array.isArray(p.drug_ids) || p.drug_ids.length === 0))
+        || null;
+}
+
+function computePromoDiscountPerUnit(promo, unitPrice) {
+    if (!promo) return 0;
+    if (promo.discount_type === 'percent') {
+        return unitPrice * (promo.discount_value / 100);
+    }
+    // Fixed peso amount off — never let a single item's discount exceed its own price.
+    return Math.min(promo.discount_value, unitPrice);
+}
+
+fetch('/api/cashier/promos')
+    .then(res => res.json())
+    .then(data => { activePromos = Array.isArray(data) ? data : []; })
+    .catch(err => console.error('Failed to load active promos:', err));
+
+// =======================================================
+// 2. HELPER FUNCTIONS (Need to be outside DOMContentLoaded)
+// =======================================================
+
+/**
+ * Updates the quantity of an item in the cart array when the input field changes.
+ * @param {HTMLElement} inputElement - The quantity input field that triggered the change.
+ */
+window.updateCartQty = function(inputElement) {
+    const index = parseInt(inputElement.dataset.index);
+    let newQty = parseInt(inputElement.value);
+    
+    const item = cart[index];
+    const maxStock = item.max_stock; // Gamitin ang Original Max Stock mula sa cart item
+
+    if (newQty < 1 || isNaN(newQty)) {
+        newQty = 1;
+        inputElement.value = 1;
+    }
+    
+    // Check laban sa Original Max Stock
+    if (newQty > maxStock) {
+        alert("⚠️ Cannot exceed max stock of " + maxStock);
+        newQty = maxStock;
+        inputElement.value = maxStock;
+    }
+
+    // 1. I-update ang quantity sa cart array
+    item.qty = newQty;
+    
+    // 2. VISUAL STOCK UPDATE: I-update ang stock sa table (index 5)
+    const addBtn = document.querySelector(`.add-btn[data-lot-id="${item.lot_id}"]`);
+    if (addBtn) {
+        const row = addBtn.closest('tr');
+        if (row && row.cells.length > 5) {
+             const newRemainingStock = maxStock - newQty; // Computation laban sa max stock
+             row.cells[5].textContent = newRemainingStock; 
+
+             // I-disable ang button kung ubos na
+             addBtn.disabled = (newRemainingStock <= 0);
+             addBtn.style.opacity = (newRemainingStock <= 0) ? 0.5 : 1;
+        }
+    }
+    
+    // 3. Re-render ang cart
+    updateCart(); 
+};
+
+/**
+ * Fetches and renders the list of pending online orders to the onlineOrdersBody table.
+ */
+function fetchOnlineOrders() {
+    const onlineOrdersBody = document.getElementById('onlineOrdersBody');
+    const pendingOrdersBadge = document.getElementById('pendingOrdersBadge');
+    
+    if (!onlineOrdersBody || !pendingOrdersBadge) return; 
+
+    // Display loading message
+    onlineOrdersBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">' + 
+                                 '<i class="fas fa-spinner fa-spin"></i> Loading online orders...</td></tr>';
+    
+    // Tiyakin na tama ang path papunta sa PHP file
+    fetch("/api/cashier/online-orders") 
+        .then(res => res.json())
+        .then(data => {
+            onlineOrdersBody.innerHTML = ""; // Clear loading message
+            
+            if (data.success && data.orders.length > 0) {
+                let pendingCount = 0;
+                
+                data.orders.forEach(order => {
+                    const statusClass = order.status_class;
+                    let actionButton = '';
+                    
+                    if (statusClass.includes('pending') || statusClass.includes('processing')) {
+                        actionButton = `<button class="btn-review" onclick="reviewOrder('${order.order_id}')" 
+                                        style="background:#f0ad4e; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">
+                                            Review
+                                        </button>`;
+                        pendingCount++;
+                    } else if (statusClass.includes('ready')) {
+                        actionButton = `<button class="btn-complete" onclick="loadOrderToCart('${order.order_id}')"
+                                        style="background:#5cb85c; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">
+                                            Load to Cart
+                                        </button>`;
+                        pendingCount++; 
+                    } else {
+                        actionButton = '—';
+                    }
+
+                    const row = `
+                        <tr>
+                            <td>${order.display_id}</td>
+                            <td>${order.customer_name}</td>
+                            <td><span class="status ${statusClass}" style="padding: 2px 8px; border-radius: 5px; font-size: 0.9em; background: #f4f4ff;">${order.status}</span></td>
+                            <td>${actionButton}</td>
+                        </tr>
+                    `;
+                    onlineOrdersBody.innerHTML += row;
+                });
+                
+                // Update Badge
+                if (pendingCount > 0) {
+                    pendingOrdersBadge.textContent = pendingCount;
+                    pendingOrdersBadge.style.display = 'inline';
+                } else {
+                    pendingOrdersBadge.style.display = 'none';
+                }
+
+            } else {
+                onlineOrdersBody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px;">No online orders currently pending or ready.</td></tr>`;
+                pendingOrdersBadge.style.display = 'none';
+            }
+        })
+        .catch(err => {
+            console.error("Error fetching online orders:", err);
+            onlineOrdersBody.innerHTML = `<tr><td colspan="4" style="color:red; text-align: center;">Failed to load online orders.</td></tr>`;
+            pendingOrdersBadge.style.display = 'none';
+        });
+}
+
+// =======================================================
+// 3. ONLINE ORDER MANAGEMENT FUNCTIONS
+// =======================================================
+
+/**
+ * Switches the POS interface between Standard Sale and Online Order Management mode.
+ * @param {string} mode - 'standard' or 'orders'
+ */
+function switchPOSMode(mode) {
+    const standardContent = document.getElementById('standard-sale-content');
+    const ordersContent = document.getElementById('online-order-content');
+    const modeProductsBtn = document.getElementById('mode-products-btn');
+    const modeOrdersBtn = document.getElementById('mode-orders-btn');
+
+    if (mode === 'orders') {
+        standardContent.style.display = 'none';
+        ordersContent.style.display = 'block';
+        modeProductsBtn.classList.remove('active-mode');
+        modeOrdersBtn.classList.add('active-mode');
+        // I-fetch/i-render dito ang listahan ng orders sa onlineOrdersBody
+fetchOnlineOrders();
+
+} else { // 'standard' mode
+        standardContent.style.display = 'block';
+        ordersContent.style.display = 'none';
+        modeProductsBtn.classList.add('active-mode');
+        modeOrdersBtn.classList.remove('active-mode');
+    }
+}
+
+
+window.clearCart = function() {
+    if (cart.length === 0) {
+        return;
+    }
+
+    // 1. Recover stock for ALL items in the cart
+    cart.forEach(item => {
+        const lotId = item.lot_id;
+        const maxStock = item.max_stock; // Ito ang ORIGINAL max stock (e.g., 5)
+        
+        const addBtn = document.querySelector(`.add-btn[data-lot-id="${lotId}"]`);
+        
+        if (addBtn) {
+            // ⭐ CRITICAL FIX: I-set ang visual at data-stock pabalik sa Original Max Stock ⭐
+            
+            // I-update ang button's data attribute pabalik sa Original Max Stock
+            addBtn.dataset.stock = maxStock;
+            
+            // Re-enable the button and reset styling
+            addBtn.disabled = false;
+            addBtn.style.opacity = 1;
+            addBtn.style.cursor = 'pointer';
+
+            // Update the visual stock text sa inventory table row
+            const row = addBtn.closest('tr');
+            if (row && row.cells.length > 5) {
+                row.cells[5].textContent = maxStock; // Ibalik ang 5 sa stock column
+            }
+        }
+    });
+
+    // 2. Clear the cart array
+    cart = [];
+    
+    // 3. Update the cart display, totals, and reset payment inputs
+    updateCart(); 
+    
+    // Reset cash and change inputs
+    if (cashInput) cashInput.value = '';
+    if (changeDisplay) changeDisplay.textContent = '₱0.00';
+
+    // Reset payment method back to Cash for the next customer.
+    const paymentMethodSelectReset = document.getElementById('paymentMethodSelect');
+    if (paymentMethodSelectReset) paymentMethodSelectReset.value = 'cash';
+    const paymentReferenceInputReset = document.getElementById('paymentReferenceInput');
+    if (paymentReferenceInputReset) paymentReferenceInputReset.value = '';
+    togglePaymentMethodFields();
+    
+    document.getElementById('selectedCustomer').textContent = 'Guest';
+    selectedCustomer = null;
+
+    // Reset the loyalty points box back to hidden/unchecked for the next
+    // customer — updateCart() (called above) will also do this once
+    // selectedCustomer is null, but we do it explicitly here too since
+    // clearCart() can run before updateCart() re-reads it in some flows.
+    const loyaltyBox = document.getElementById('loyaltyPointsBox');
+    if (loyaltyBox) loyaltyBox.style.display = 'none';
+    const applyPointsToggle = document.getElementById('applyPointsToggle');
+    if (applyPointsToggle) applyPointsToggle.checked = false;
+
+    alert("Cart has been cleared.");
+};
+
+/**
+ * Nagpapakita ng resibo sa bagong bintana na may Print Button.
+ * @param {object} responseData - Data mula sa transactions.php (para sa transaction_id).
+ * @param {object} saleData - Data ng bentahan (para sa items, totals).
+ * @param {Window} printWindow - Ang pre-opened window object.
+ */
+function printReceipt(responseData, saleData, printWindow) {
+    const transactionId = responseData.transaction_id || 'N/A';
+    const date = new Date().toLocaleString();
+    
+    // ⭐ FIX #1: GUMAMIT NG TAMANG LOGIC PARA SA CUSTOMER DISPLAY ⭐
+    let customerDisplay;
+    
+    if (saleData.customer_id !== null) {
+        // Kapag may customer ID (online order). I-check na ang saleData.customer_id ay hindi NULL
+        customerDisplay = `Customer ID: ${saleData.customer_id}`; 
+    } else {
+        // Kapag Guest (walk-in)
+        customerDisplay = `Customer: Guest`; 
+    }
+    
+    // 1. Generate Items List HTML
+    let itemsHtml = saleData.items.map(item => {
+        // Ginamit ang saleData.items na may lot_id, hindi na kailangan ang global cart.
+        // Pero kung kailangan mo pa rin ng name, gamitin natin ang lot_id.
+        // Assume na tama ang 'cart' variable na may full item details.
+        const cartItem = cart.find(c => c.lot_id === item.lot_id);
+        const itemName = cartItem ? cartItem.name : 'Unknown Item'; 
+        return `
+            <tr>
+                <td style="text-align: left;">${item.qty} x ₱${item.price.toFixed(2)}</td>
+                <td style="text-align: left;">${itemName}</td>
+                <td style="text-align: right;">₱${(item.price * item.qty).toFixed(2)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    // ⭐ Loyalty points line — only shown when points were actually redeemed on this sale ⭐
+    const pointsLineHtml = (responseData.points_redeemed && responseData.points_redeemed > 0)
+        ? `<tr><td class="right">Points Redeemed:</td><td class="right">${Number(responseData.points_redeemed).toFixed(2)} (₱${Number(responseData.points_discount_value || 0).toFixed(2)})</td></tr>`
+        : '';
+
+    // Payment method line(s) — Cash shows the tendered amount + change as
+    // before; GCash/Maya/Card show the method name and an optional
+    // reference number instead (there's no "change" for an exact e-wallet
+    // or card payment).
+    const paymentMethodLabels = { cash: 'CASH', gcash: 'GCASH', maya: 'MAYA', card: 'CARD', bank: 'BANK TRANSFER' };
+    const paymentMethodDisplay = paymentMethodLabels[saleData.payment_method] || String(saleData.payment_method || 'CASH').toUpperCase();
+    const paymentLineHtml = saleData.payment_method === 'cash'
+        ? `
+            <tr><td class="right">CASH:</td><td class="right">₱${saleData.cash_received.toFixed(2)}</td></tr>
+            <tr><td class="right">CHANGE:</td><td class="right">₱${saleData.change_amount.toFixed(2)}</td></tr>`
+        : `
+            <tr><td class="right">PAYMENT METHOD:</td><td class="right">${paymentMethodDisplay}</td></tr>
+            ${saleData.payment_reference ? `<tr><td class="right">REF NO.:</td><td class="right">${saleData.payment_reference}</td></tr>` : ''}`;
+
+    // 2. Construct Full Receipt HTML (MAY DAGDAG NA PRINT BUTTON)
+    const receiptHtml = `
+        <html>
+        <head>
+            <title>Receipt ${transactionId}</title>
+            <style>
+                body { font-family: 'Courier New', Courier, monospace; font-size: 11px; margin: 0; padding: 10px; }
+                .receipt { width: 280px; margin: 0 auto; }
+                .center { text-align: center; }
+                .right { text-align: right; }
+                table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+                th, td { padding: 2px 0; }
+                .border-top { border-top: 1px dashed #000; }
+                .border-bottom { border-bottom: 1px dashed #000; }
+                @media print { 
+                    .no-print { display: none; } 
+                }
+            </style>
+        </head>
+        <body>
+            <div class="receipt">
+                <div class="center">
+                    <h4>PHARMALINK SYSTEM</h4>
+                    <p>123 PLP St, Kapasigan, Pasig City<br>
+                    TIN: 000-000-000-000</p>
+                </div>
+                <div class="border-top"></div>
+                <p>Date: ${date}</p>
+                <p>Trans ID: ${transactionId}</p>
+                <p>${customerDisplay}</p> <!-- ⭐ FIX #2: GINAMIT NA ANG customerDisplay ⭐ -->
+                <div class="border-bottom"></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="text-align: left; width: 30%;">QTY/Price</th>
+                            <th style="text-align: left;">Description</th>
+                            <th style="text-align: right; width: 25%;">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                </table>
+                <div class="border-top"></div>
+                <table>
+                    <tr><td class="right">Subtotal:</td><td class="right">₱${saleData.subtotal.toFixed(2)}</td></tr>
+                    <tr><td class="right">Discount:</td><td class="right">₱${saleData.discount_total.toFixed(2)}</td></tr>
+                    <tr><td class="right">VAT:</td><td class="right">₱${saleData.tax_total.toFixed(2)}</td></tr>
+                    ${pointsLineHtml}
+                    <tr class="border-top">
+                        <td class="right"><strong>TOTAL DUE:</strong></td>
+                        <td class="right"><strong>₱${saleData.total_amount.toFixed(2)}</strong></td>
+                    </tr>
+                    ${paymentLineHtml}
+                </table>
+                <div class="border-bottom"></div>
+                
+                <div class="center no-print" style="margin-top: 20px;">
+                    <button onclick="window.print()" style="padding: 10px 20px; cursor: pointer;"><i class="fas fa-print"></i> Print Receipt</button>
+                    <button onclick="window.close()" style="padding: 10px 20px; cursor: pointer;"><i class="fas fa-xmark"></i> Close</button>
+                </div>
+
+                <div class="center" style="margin-top: 10px;"><p>Thank you! Come again.</p></div>
+            </div>
+        </body>
+        </html>
+    `;
+
+    // 3. Write to the Existing Window (NO AUTOMATIC PRINT)
+    printWindow.document.write(receiptHtml);
+    printWindow.document.close();
+    printWindow.focus(); 
+}
+
+function loadTransactionHistory() {
+    const historyTable = document.getElementById("historyTable");
+    if (!historyTable) return;
+
+    fetch("/api/cashier/transactions") 
+        .then(res => res.json())
+        .then(transactions => {
+            historyTable.innerHTML = ""; // Clear existing rows
+
+            if (transactions.error) {
+                 historyTable.innerHTML = `<tr><td colspan="5">Error: ${transactions.message}</td></tr>`;
+                 return;
+            }
+
+            transactions.forEach(t => {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${t.transaction_id}</td>
+                    <td>${t.date_created.split(' ')[0]}</td>
+                    <td>₱${parseFloat(t.total_amount).toFixed(2)}</td>
+                    <td>₱${parseFloat(t.cash_received).toFixed(2)}</td>
+                    <td>₱${parseFloat(t.change_amount).toFixed(2)}</td>
+                `;
+                historyTable.appendChild(row);
+            });
+            
+            if (transactions.length === 0) {
+                 historyTable.innerHTML = `<tr><td colspan="5">No recent transactions found.</td></tr>`;
+            }
+
+        })
+        .catch(err => {
+            console.error("Error loading transactions:", err);
+            historyTable.innerHTML = `<tr><td colspan="5">Failed to fetch transaction data.</td></tr>`;
+        });
+}
+
+
+function calculateChange() {
+    // Check if totalDisplay has been initialized
+    if (!totalDisplay) return; 
+
+    const total = parseFloat(totalDisplay.textContent.replace('₱','')) || 0; 
+    const cash = Math.max(0, parseFloat(cashInput && cashInput.value) || 0);
+    const change = cash - total;
+    // Only display change if cash is sufficient
+    changeDisplay.textContent = '₱' + (change >= 0 ? change.toFixed(2) : '0.00'); 
+
+    const ewalletTotalDisplay = document.getElementById('ewalletTotalDisplay');
+    if (ewalletTotalDisplay) ewalletTotalDisplay.textContent = total.toFixed(2);
+    if (typeof refreshEwalletQr === 'function') refreshEwalletQr(false);
+}
+
+function generatePaymentReference(method) {
+    const prefix = method === 'maya' ? 'PLMY' : 'PLGC';
+    const stamp = Date.now().toString(36).toUpperCase();
+    const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return prefix + stamp + rand;
+}
+
+function paymentQrPayload(method, amount, ref) {
+    const label = method === 'maya' ? 'Maya' : 'GCash';
+    return [
+        'PHARMALINK PAYMENT',
+        'Method: ' + label,
+        'Amount: PHP ' + Number(amount).toFixed(2),
+        'Ref: ' + ref,
+        'Merchant: PharmaLink Pharmacy'
+    ].join('\n');
+}
+
+function refreshEwalletQr(forceNewRef) {
+    const select = document.getElementById('paymentMethodSelect');
+    const holder = document.getElementById('posPayQr');
+    const refInput = document.getElementById('paymentReferenceInput');
+    if (!select || !holder || !refInput) return;
+    const method = select.value;
+    if (method === 'cash') {
+        holder.innerHTML = '';
+        return;
+    }
+    if (forceNewRef || !(refInput.value || '').trim()) {
+        refInput.value = generatePaymentReference(method);
+    }
+    const ref = (refInput.value || '').trim();
+    const amount = parseFloat((totalDisplay && totalDisplay.textContent || '0').replace('₱', '')) || 0;
+    holder.innerHTML = '';
+    if (typeof QRCode === 'undefined') {
+        holder.innerHTML = '<p class="pos-ewallet-hint">QR library failed to load. Type or scan the reference instead.</p>';
+        return;
+    }
+    new QRCode(holder, {
+        text: paymentQrPayload(method, amount, ref),
+        width: 160,
+        height: 160,
+        correctLevel: QRCode.CorrectLevel.M
+    });
+}
+
+function sanitizeCashInput() {
+    if (!cashInput) return;
+    let raw = String(cashInput.value || '');
+    if (raw.indexOf('-') !== -1) raw = raw.replace(/-/g, '');
+    cashInput.value = raw;
+    const n = parseFloat(cashInput.value);
+    if (cashInput.value !== '' && !isNaN(n) && n < 0) cashInput.value = '0';
+    calculateChange();
+}
+
+// Toggles between the Cash/Change fields and the Reference-number field
+// depending on the selected Payment Method, and updates the readable
+// method name shown in the e-wallet/card note.
+function togglePaymentMethodFields() {
+    const select = document.getElementById('paymentMethodSelect');
+    const cashFields = document.getElementById('cashPaymentFields');
+    const ewalletFields = document.getElementById('ewalletPaymentFields');
+    const methodLabel = document.getElementById('ewalletMethodLabel');
+    if (!select || !cashFields || !ewalletFields) return;
+
+    const method = select.value;
+    const isCash = method === 'cash';
+    cashFields.style.display = isCash ? 'block' : 'none';
+    ewalletFields.style.display = isCash ? 'none' : 'block';
+
+    if (methodLabel) {
+        const labels = { gcash: 'GCash', maya: 'Maya' };
+        methodLabel.textContent = labels[method] || 'e-wallet';
+    }
+    if (!isCash) refreshEwalletQr(true);
+    calculateChange();
+}
+
+window.removeItem = function(index) {
+    const removedItem = cart[index];
+    const lotId = removedItem.lot_id;
+    
+    // 1. Remove the item from the cart array
+    cart.splice(index, 1);
+    
+    // 2. Update the cart display (totals and rows)
+    updateCart();
+
+    // 3. VISUAL STOCK RECOVERY: Kalkulahin ang total quantity ng lot na ito na nasa cart pa
+    const remainingInCart = cart.filter(item => item.lot_id === lotId)
+                                .reduce((sum, item) => sum + item.qty, 0);
+
+    const maxStock = removedItem.max_stock;
+    const newRemainingStock = maxStock - remainingInCart;
+    
+    // 4. I-update ang visual stock sa inventory table
+    const addBtn = document.querySelector(`.add-btn[data-lot-id="${lotId}"]`);
+    if (addBtn) {
+        const row = addBtn.closest('tr');
+        if (row && row.cells.length > 5) {
+             row.cells[5].textContent = newRemainingStock; 
+        }
+
+        // I-re-enable ang button kung may stock na ulit
+        addBtn.disabled = (newRemainingStock <= 0);
+        addBtn.style.opacity = (newRemainingStock <= 0) ? 0.5 : 1;
+        addBtn.style.cursor = (newRemainingStock <= 0) ? 'not-allowed' : 'pointer';
+    }
+}
+window.getCustomerIdForSale = function() {
+    // You need access to the `selectedCustomer` variable. 
+    // Since `selectedCustomer` is currently scoped *inside* DOMContentLoaded,
+    // we need to make it global (see Step 2).
+    
+    // TEMPORARY FIX: Assume selectedCustomer is now a global variable (see Step 2)
+    return selectedCustomer ? selectedCustomer.customer_id : null;
+};
+
+function updateCart() {
+    if (!cartTable || !totalDisplay) return; // Basic safety check
+
+    cartTable.innerHTML = "";
+    let subtotalBeforeDiscount = 0; 
+    
+    // 1. Loop through cart to calculate base subtotal and build cart rows
+    cart.forEach((item, index) => {
+        const itemGrossSubtotal = item.price * item.qty;
+        const promoDiscountPerUnit = item.promo_discount_per_unit || 0;
+        const itemPromoDiscount = promoDiscountPerUnit * item.qty;
+        const itemSubtotal = itemGrossSubtotal - itemPromoDiscount;
+        subtotalBeforeDiscount += itemSubtotal;
+
+        const displayPrice = `(₱${item.price.toFixed(2)})`;
+        // Descriptive name fix is already applied when adding to cart
+        const promoBadge = item.promo_name
+            ? `<br><span style="background:#f3e8ff;color:#7c3aed;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;">🏷️ ${item.promo_name}</span>`
+            : '';
+        const displayName = `${item.name} <span style="font-weight:normal; color:#666; font-size:0.9em;">${displayPrice}</span>${promoBadge}`;
+        const subtotalCellText = itemPromoDiscount > 0
+            ? `<span style="text-decoration:line-through;color:#9ca3af;font-size:0.85em;">₱${itemGrossSubtotal.toFixed(2)}</span> ₱${itemSubtotal.toFixed(2)}`
+            : `₱${itemSubtotal.toFixed(2)}`;
+
+const row = `
+    <tr>
+        <td>${displayName}</td>
+        <td>
+            <input type="number"
+                   class="pos-qty"
+                   min="1"
+                   value="${item.qty}"
+                   data-index="${index}"
+                   onchange="updateCartQty(this)">
+        </td>
+        <td>${subtotalCellText}</td>
+        <td>
+            <button type="button" class="pos-remove" onclick="removeItem(${index})">×</button>
+        </td>
+    </tr>
+`;
+cartTable.innerHTML += row;
+    });
+    
+    const scPwdChecked = document.getElementById("scPwdToggle").checked;
+    let scDiscount = 0;
+    let vatExemptSale = 0;
+    let taxAmount = 0;
+    let totalAfterDiscount = 0;
+
+    if (scPwdChecked) {
+        // Step 1: Compute VAT-exempt sale
+        vatExemptSale = subtotalBeforeDiscount / (1 + TAX_RATE);
+
+        // Step 2: Compute 20% SC/PWD discount
+        scDiscount = vatExemptSale * 0.20;
+
+        // Step 3: Amount collectible after SC discount
+        totalAfterDiscount = vatExemptSale - scDiscount;
+
+        // VAT is 0 for SC/PWD
+        taxAmount = 0;
+
+    } else {
+        // Non-SC/PWD: Normal computation
+        totalAfterDiscount = subtotalBeforeDiscount;
+
+        // Compute VAT from total
+        taxAmount = totalAfterDiscount * TAX_RATE / (1 + TAX_RATE);
+    }
+
+    // 3️⃣ Apply custom discount (%) on top of SC/PWD or normal total
+    const discountPercent = parseFloat(discountInput.value) || 0;
+    const discountAmount = totalAfterDiscount * (discountPercent / 100);
+    let runningTotal = totalAfterDiscount - discountAmount;
+
+    // 4️⃣ Apply loyalty points discount (on top of everything else, if a
+    // registered customer with points is selected and the box is checked).
+    // The peso cap can never exceed whatever total is left at this point —
+    // a customer can never redeem their way into a negative total.
+    const loyaltyBox = document.getElementById("loyaltyPointsBox");
+    const applyPointsToggle = document.getElementById("applyPointsToggle");
+    const maxPointsDiscountDisplay = document.getElementById("maxPointsDiscountDisplay");
+
+    pointsDiscountValue = 0;
+
+    if (selectedCustomer && selectedCustomer.loyalty_points > 0) {
+        const maxFromPoints = +(selectedCustomer.loyalty_points * POINTS_TO_PESO_RATE).toFixed(2);
+        const maxRedeemable = Math.min(maxFromPoints, runningTotal);
+
+        if (loyaltyBox) loyaltyBox.style.display = 'block';
+        if (maxPointsDiscountDisplay) maxPointsDiscountDisplay.textContent = maxRedeemable.toFixed(2);
+
+        if (applyPointsToggle && applyPointsToggle.checked) {
+            pointsDiscountValue = maxRedeemable;
+        }
+    } else {
+        if (loyaltyBox) loyaltyBox.style.display = 'none';
+        if (applyPointsToggle) applyPointsToggle.checked = false;
+    }
+
+    const finalTotal = runningTotal - pointsDiscountValue;
+
+    // 5️⃣ Update displays
+    subtotalDisplay.textContent = '₱' + subtotalBeforeDiscount.toFixed(2);
+    discountApplied.textContent = '₱' + (scDiscount + discountAmount).toFixed(2);
+    taxDisplay.textContent = '₱' + taxAmount.toFixed(2);
+    totalDisplay.textContent = '₱' + finalTotal.toFixed(2);
+
+    const pointsDiscountRow = document.getElementById("pointsDiscountRow");
+    const pointsDiscountDisplay = document.getElementById("pointsDiscountDisplay");
+    if (pointsDiscountRow && pointsDiscountDisplay) {
+        if (pointsDiscountValue > 0) {
+            pointsDiscountRow.style.display = 'block';
+            pointsDiscountDisplay.textContent = '₱' + pointsDiscountValue.toFixed(2);
+        } else {
+            pointsDiscountRow.style.display = 'none';
+        }
+    }
+
+    calculateChange();
+}
+
+
+/**
+ * Loads a 'Ready for Pickup' order's items into the Current Cart.
+ * Ito ang ginagawa kapag nag-click ng "Load to Cart" ang Cashier.
+ * @param {string} orderId - Ang ID ng online order (e.g., 4).
+ */
+window.loadOrderToCart = function(orderId) {
+    
+    // Tiyakin na ang online order ay na-fetch at ready for processing.
+    fetch(`/api/cashier/online-orders/${orderId}`)
+        .then(response => response.json())
+        .then(orderData => { 
+            if (!orderData.success) {
+                alert("Error loading order items: " + orderData.message);
+                return;
+            }
+
+            // 1. Clear the existing cart
+            clearCart(); 
+
+            // Customer Name formatting (OK)
+            const rawName = orderData.customer_name;
+            const formattedCustomerName = rawName
+                .toLowerCase()
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+
+// Dapat i-store ang buong customer object (ID, Pangalan, at Points)
+selectedCustomer = { 
+    customer_id: orderData.customer_id, // Kinuha ang ID mula sa PHP
+    name: formattedCustomerName,         // Kinuha ang formatte
+    loyalty_points: parseFloat(orderData.loyalty_points || 0) // ⭐ Para makita/magamit ang points kahit online order ang pinagmulan ⭐
+};
+            currentOnlineOrderId = orderData.order_id;
+            
+document.getElementById('selectedCustomer').textContent = formattedCustomerName;
+const availablePointsSpan = document.getElementById('availablePointsDisplay');
+if (availablePointsSpan) availablePointsSpan.textContent = selectedCustomer.loyalty_points.toFixed(2);
+            // 3. Add order items to the cart
+            orderData.items.forEach(item => {
+                const orderedQty = parseInt(item.ordered_qty);
+                const lotId = item.lot_inventory_id; // ⭐ IDINAGDAG ANG DEKLARASYON DITO ⭐
+                
+                // Tiyakin na ang keys ay tugma sa PHP (get_order_details.php) response at cart structure
+                cart.push({
+                    lot_id: lotId,
+                    drug_id: item.drug_id,
+                    name: item.brand_name + ' / ' + item.generic_name, 
+                    price: parseFloat(item.price_per_unit), 
+                    qty: orderedQty,
+                    max_stock: parseInt(item.current_stock) 
+                });
+                
+                // ⭐ INAYOS AT MAS MATATAG NA LOGIC PARA SA STOCK UPDATE ⭐
+                try {
+                    // Hahanapin ang element gamit ang lotId
+                    const addBtn = document.querySelector(`.add-btn[data-lot-id="${lotId}"]`);
+
+                    if (addBtn) {
+                        const row = addBtn.closest('tr'); 
+
+                        // Tiyakin na mayroong row at may 5th cell (index 4)
+                        if (row && row.cells.length > 5) {
+                            const stockCell = row.cells[5];
+                          
+                            // I-parse ang stock, default sa 0 kung hindi valid number
+                            const currentDisplayStock = parseInt(stockCell.textContent) || 0; 
+                            const newRemainingStock = currentDisplayStock - orderedQty;
+                            
+                            // Update ang stock cell
+                            stockCell.textContent = newRemainingStock; 
+                            
+                            // Disable ang button
+                            addBtn.disabled = (newRemainingStock <= 0);
+                            addBtn.style.opacity = (newRemainingStock <= 0) ? 0.5 : 1;
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`Warning: Could not safely update stock UI for lot ${lotId}. Error:`, e);
+                }
+                // ⭐ END OF REVISED LOGIC ⭐
+            });
+            
+            // 4. Render ang data sa screen
+            updateCart(); 
+
+            // 5. I-switch ang view pabalik sa standard POS at magbigay ng feedback
+            switchPOSMode('standard'); 
+            alert(`Order #ORD-${orderId} successfully loaded to cart. Ready for payment.`);
+            
+        })
+        .catch(err => {
+            console.error("Error loading order for cart:", err);
+            alert("Failed to load order to cart due to a network error. Check console for details.");
+        });
+}
+/**
+ * [CONCEPTUAL] Opens a modal/screen to review a pending order (e.g., check prescription).
+ * @param {string} orderId 
+ */
+/**
+ * Opens a modal/screen to review a pending order (e.g., check prescription).
+ * @param {string} orderId - Ang ID ng online order.
+ */
+window.reviewOrder = function(orderId) {
+    const modal = document.getElementById('orderReviewModal');
+    const itemsBody = document.getElementById('reviewItemsBody');
+    const messageP = document.getElementById('reviewMessage');
+    const processBtn = document.getElementById('processOrderBtn');
+    const cancelBtn = document.getElementById('cancelOrderBtn');
+    
+    // I-reset ang modal state
+    itemsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+    messageP.textContent = '';
+    processBtn.disabled = true;
+    cancelBtn.disabled = true;
+
+    document.getElementById('reviewOrderTitle').textContent = `Review Order #ORD-${orderId}`;
+    modal.style.display = 'flex';
+
+    fetch(`/api/cashier/online-orders/${orderId}`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) {
+                itemsBody.innerHTML = `<tr><td colspan="4" style="color:red; text-align:center;">Error: ${data.message}</td></tr>`;
+                return;
+            }
+
+            document.getElementById('reviewCustomerName').textContent = data.customer_name;
+            document.getElementById('reviewOrderStatus').textContent = data.status;
+            
+            // Handle Prescription Display
+            const prescContainer = document.getElementById('prescriptionContainer');
+            const prescImage = document.getElementById('prescriptionImage');
+            if (data.prescription_path) {
+                prescImage.src = data.prescription_path;
+                prescContainer.style.display = 'block';
+                prescImage.onclick = () => window.open(data.prescription_path, '_blank');
+            } else {
+                prescContainer.style.display = 'none';
+            }
+
+            itemsBody.innerHTML = '';
+            let isReadyToProcess = true;
+
+            data.items.forEach(item => {
+                const orderedQty = parseInt(item.ordered_qty);
+                const currentStock = parseInt(item.current_stock);
+                let stockStatus = '';
+                let statusColor = '';
+                
+                if (currentStock >= orderedQty) {
+                    stockStatus = 'In Stock';
+                    statusColor = 'green';
+                } else if (currentStock > 0) {
+                    stockStatus = `Low Stock (${currentStock} left)`;
+                    statusColor = 'orange';
+                    isReadyToProcess = false; // Hindi pwedeng i-process agad kung kulang
+                } else {
+                    stockStatus = 'Out of Stock';
+                    statusColor = 'red';
+                    isReadyToProcess = false; // Hindi pwedeng i-process
+                }
+
+                itemsBody.innerHTML += `
+                    <tr>
+                        <td style="text-align:left;">${item.brand_name} / ${item.generic_name}</td>
+                        <td style="text-align:center;">${orderedQty}</td>
+                        <td style="text-align:center;">${currentStock}</td>
+                        <td style="text-align:center; color:${statusColor}; font-weight:bold;">${stockStatus}</td>
+                    </tr>
+                `;
+            });
+
+            // Set Button states
+            if (isReadyToProcess) {
+                processBtn.disabled = false;
+                processBtn.textContent = 'Set to Ready for Pickup';
+                messageP.textContent = 'All items are currently in stock.';
+                messageP.style.color = 'green';
+            } else {
+                processBtn.disabled = true;
+                processBtn.textContent = 'Cannot Process (Check Items)';
+                messageP.textContent = '⚠️ WARNING: One or more items are out of stock or low stock.';
+                messageP.style.color = 'red';
+            }
+            // Laging pwedeng i-cancel
+            cancelBtn.disabled = false;
+
+            // I-bind ang events sa buttons
+            processBtn.onclick = () => updateOrderStatus(orderId, 'Ready for Pickup', modal);
+            cancelBtn.onclick = () => updateOrderStatus(orderId, 'Cancelled', modal, true);
+
+        })
+        .catch(err => {
+            console.error("Error fetching order details:", err);
+            itemsBody.innerHTML = `<tr><td colspan="4" style="color:red; text-align:center;">Failed to load order details.</td></tr>`;
+        });
+}
+
+
+// Function para kunin at i-display ang categories
+
+
+
+// ----------------------------------------------------
+// D. NEW HELPER FUNCTION: Update Order Status
+// ----------------------------------------------------
+/**
+ * Updates the order status on the backend.
+ * @param {string} orderId 
+ * @param {string} newStatus 
+ * @param {HTMLElement} modal - The modal element to close.
+ * @param {boolean} isCancellation - Flag for cancellation message.
+ */
+function updateOrderStatus(orderId, newStatus, modal, isCancellation = false) {
+    const proceed = function () {
+    fetch('/api/cashier/online-orders/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId, status: newStatus })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert(`Order #ORD-${orderId} successfully set to ${newStatus}.`);
+            modal.style.display = 'none';
+            // I-refresh ang order list sa likod ng modal
+            fetchOnlineOrders(); 
+        } else {
+            alert(`Failed to update status: ${data.message}`);
+        }
+    })
+    .catch(err => {
+        console.error("Status update error:", err);
+        alert("An error occurred during status update.");
+    });
+    };
+    if (isCancellation) {
+        const msg = `Are you sure you want to CANCEL Order #ORD-${orderId}? This cannot be undone.`;
+        if (window.phConfirm) window.phConfirm(msg).then(function (ok) { if (ok) proceed(); });
+        else if (confirm(msg)) proceed();
+        return;
+    }
+    proceed();
+}
+
+function loadCategories() {
+    fetch('/api/cashier/categories')
+    .then(response => response.json())
+    .then(categories => {
+
+        const filterSelect = document.getElementById('categoryFilter');
+
+        if (!filterSelect) {
+            console.warn("Category dropdown not ready yet. Retrying in 200ms...");
+            setTimeout(loadCategories, 200);
+            return;
+        }
+
+        let optionsHTML = '<option value="">All Categories</option>';
+
+        categories.forEach(category => {
+            optionsHTML += `<option value="${category}">${category}</option>`;
+        });
+
+        filterSelect.innerHTML = optionsHTML;
+
+        console.log("Categories loaded:", categories);
+    })
+    .catch(error => console.error("Error fetching categories:", error));
+}
+
+
+// Tawagin ang function kapag nag-load ang page
+document.addEventListener('DOMContentLoaded', function() {
+
+// O kung gumagamit ka ng jQuery:
+// $(document).ready(loadCategories);
+
+loadInventory();
+
+});
+
+document.querySelectorAll('.nav-item').forEach(nav => {
+    nav.addEventListener('click', function () {
+        let target = this.dataset.page;
+
+        // If POS page is opened, load categories
+if (target === "pos-page") {
+    console.log("POS page activated → Loading categories & POS inventory...");
+    loadCategories();
+    loadPOSInventory();
+
+        }
+    });
+});
+
+// =======================================================
+// 4. EVENT LISTENERS SETUP
+// =======================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // ... [existing DOMContentLoaded code here] ...
+
+    // --- POS MODE SWITCH LISTENERS ---
+    document.getElementById('mode-products-btn').addEventListener('click', () => {
+        switchPOSMode('standard');
+    });
+
+    document.getElementById('mode-orders-btn').addEventListener('click', () => {
+        switchPOSMode('orders');
+    });
+
+    // ... [rest of existing DOMContentLoaded code here] ...
+
+    // I-initialize ang mode sa 'standard' pag-load ng page
+    // switchPOSMode('standard'); // (optional, dahil default na ang CSS)
+});
+
+// =======================================================
+// 3. DOM LOADED & EVENT BINDING
+// =======================================================
+document.addEventListener("DOMContentLoaded", function() {
+    // Assign global variables to their DOM elements
+    tbody = document.getElementById("posInventoryBody");
+    cartTable = document.getElementById("cartTable");
+    totalDisplay = document.getElementById("total");
+    subtotalDisplay = document.getElementById("subtotalDisplay");
+    taxDisplay = document.getElementById("taxDisplay");
+    changeDisplay = document.getElementById("change");
+    cashInput = document.getElementById("cashInput");
+    discountInput = document.getElementById("discountInput");
+    discountApplied = document.getElementById("discountApplied");
+    confirmSale = document.getElementById("confirmSale");
+    taxLabel = document.getElementById("taxLabel"); // Assign the new DOM element
+
+    // ===== INPUT EVENT BINDING =====
+    discountInput.addEventListener("input", updateCart);
+    cashInput.addEventListener("input", sanitizeCashInput);
+    cashInput.addEventListener("keydown", function (e) {
+        if (e.key === '-' || e.key === 'Minus' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
+    });
+    cashInput.addEventListener("paste", function (e) {
+        const text = (e.clipboardData || window.clipboardData).getData('text') || '';
+        if (text.indexOf('-') !== -1) {
+            e.preventDefault();
+            cashInput.value = text.replace(/-/g, '');
+            sanitizeCashInput();
+        }
+    });
+
+    // ===== PAYMENT METHOD SWITCH =====
+    document.getElementById('paymentMethodSelect')?.addEventListener('change', togglePaymentMethodFields);
+    togglePaymentMethodFields(); // set correct initial visibility (Cash by default)
+
+    // ===== SC/PWD TOGGLE =====
+    const scPwdToggle = document.getElementById("scPwdToggle");
+    scPwdToggle.addEventListener("change", updateCart);
+
+    // ===== LOYALTY POINTS TOGGLE =====
+    const applyPointsToggle = document.getElementById("applyPointsToggle");
+    if (applyPointsToggle) applyPointsToggle.addEventListener("change", updateCart);
+
+    loadTransactionHistory();
+
+    // Siyasatin ang IDs:
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+    const applyFilterBtn = document.getElementById('applyFilterBtn');
+    
+    // Tiyakin na ang tatlong ito ay NAKITA (hindi null)
+    if (startDateInput && endDateInput && applyFilterBtn) {
+        
+console.log("Dashboard Inputs Found. Setting defaults...");
+        
+        // 1. Default dates: last 7 days (matches the fixed 7-day window
+        //    already used by the Daily Sales Performance graph via
+        //    get_daily_sales.php). Previously this defaulted to a single
+        //    day ("today"), so Top Selling Medicines / Total Sales / Total
+        //    Transactions looked empty on load whenever there were no
+        //    completed sales on that exact calendar day, even though the
+        //    graph right next to it was clearly showing recent sales.
+        const endDateObj = new Date();
+        const startDateObj = new Date();
+        startDateObj.setDate(endDateObj.getDate() - 6);
+        const fmt = (d) => d.toISOString().split('T')[0];
+        startDateInput.value = fmt(startDateObj);
+        endDateInput.value = fmt(endDateObj);
+        
+        // 2. Initial load ng dashboard data
+        console.log("Calling handleDateFilter() for initial load...");
+        handleDateFilter(); 
+
+        // 3. Add listener for the button
+        applyFilterBtn.addEventListener('click', handleDateFilter);
+    } else {
+        console.error("CRITICAL: One or more Dashboard IDs (startDate, endDate, applyFilterBtn) were not found in the HTML.");
+    }
+
+    const srStart = document.getElementById('srStartDate');
+    const srEnd = document.getElementById('srEndDate');
+    if (srStart && srEnd) {
+        const endObj = new Date();
+        const startObj = new Date();
+        startObj.setDate(endObj.getDate() - 6);
+        const fmt = (d) => d.toISOString().split('T')[0];
+        srStart.value = fmt(startObj);
+        srEnd.value = fmt(endObj);
+    }
+    document.getElementById('srApplyBtn')?.addEventListener('click', loadSalesReport);
+    document.getElementById('srSearch')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadSalesReport(); });
+    document.getElementById('srPrintBtn')?.addEventListener('click', printSalesReport);
+    document.getElementById('srDetailClose')?.addEventListener('click', closeSalesReportDetail);
+    document.getElementById('srDetailModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'srDetailModal') closeSalesReportDetail();
+    });
+
+const calculatedTaxRate = (TAX_RATE * 100).toFixed(0); // e.g., 12
+    taxLabel.textContent = `Tax (${calculatedTaxRate}%):`;
+
+// ===== LOAD PRODUCTS =====
+// Wrapped in a named function (was a one-shot inline fetch) so it can also
+// be called again right after a successful sale — that's what keeps the
+// on-screen stock numbers accurate against the real database instead of
+// relying only on the client-side "visual" decrement, which could drift
+// out of sync if another cashier or an online order sells the same item.
+function loadPOSProducts() {
+fetch("/api/cashier/products")
+    .then(res => res.json())
+    .then(products => {
+        tbody.innerHTML = "";
+
+        products.forEach(p => {
+            const stock = parseInt(p.current_stock);
+            const row = document.createElement("tr");
+
+            // ✅ FIX: ADD DATA ATTRIBUTE FOR FILTERING
+            row.dataset.category = p.category;
+
+            row.innerHTML = `
+                <td>${p.category}</td>
+                <td>${p.brand_name}</td>
+                <td>${p.generic_name}</td>
+                <td>${p.dosage}</td>
+                <td>${p.form}</td>
+                <td>${p.current_stock}</td>
+
+                <td>₱${parseFloat(p.price).toFixed(2)}</td>
+                <td>
+
+                        <button class="add-btn"
+                            data-drug-id="${p.drug_id}"
+                            data-lot-id="${p.lot_inventory_id}"
+                            data-name="${p.brand_name} / ${p.generic_name} ${p.dosage} ${p.form}"
+                            data-price="${p.price}"
+                            data-stock="${stock}"
+                            data-category="${p.category}"
+                            ${stock <= 0 ? "disabled style='opacity:0.5;cursor:not-allowed;'" : ""}
+                        >Add</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        // add
+document.querySelectorAll(".add-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        const lotId = btn.dataset.lotId;
+        // ⭐ CRITICAL: Gamitin ang data-stock bilang ORIGINAL_MAX_STOCK ⭐
+        const maxStock = parseInt(btn.dataset.stock);
+        const name = btn.dataset.name;
+        const price = parseFloat(btn.dataset.price);
+
+        const existing = cart.find(item => item.lot_id === lotId);
+        const currentQtyInCart = existing ? existing.qty : 0;
+        
+        // 1. Check laban sa Original Max Stock (e.g., 5)
+        if (currentQtyInCart >= maxStock) {
+            btn.disabled = true;
+            btn.style.opacity = 0.5;
+            alert("⚠️ Only " + maxStock + " in stock — cannot add more.");
+            return;
+        }
+
+        if (existing) {
+            existing.qty++;
+        } else {
+            const category = btn.dataset.category;
+            const drugId = btn.dataset.drugId;
+            const matchedPromo = findPromoForItem(drugId, category);
+            const promoDiscountPerUnit = matchedPromo ? computePromoDiscountPerUnit(matchedPromo, price) : 0;
+
+            cart.push({
+                drug_id: drugId,
+                lot_id: lotId,
+                name,
+                price,
+                qty: 1,
+                max_stock: maxStock, // Store the maximum stock for validation
+                promo_name: matchedPromo ? matchedPromo.name : null,
+                promo_discount_per_unit: promoDiscountPerUnit,
+            });
+        }
+
+        updateCart();
+
+        // 2. VISUAL STOCK UPDATE: I-update ang stock sa table (index 5)
+        const row = btn.closest('tr');
+        if (row && row.cells.length > 5) {
+            const newVisualStock = maxStock - (currentQtyInCart + 1);
+            row.cells[5].textContent = newVisualStock; 
+        }
+
+        // 3. I-disable ang button kung ubos na
+        if ((currentQtyInCart + 1) >= maxStock) {
+            btn.disabled = true;
+            btn.style.opacity = 0.5;
+        }
+    });
+});
+    })
+    .catch(err => console.error("Error loading products:", err));
+}
+loadPOSProducts();
+             // If fetch fails, this alert helps diagnose:
+             // alert("Failed to load products. Check console for details.");
+
+// ===== BARCODE SCANNER (camera-based, via ZXing) =====
+// Reuses the existing per-row "Add" button click handler instead of
+// duplicating cart logic — once we find the matching product row by its
+// lot_inventory_id, we just click its button, which already handles the
+// max-stock check, cart push/increment, and visual stock update.
+let barcodeReader = null;
+let barcodeScanCooldown = false;
+let scannerMode = 'cart'; // 'cart' (add product to cart) | 'payment_ref' (fill GCash/Maya reference field)
+
+function addProductFromLookup(p, statusEl) {
+    const lotId = String(p.lot_inventory_id);
+    const maxStock = parseInt(p.current_stock, 10) || 0;
+    const name = `${p.brand_name} / ${p.generic_name} ${p.dosage || ''} ${p.form || ''}`.replace(/\s+/g, ' ').trim();
+    const price = parseFloat(p.price) || 0;
+    const existing = cart.find(item => String(item.lot_id) === lotId);
+    const currentQtyInCart = existing ? existing.qty : 0;
+    if (maxStock <= 0 || currentQtyInCart >= maxStock) {
+        if (statusEl) statusEl.textContent = '⚠️ Already at max stock in cart, or out of stock.';
+        return false;
+    }
+    if (existing) {
+        existing.qty++;
+    } else {
+        const category = p.category;
+        const drugId = p.drug_id;
+        const matchedPromo = typeof findPromoForItem === 'function' ? findPromoForItem(drugId, category) : null;
+        const promoDiscountPerUnit = matchedPromo ? computePromoDiscountPerUnit(matchedPromo, price) : 0;
+        cart.push({
+            drug_id: drugId,
+            lot_id: lotId,
+            name,
+            price,
+            qty: 1,
+            max_stock: maxStock,
+            promo_name: matchedPromo ? matchedPromo.name : null,
+            promo_discount_per_unit: promoDiscountPerUnit,
+        });
+    }
+    if (typeof updateCart === 'function') updateCart();
+    const btn = document.querySelector(`.add-btn[data-lot-id="${lotId}"]`);
+    if (btn) {
+        const row = btn.closest('tr');
+        if (row && row.cells.length > 5) {
+            row.cells[5].textContent = maxStock - (currentQtyInCart + 1);
+        }
+        if ((currentQtyInCart + 1) >= maxStock) {
+            btn.disabled = true;
+            btn.style.opacity = 0.5;
+        }
+    }
+    if (statusEl) statusEl.textContent = `✅ Added: ${name}`;
+    return true;
+}
+
+function addToCartByBarcode(barcode) {
+    const statusEl = document.getElementById('barcodeScannerStatus');
+    if (statusEl) statusEl.textContent = 'Looking up product…';
+
+    fetch('/api/cashier/products/barcode?barcode=' + encodeURIComponent(barcode))
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) {
+                if (statusEl) statusEl.textContent = '❌ ' + (data.message || 'Product not found.');
+                return;
+            }
+            const ok = addProductFromLookup(data.product, statusEl);
+            if (ok) {
+                const modal = document.getElementById('barcodeScannerModal');
+                if (modal && modal.style.display === 'flex') setTimeout(() => { closeBarcodeScanner(); }, 900);
+            }
+        })
+        .catch(() => { if (statusEl) statusEl.textContent = '❌ Lookup failed. Check your connection.'; });
+}
+
+function handleScannedPaymentRef(code) {
+    const refInput = document.getElementById('paymentReferenceInput');
+    if (refInput) refInput.value = code;
+    if (typeof refreshEwalletQr === 'function') refreshEwalletQr(false);
+    const statusEl = document.getElementById('barcodeScannerStatus');
+    if (statusEl) statusEl.textContent = `✅ Reference captured: ${code}`;
+    setTimeout(() => { closeBarcodeScanner(); }, 900);
+}
+
+function openBarcodeScanner(mode = 'cart') {
+    scannerMode = mode;
+    const modal = document.getElementById('barcodeScannerModal');
+    const statusEl = document.getElementById('barcodeScannerStatus');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    if (statusEl) statusEl.textContent = mode === 'payment_ref'
+        ? 'Point the camera at the customer\'s GCash/Maya QR…'
+        : 'Point the camera at a barcode…';
+
+    if (typeof ZXing === 'undefined') {
+        if (statusEl) statusEl.textContent = '❌ Scanner library failed to load. Check your internet connection.';
+        return;
+    }
+
+    barcodeReader = new ZXing.BrowserMultiFormatReader();
+    barcodeReader.decodeFromVideoDevice(null, 'barcodeScannerVideo', (result) => {
+        if (result && !barcodeScanCooldown) {
+            barcodeScanCooldown = true;
+            if (scannerMode === 'payment_ref') {
+                handleScannedPaymentRef(result.getText());
+            } else {
+                addToCartByBarcode(result.getText());
+            }
+            setTimeout(() => { barcodeScanCooldown = false; }, 2000); // debounce repeated frames of the same code
+        }
+    }).catch(err => {
+        if (statusEl) statusEl.textContent = '❌ Camera access failed: ' + err.message + ' (allow camera permission and use HTTPS or localhost).';
+    });
+}
+
+function closeBarcodeScanner() {
+    if (barcodeReader) {
+        try { barcodeReader.reset(); } catch (e) { /* ignore */ }
+        barcodeReader = null;
+    }
+    const modal = document.getElementById('barcodeScannerModal');
+    if (modal) modal.style.display = 'none';
+}
+
+document.getElementById('scanBarcodeBtn')?.addEventListener('click', () => openBarcodeScanner('cart'));
+document.getElementById('barcodeManualInput')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const code = (e.target.value || '').trim();
+    if (!code) return;
+    addToCartByBarcode(code);
+    e.target.value = '';
+});
+document.getElementById('barcodeModalManualInput')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const code = (e.target.value || '').trim();
+    if (!code) return;
+    if (scannerMode === 'payment_ref') handleScannedPaymentRef(code);
+    else addToCartByBarcode(code);
+    e.target.value = '';
+});
+document.getElementById('scanPaymentQrBtn')?.addEventListener('click', () => openBarcodeScanner('payment_ref'));
+document.getElementById('regenPaymentRefBtn')?.addEventListener('click', () => refreshEwalletQr(true));
+document.getElementById('paymentReferenceInput')?.addEventListener('input', () => refreshEwalletQr(false));
+document.getElementById('closeBarcodeScannerModal')?.addEventListener('click', closeBarcodeScanner);
+document.getElementById('barcodeScannerModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'barcodeScannerModal') closeBarcodeScanner(); // click outside the card closes it
+});
+
+
+// ===== CONFIRM SALE LOGIC (Updated) =====
+// ===== CONFIRM SALE LOGIC (Updated for Receipt) =====
+confirmSale.addEventListener("click", () => {
+    // Read final values from the display (which is updated by updateCart)
+    const total = parseFloat(totalDisplay.textContent.replace('₱','')) || 0;
+    const tax = parseFloat(taxDisplay.textContent.replace('₱','')) || 0; 
+    const appliedDiscount = parseFloat(discountApplied.textContent.replace('₱','')) || 0; 
+    
+    // CRITICAL FIX #1: TIYAKIN NA LAGING MAY NAME AT ID ANG CUSTOMER!
+    const customerId = selectedCustomer ? selectedCustomer.customer_id : null;
+    const customerName = selectedCustomer ? selectedCustomer.name : "Guest"; 
+
+    // Points actually being redeemed on this sale (authoritative peso value
+    // was already computed and capped by updateCart() into pointsDiscountValue).
+    // Convert back to a points count only for what we send the server — the
+    // server itself recomputes and re-validates this against the real DB
+    // balance and rate, so this is just a request, not the final word.
+    const pointsRedeemed = pointsDiscountValue > 0
+        ? +(pointsDiscountValue / POINTS_TO_PESO_RATE).toFixed(2)
+        : 0;
+
+    if (cart.length === 0) { 
+        alert("No items in cart."); 
+        return; 
+    }
+
+    // Payment method drives how "cash"/"change" are computed. GCash/Maya/
+    // Card payments are for the exact total — there's no physical change to
+    // hand back — so cash_received is just set equal to the total, and we
+    // capture an optional reference/transaction number instead.
+    const paymentMethod = document.getElementById('paymentMethodSelect')?.value || 'cash';
+    const isCashPayment = paymentMethod === 'cash';
+
+    let cash, change, paymentReference = null;
+    if (isCashPayment) {
+        cash = parseFloat(cashInput.value);
+        if (isNaN(cash) || cash < 0) {
+            alert("Cash amount cannot be negative.");
+            return;
+        }
+        change = cash - total;
+        if (cash < total) {
+            alert("Insufficient cash. Required: ₱" + total.toFixed(2));
+            return;
+        }
+    } else {
+        cash = total; // exact payment, no change for e-wallet
+        change = 0;
+        paymentReference = (document.getElementById('paymentReferenceInput')?.value || '').trim() || null;
+        if (!paymentReference) {
+            refreshEwalletQr(true);
+            paymentReference = (document.getElementById('paymentReferenceInput')?.value || '').trim() || null;
+        }
+    }
+
+    // 1. PRE-OPEN THE RECEIPT WINDOW HERE (CRITICAL FOR POP-UP BLOCKERS)
+    // Center the receipt popup window on the screen instead of letting the
+    // browser place it wherever (usually top-left).
+    const receiptW = 300, receiptH = 500;
+    const receiptLeft = Math.max(0, Math.round((window.screen.width - receiptW) / 2));
+    const receiptTop = Math.max(0, Math.round((window.screen.height - receiptH) / 2));
+    const printWindow = window.open('', '_blank', `width=${receiptW},height=${receiptH},left=${receiptLeft},top=${receiptTop}`);
+    if (!printWindow) {
+        alert("Please allow pop-ups to print the receipt. Transaction aborted.");
+        return; 
+    }
+
+    // Default content habang naghihintay ng server response
+    printWindow.document.write("<html><body><p>Processing transaction...</p></body></html>");
+    printWindow.document.close();
+
+    // Prepare sale data for backend
+    const saleData = {
+        customer_id: customerId,
+        customer_name: customerName, 
+        user_id: 1, // placeholder
+        subtotal: parseFloat(subtotalDisplay.textContent.replace('₱','')) || 0,
+        discount_total: appliedDiscount,
+        tax_total: tax,
+        total_amount: total, // Final Total Due
+        cash_received: cash,
+        change_amount: change, 
+        payment_method: paymentMethod,
+        payment_reference: paymentReference,
+        points_redeemed: pointsRedeemed,
+        points_discount_value: pointsDiscountValue,
+        items: cart.map(item => ({
+            drug_id: item.drug_id,
+            lot_id: item.lot_id,
+            qty: item.qty,
+            price: item.price,
+            subtotal: item.price * item.qty, 
+            discount_amount: (item.promo_discount_per_unit || 0) * item.qty,
+            promo_name: item.promo_name || null,
+            vat_exempt: item.vat_exempt ? 1 : 0
+        }))
+    };
+
+    // Send to backend
+    fetch("/api/cashier/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(saleData)
+    })
+    .then(res => {
+        if (!res.ok) {
+            return res.text().then(text => {
+                try {
+                    const parsed = JSON.parse(text);
+                    throw new Error(parsed.message || text.substring(0, 200));
+                } catch (e) {
+                    if (e instanceof Error && e.message && e.message !== "Unexpected end of JSON input") {
+                        throw e;
+                    }
+                    throw new Error("Server Response Error: " + text.substring(0, 200));
+                }
+            });
+        }
+        return res.text();
+    })
+    .then(text => {
+        let data;
+        try {
+            const cleanText = text.trim(); 
+            data = JSON.parse(cleanText); 
+        } catch (e) {
+            throw new Error("JSON Parsing Failed. Raw Response: [" + text.substring(0, 100) + "]");
+        }
+
+        if (data.status === "success") {
+            let successMsg = isCashPayment
+                ? "Transaction Successful!\nChange: ₱" + change.toFixed(2)
+                : "Transaction Successful!\nPaid via " + paymentMethod.toUpperCase() + (paymentReference ? " (Ref: " + paymentReference + ")" : "");
+            if (data.points_redeemed > 0) {
+                successMsg += "\nPoints Redeemed: " + Number(data.points_redeemed).toFixed(2) +
+                              " (₱" + Number(data.points_discount_value).toFixed(2) + ")" +
+                              "\nRemaining Points: " + Number(data.new_loyalty_balance).toFixed(2);
+            }
+            alert(successMsg);
+
+            // TAWAGIN ANG PRINT FUNCTION
+            printReceipt(data, saleData, printWindow); 
+            
+            // I-clear ang cart at i-reset ang POS state
+            clearCart(); 
+            loadTransactionHistory();
+
+            // Pull the real, current stock from the database now that the
+            // sale has been committed — keeps the POS grid accurate even
+            // if another cashier or an online order affected the same items.
+            loadPOSProducts();
+
+            // ⭐ ONLINE ORDER FINALIZATION LOGIC ⭐
+            if (currentOnlineOrderId !== null) {
+                
+                // I-update ang status ng order sa Completed
+                fetch('/api/cashier/online-orders/status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        order_id: currentOnlineOrderId, 
+                        status: 'Completed' 
+                    })
+                })
+                .then(res => res.json())
+                .then(updateData => {
+                    if (updateData.success) {
+                        console.log(`Online Order #${currentOnlineOrderId} marked as Completed.`);
+                        
+                        // I-REFRESH ANG ONLINE ORDER QUEUE UI
+                        if (typeof fetchOnlineOrders === 'function') {
+                            fetchOnlineOrders(); 
+                        }
+
+                        // I-reset ang global variable
+                        currentOnlineOrderId = null; 
+                        
+                    } else {
+                        console.error("Failed to update Online Order status:", updateData.message);
+                    }
+                })
+                .catch(err => {
+                    console.error("Network error during Online Order status update:", err);
+                });
+            }
+            
+        } else {
+            let errorMsg = "Error saving transaction: " + data.message;
+            if (data.db_error) {
+                errorMsg += "\nDB Error: " + data.db_error.substring(0, 100) + "...";
+            }
+            alert(errorMsg);
+            printWindow.close(); 
+        }
+    })
+    .catch(err => {
+        console.error("Fetch error:", err);
+        alert("CRITICAL ERROR: " + err.message); 
+        if(printWindow) printWindow.close(); 
+    });
+});
+
+
+
+  
+
+ // ===== PAGE NAVIGATION (REVISED) =====
+const navItems = document.querySelectorAll('.nav-item');
+const pages = document.querySelectorAll('.page');
+
+navItems.forEach(item => {
+    item.addEventListener('click', () => {
+        const target = item.dataset.page;
+
+        // Switch active tab
+        navItems.forEach(n => n.classList.remove('active'));
+        item.classList.add('active');
+
+        // Switch visible page
+        pages.forEach(p => p.classList.remove('active'));
+        document.getElementById(target).classList.add('active');
+
+        // 🔥 CRITICAL: Run loaders/functions based on the target page
+        if (target === "pos-page") {
+            setTimeout(() => {
+                console.log("POS page is now active → loading categories & inventory...");
+                // Tiyaking defined ang loadCategories() at loadPOSInventory()
+                loadCategories();
+                loadPOSInventory();
+            }, 10); // small delay to allow rendering
+        } 
+        
+        // ⭐ BAGONG DAGDAG: LOAD DASHBOARD DATA
+        else if (target === "dashboard-page") {
+            console.log("Dashboard page is now active → loading stats and charts...");
+            // Tiyaking defined ang handleDateFilter() at ang mga input IDs ay tama
+            handleDateFilter(); 
+        }
+
+        // 🔧 FIX: the Customer Segmentation charts are NOT built at page
+        // load anymore (that's what caused the cut-off/overlapping donut —
+        // Chart.js was measuring a 0-size box since the tab was hidden).
+        // They're now created lazily, right here, the first time this tab
+        // is actually visible and has its real, final size.
+        else if (target === "sales-report-page") {
+            loadSalesReport();
+        }
+        else if (target === "customer-segmentation-page") {
+            if (window.bootSegmentation) window.bootSegmentation();
+        }
+    });
+});
+
+
+  // ===== CHARTS =====
+  // NOTE: dailySalesChart and topMedicinesChart are initialized with REAL
+  // data by renderDailySalesChart()/renderTopMedicinesChart() below, called
+  // from handleDateFilter(). (This used to double-initialize fake charts
+  // here first, which both wasted a render and, for topMedicinesChart,
+  // could throw a "canvas already in use" error once the real chart tried
+  // to take over the same canvas.)
+
+
+    const selectBtn = document.getElementById("selectCustomerBtn");
+  const modal = document.getElementById("customerModal");
+  const customerList = document.getElementById("customerList");
+  const searchInput = document.getElementById("customerSearch");
+  const selectedCustomerSpan = document.getElementById("selectedCustomer");
+  const closeModal = document.getElementById("closeModal");
+
+  let customers = [];
+
+  // Fetch customers from database
+  fetch("/api/cashier/customers")
+    .then(res => res.json())
+    .then(data => { customers = data; renderCustomerList(customers); })
+    .catch(err => console.error("Error loading customers:", err));
+
+  // Open modal
+  selectBtn.addEventListener("click", () => {
+    modal.style.display = "flex";
+    renderCustomerList(customers);
+    searchInput.value = "";
+    searchInput.focus();
+  });
+
+  // Close modal
+  closeModal.addEventListener("click", () => {
+    modal.style.display = "none";
+  });
+
+  // Render list
+  function renderCustomerList(list) {
+    customerList.innerHTML = "";
+    if (list.length === 0) {
+      customerList.innerHTML = "<li style='padding:5px;'>No customer found</li>";
+      return;
+    }
+
+    list.forEach(c => {
+      const li = document.createElement("li");
+      li.textContent = c.name;
+      li.style.padding = "8px";
+      li.style.cursor = "pointer";
+      li.style.borderBottom = "1px solid #eee";
+      li.addEventListener("click", () => {
+        // ⭐ Store loyalty_points along with the rest of the customer object
+        // so the loyalty points box + updateCart() can use it right away.
+        selectedCustomer = {
+            customer_id: c.customer_id,
+            name: c.name,
+            loyalty_points: parseFloat(c.loyalty_points || 0)
+        };
+        selectedCustomerSpan.textContent = c.name;
+        modal.style.display = "none";
+        const availablePointsSpan = document.getElementById('availablePointsDisplay');
+        if (availablePointsSpan) availablePointsSpan.textContent = selectedCustomer.loyalty_points.toFixed(2);
+        updateCart();
+      });
+      customerList.appendChild(li);
+    });
+  }
+
+  /**
+ * Renders the Daily Sales line chart using real, last-7-days totals.
+ */
+function renderDailySalesChart() {
+    const ctx = document.getElementById('dailySalesChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+
+    fetch('/api/cashier/daily-sales')
+        .then(res => res.json())
+        .then(data => {
+            if (window.dailySalesChartInstance) {
+                window.dailySalesChartInstance.destroy();
+            }
+            window.dailySalesChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [{ label: 'Sales (₱)', data: data.data, borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)', fill: true, tension: 0.3 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+            });
+        })
+        .catch(err => console.error('Failed to load daily sales:', err));
+}
+
+/**
+ * Shared bar-chart look, matching the "Top Forecasted Items" chart style
+ * used on the Admin > Sales Forecasting page — same color palette and same
+ * left-to-right gradient-fill bars, so bar charts look consistent across
+ * the whole system instead of each page inventing its own colors.
+ */
+window.CHART_PALETTE = ['#2563eb', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9'];
+window.chartBarGradient = function (ctx, color) {
+    color = color || CHART_PALETTE[0]; // guard: Chart.js can resolve this before a real index/color exists
+    const chartArea = ctx.chart.chartArea;
+    if (!chartArea) return color;
+    const g = ctx.chart.ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+    g.addColorStop(0, color + 'cc');
+    g.addColorStop(1, color);
+    return g;
+}
+
+/**
+ * Renders the Top Selling Medicines Bar Chart.
+ */
+function renderTopMedicinesChart(start, end) {
+    const ctx = document.getElementById('topMedicinesChart');
+    // NOTE: Tiyaking naka-link ang Chart.js sa HTML mo
+    if (!ctx || typeof Chart === 'undefined') {
+        console.warn("Chart.js or canvas 'topMedicinesChart' not available.");
+        return;
+    }
+    
+    // Destroy existing chart instance (para hindi mag-overlap)
+    if (window.topMedicinesChartInstance) {
+        window.topMedicinesChartInstance.destroy();
+    }
+
+    const apiEndpoint = `/api/cashier/top-selling?startDate=${start}&endDate=${end}`;
+
+    fetch(apiEndpoint)
+        .then(response => {
+             // Tiyakin na nagbabalik ng JSON ang PHP file
+            if (!response.ok) {
+                console.error("top_selling_data.php returned non-OK status.");
+                return response.text().then(text => { throw new Error(text); });
+            }
+            return response.json();
+        })
+        .then(data => {
+            const labels = data.map(item => `${item.brand_name} / ${item.generic_name}`);
+            const quantities = data.map(item => item.total_quantity_sold);
+            const cardHeader = ctx.closest('.chart-card')?.querySelector('h3') || document.getElementById('topMedicinesHeader');
+            
+            if (data.length === 0) {
+                ctx.style.display = 'none';
+                if (cardHeader) cardHeader.textContent = 'Top Selling Medicines (No Sales Found)';
+                return;
+            } else {
+                ctx.style.display = 'block';
+                if (cardHeader) cardHeader.textContent = 'Top Selling Medicines';
+            }
+
+            window.topMedicinesChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Quantity Sold',
+                        data: quantities,
+                        backgroundColor: (c) => chartBarGradient(c, CHART_PALETTE[(c.dataIndex ?? 0) % CHART_PALETTE.length]),
+                        borderRadius: 6,
+                        borderSkipped: false,
+                        maxBarThickness: 28,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    animation: { duration: 600, easing: 'easeOutQuart' },
+                    scales: {
+                        x: { beginAtZero: true, title: { display: true, text: 'Units Sold' }, grid: { color: '#eef2f7' } },
+                        y: { grid: { display: false }, ticks: { color: '#334155', font: { size: 12 } } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: false },
+                        tooltip: { backgroundColor: '#1e3a8a', padding: 10, cornerRadius: 8 }
+                    }
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Fetch error for Top Selling Data. Check PHP/MySQLi code:', error);
+        });
+}
+
+/**
+ * Fetches dashboard stats and updates the four stat cards.
+ */
+function updateDashboardStats(start, end) {
+    const apiEndpoint = `/api/cashier/dashboard?startDate=${start}&endDate=${end}`; 
+
+    fetch(apiEndpoint)
+        .then(response => {
+            if (!response.ok) {
+                console.error("dashboard_data.php returned non-OK status.");
+                return response.text().then(text => { throw new Error(text); });
+            }
+            return response.json();
+        })
+        .then(data => {
+            const formatter = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 });
+            
+            // Update Stat Cards (TIYAKING TAMA ANG IDs NA ITO SA HTML)
+            if(document.getElementById('stat-transactions')) document.getElementById('stat-transactions').textContent = data.transaction_count || '0'; 
+            if(document.getElementById('stat-sales')) document.getElementById('stat-sales').textContent = '₱' + formatter.format(data.total_sales || 0); 
+            if(document.getElementById('stat-items-sold')) document.getElementById('stat-items-sold').textContent = data.items_sold || '0';
+            if(document.getElementById('stat-low-stock')) document.getElementById('stat-low-stock').textContent = data.low_stock_count || '0'; 
+            if(document.getElementById('stat-out-stock')) document.getElementById('stat-out-stock').textContent = data.out_of_stock_count || '0';
+            if(document.getElementById('stat-pending-orders')) document.getElementById('stat-pending-orders').textContent = data.pending_orders || '0';
+        })
+        .catch(error => {
+            console.error('Fetch error for Dashboard Stats. Check PHP/MySQLi code:', error);
+        });
+}
+
+/**
+ * Fetches and renders the 5 most recent transactions.
+ * Gumagamit ng start at end date mula sa filter.
+ */
+function loadRecentTransactions(start, end) {
+    const tableBody = document.getElementById('recentTransactionsBody'); // Titingnan natin ito mamaya
+    if (!tableBody) return;
+
+    const apiEndpoint = `/api/cashier/recent-transactions?startDate=${start}&endDate=${end}`;
+
+    fetch(apiEndpoint)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return response.json();
+        })
+        .then(transactions => {
+            let html = '';
+            
+if (transactions.length === 0) {
+                html = '<tr><td colspan="5" class="cs-empty">No transactions found for this period.</td></tr>';
+            } else {
+                transactions.forEach(t => {
+                    const statusClass = t.status.toLowerCase().replace(' ', '-');
+
+const transactionDate = new Date(t.date_created).toLocaleDateString('en-US', {
+                        month: 'short', 
+                        day: 'numeric', 
+                        year: 'numeric' // O '2-digit' kung gusto mo 25
+                    });
+
+                    html += `
+                        <tr>
+                            <td>${transactionDate}</td> 
+                            <td>${t.time_display}</td>
+                            <td>${t.customer_name}</td>
+                            <td>₱${t.total_amount}</td>
+                            <td><span class="status ${statusClass}">${t.status}</span></td>
+                        </tr>
+                    `;
+                });
+            }
+            tableBody.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading recent transactions:', error);
+tableBody.innerHTML = '<tr><td colspan="5" style="color: red;">Failed to load data.</td></tr>';        });
+}
+
+// SA LOOB NG IYONG JS CODE
+function handleDateFilter() {
+    const startDate = document.getElementById('startDate')?.value;
+    const endDate = document.getElementById('endDate')?.value;
+    
+    if (startDate && endDate) {
+        // 1. Stat Cards
+        updateDashboardStats(startDate, endDate); 
+        
+        // 2. Top Selling Chart
+        renderTopMedicinesChart(startDate, endDate);
+
+        // 3. Daily Sales Chart (real last-7-days data)
+        renderDailySalesChart();
+        
+        // ⭐ BAGONG DAGDAG: Recent Transactions
+        loadRecentTransactions(startDate, endDate); 
+    }
+}
+
+function srEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+function srPayLabel(method) {
+    const m = String(method || 'cash').toLowerCase();
+    if (m === 'gcash') return 'GCash';
+    if (m === 'maya') return 'Maya';
+    return 'Cash';
+}
+
+function loadSalesReport() {
+    const body = document.getElementById('srTableBody');
+    if (!body) return;
+    const start = document.getElementById('srStartDate')?.value || '';
+    const end = document.getElementById('srEndDate')?.value || '';
+    const q = document.getElementById('srSearch')?.value || '';
+    const payment = document.getElementById('srPaymentFilter')?.value || '';
+    const params = new URLSearchParams({ startDate: start, endDate: end, q, payment });
+    body.innerHTML = '<tr><td colspan="9" class="cs-empty">Loading logs...</td></tr>';
+    fetch('/api/cashier/sales-report?' + params.toString(), { credentials: 'same-origin' })
+        .then((r) => r.json())
+        .then((data) => {
+            if (!data.success) {
+                body.innerHTML = '<tr><td colspan="9" class="cs-empty">Could not load sales report.</td></tr>';
+                return;
+            }
+            const s = data.summary || {};
+            const countEl = document.getElementById('srCount');
+            const totalEl = document.getElementById('srTotal');
+            const itemsEl = document.getElementById('srItems');
+            const mixEl = document.getElementById('srPayMix');
+            if (countEl) countEl.textContent = s.transaction_count || 0;
+            if (totalEl) totalEl.textContent = '₱' + Number(s.total_sales || 0).toFixed(2);
+            if (itemsEl) itemsEl.textContent = s.items_sold || 0;
+            if (mixEl) mixEl.textContent = (s.cash_count || 0) + ' / ' + (s.gcash_count || 0) + ' / ' + (s.maya_count || 0);
+            const logs = data.logs || [];
+            if (!logs.length) {
+                body.innerHTML = '<tr><td colspan="9" class="cs-empty">No transactions found for this period.</td></tr>';
+                return;
+            }
+            body.innerHTML = logs.map((t) => {
+                const pay = String(t.payment_method || 'cash').toLowerCase();
+                return '<tr>' +
+                    '<td>' + srEsc(t.transaction_id) + '</td>' +
+                    '<td>' + srEsc(t.date) + '</td>' +
+                    '<td>' + srEsc(t.time) + '</td>' +
+                    '<td>' + srEsc(t.customer_name) + '</td>' +
+                    '<td>' + srEsc(t.cashier_name) + '</td>' +
+                    '<td><span class="sr-pay ' + srEsc(pay) + '">' + srEsc(srPayLabel(pay)) + '</span></td>' +
+                    '<td>' + srEsc(t.payment_reference || '—') + '</td>' +
+                    '<td>₱' + Number(t.total_amount || 0).toFixed(2) + '</td>' +
+                    '<td><button type="button" class="sr-view-btn" data-sale-id="' + t.sale_id + '"><i class="fas fa-eye"></i> View</button></td>' +
+                    '</tr>';
+            }).join('');
+            body.querySelectorAll('.sr-view-btn').forEach((btn) => {
+                btn.addEventListener('click', () => openSalesReportDetail(btn.getAttribute('data-sale-id')));
+            });
+        })
+        .catch(() => {
+            body.innerHTML = '<tr><td colspan="9" class="cs-empty">Failed to load sales report.</td></tr>';
+        });
+}
+
+function closeSalesReportDetail() {
+    const modal = document.getElementById('srDetailModal');
+    if (!modal) return;
+    modal.hidden = true;
+}
+
+function openSalesReportDetail(saleId) {
+    const modal = document.getElementById('srDetailModal');
+    const title = document.getElementById('srDetailTitle');
+    const box = document.getElementById('srDetailBody');
+    if (!modal || !box) return;
+    modal.hidden = false;
+    if (title) title.textContent = 'Transaction';
+    box.innerHTML = '<p>Loading...</p>';
+    fetch('/api/cashier/sales-report/' + encodeURIComponent(saleId), { credentials: 'same-origin' })
+        .then((r) => r.json())
+        .then((data) => {
+            if (!data.success || !data.sale) {
+                box.innerHTML = '<p>Transaction not found.</p>';
+                return;
+            }
+            const s = data.sale;
+            if (title) title.textContent = s.transaction_id;
+            const itemRows = (data.items || []).map((it) =>
+                '<tr><td>' + srEsc(it.name) + (it.promo_name ? ' <small>' + srEsc(it.promo_name) + '</small>' : '') +
+                '</td><td>' + it.quantity + '</td><td>₱' + Number(it.price).toFixed(2) +
+                '</td><td>₱' + Number(it.subtotal).toFixed(2) + '</td></tr>'
+            ).join('') || '<tr><td colspan="4">No line items.</td></tr>';
+            box.innerHTML =
+                '<p><strong>Date:</strong> ' + srEsc(s.date) + '</p>' +
+                '<p><strong>Customer:</strong> ' + srEsc(s.customer_name) + '</p>' +
+                '<p><strong>Cashier:</strong> ' + srEsc(s.cashier_name) + '</p>' +
+                '<p><strong>Payment:</strong> ' + srEsc(srPayLabel(s.payment_method)) +
+                (s.payment_reference ? ' · Ref ' + srEsc(s.payment_reference) : '') + '</p>' +
+                '<p><strong>Subtotal:</strong> ₱' + Number(s.subtotal).toFixed(2) +
+                ' · <strong>Discount:</strong> ₱' + Number(s.discount_amount).toFixed(2) +
+                ' · <strong>Total:</strong> ₱' + Number(s.total_amount).toFixed(2) + '</p>' +
+                '<table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr></thead><tbody>' +
+                itemRows + '</tbody></table>';
+        })
+        .catch(() => { box.innerHTML = '<p>Failed to load transaction.</p>'; });
+}
+
+function printSalesReport() {
+    const start = document.getElementById('srStartDate')?.value || '';
+    const end = document.getElementById('srEndDate')?.value || '';
+    const table = document.querySelector('#sales-report-page .sr-table-card')?.innerHTML || '';
+    const summary = 'Transactions: ' + (document.getElementById('srCount')?.textContent || '0') +
+        ' · Total: ' + (document.getElementById('srTotal')?.textContent || '₱0.00') +
+        ' · Items: ' + (document.getElementById('srItems')?.textContent || '0');
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write('<html><head><title>Sales Report</title><style>body{font-family:Inter,Arial,sans-serif;padding:20px;color:#111}h2{color:#1e3a8a}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #eee;padding:8px;text-align:left;font-size:13px}button{display:none}</style></head><body>');
+    w.document.write('<h2>PharmaLink Sales Report</h2><p>' + start + ' to ' + end + '</p><p>' + summary + '</p>' + table);
+    w.document.write('</body></html>');
+    w.document.close();
+    w.focus();
+    w.print();
+}
+
+// ===== REAL-TIME DASHBOARD REFRESH =====
+// Re-runs the same real DB-backed fetches every 15s, but only while the
+// Dashboard page is actually the one showing, so a sale rung up elsewhere
+// (or by this same cashier) is reflected without a manual refresh.
+setInterval(() => {
+    const dashboardPage = document.getElementById('dashboard-page');
+    const isVisible = dashboardPage && dashboardPage.style.display !== 'none' && dashboardPage.classList.contains('active');
+    if (isVisible) handleDateFilter();
+}, 15000);
+
+
+// ===== REAL-TIME ONLINE ORDERS QUEUE =====
+// Polls the online orders list + badge every 10s so a new customer checkout,
+// or a status change made from another cashier terminal, shows up automatically.
+setInterval(() => {
+    fetchOnlineOrders();
+}, 10000);
+
+// ===== REAL-TIME POS STOCK =====
+// The POS product/stock grid was previously only reloaded right after this
+// terminal's own sale. Poll it too, so a sale rung up on another cashier
+// terminal (or an online order that just ate the last of a lot) shows up
+// here without waiting for this terminal to sell something itself — the
+// #1 way stock counts used to drift and cause overselling. Skipped while
+// the POS page isn't the one showing, or while the cashier is typing in
+// the product search box.
+setInterval(() => {
+    const posPage = document.getElementById('pos-page');
+    const isVisible = posPage && posPage.style.display !== 'none' && posPage.classList.contains('active');
+    if (!isVisible) return;
+
+    const active = document.activeElement;
+    const isTyping = active && active.id === 'searchInput';
+    if (isTyping) return;
+
+    loadPOSProducts();
+}, 15000);
+
+// === Category filter ===
+document.getElementById('categoryFilter').addEventListener('change', function() {
+  const selected = this.value.toLowerCase();
+  const rows = document.querySelectorAll('#posInventoryBody tr');
+
+  rows.forEach(row => {
+    // This now works because row.dataset.category is set above
+    const category = row.dataset.category.toLowerCase(); 
+    if (selected === '' || category === selected) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+});
+
+
+// === Combine with search filter ===
+document.getElementById('searchInput').addEventListener('input', function() {
+  const search = this.value.toLowerCase();
+  const selected = document.getElementById('categoryFilter').value.toLowerCase();
+  const rows = document.querySelectorAll('#posInventoryBody tr');
+
+  rows.forEach(row => {
+    // This now works because row.dataset.category is set above
+    const category = row.dataset.category.toLowerCase(); 
+    const brand = row.cells[1].textContent.toLowerCase();
+    const generic = row.cells[2].textContent.toLowerCase();
+    const dosage = row.cells[3].textContent.toLowerCase();
+    const form = row.cells[4].textContent.toLowerCase();
+  
+    const matchesSearch = brand.includes(search) || generic.includes(search) || dosage.includes(search) || form.includes(search);
+    const matchesCategory = (selected === '' || category === selected);
+
+    if (matchesSearch && matchesCategory) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+});
+
+
+});
+</script>
+
+
+<!-- Chart.js Library -->
+
+
+<script>
+// profile
+
+  // Keep a snapshot of the original values so Cancel can restore them
+  // without reloading the whole page (which used to kick the user back
+  // to the Dashboard tab).
+  window.profileOriginal = window.profileOriginal || {};
+  const profileOriginal = window.profileOriginal;
+  document.querySelectorAll("#profile-page .p-input").forEach(i => {
+      profileOriginal[i.id] = i.value;
+  });
+
+  const cEditBtn = document.getElementById("profile_editBtn");
+  const cSaveBtn = document.getElementById("saveBtn");
+  const cCancelBtn = document.getElementById("profile_cancelBtn");
+  const cMsg = document.getElementById("message");
+
+  // ENABLE EDIT MODE
+  cEditBtn.onclick = () => {
+      document.querySelectorAll("#profile-page .p-input").forEach(i => i.disabled = false);
+      cSaveBtn.hidden = false;
+      cCancelBtn.hidden = false;
+      cEditBtn.hidden = true;
+      cMsg.textContent = "";
+  };
+
+  // CANCEL EDIT (stay on the Profile page, just restore old values)
+  cCancelBtn.onclick = () => {
+      document.querySelectorAll("#profile-page .p-input").forEach(i => {
+          i.value = profileOriginal[i.id];
+          i.disabled = true;
+      });
+      cSaveBtn.hidden = true;
+      cCancelBtn.hidden = true;
+      cEditBtn.hidden = false;
+      cMsg.textContent = "";
+  };
+
+  // SAVE PROFILE (AJAX) — stays on the Profile page after saving
+  cSaveBtn.onclick = () => {
+
+      const data = {
+          first_name: document.getElementById("first_name").value.trim(),
+          middle_name: document.getElementById("middle_name").value.trim(),
+          last_name: document.getElementById("last_name").value.trim(),
+          email: document.getElementById("email").value.trim(),
+          phone_number: document.getElementById("phone_number").value.trim(),
+          address: document.getElementById("address").value.trim()
+      };
+      const vErr = window.phProfileValidate && window.phProfileValidate.profileError(data);
+      if (vErr) {
+          cMsg.style.color = "#e74c3c";
+          cMsg.textContent = vErr;
+          return;
+      }
+
+      cMsg.style.color = "#6b7280";
+      cMsg.textContent = "Saving...";
+
+      fetch("/api/cashier/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+      })
+      .then(res => res.json())
+      .then(response => {
+          if (response.success) {
+              cMsg.style.color = "#16a34a";
+              cMsg.textContent = response.message || "Profile updated successfully!";
+
+              // Use what the server actually verified was persisted in the DB
+              // (not just what we typed) as the new source of truth.
+              const saved = {
+                  first_name: response.first_name ?? data.first_name,
+                  middle_name: response.middle_name ?? data.middle_name,
+                  last_name: response.last_name ?? data.last_name,
+                  email: response.email ?? data.email,
+                  phone_number: response.phone_number ?? data.phone_number,
+                  address: response.address ?? data.address
+              };
+              Object.keys(saved).forEach(key => {
+                  profileOriginal[key] = saved[key];
+                  const field = document.getElementById(key);
+                  if (field) field.value = saved[key];
+              });
+              document.querySelectorAll("#profile-page .p-input").forEach(i => i.disabled = true);
+              cSaveBtn.hidden = true;
+              cCancelBtn.hidden = true;
+              cEditBtn.hidden = false;
+
+              // Refresh the name shown in the summary card without a reload
+              const nameHeader = document.getElementById("profileCardName");
+              if (nameHeader) nameHeader.textContent = `${saved.first_name} ${saved.last_name}`.trim();
+
+              const headerWelcome = document.getElementById("headerWelcomeName");
+              if (headerWelcome) headerWelcome.textContent = `Welcome, ${saved.first_name} ${saved.last_name || ''}`.replace(/\s+/g, ' ').trim();
+          } else {
+              cMsg.style.color = "#e74c3c";
+              cMsg.textContent = response.message || "Update failed.";
+          }
+      })
+      .catch(err => {
+          cMsg.style.color = "#e74c3c";
+          cMsg.textContent = "Request error.";
+          console.error("AJAX error:", err);
+      });
+  };
+
+  document.getElementById("cashierPasswordForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const pwMsg = document.getElementById("password-message");
+      const current = document.getElementById("current_password").value;
+      const next = document.getElementById("new_password").value;
+      const confirm = document.getElementById("confirm_password").value;
+      const vErr = window.phProfileValidate && window.phProfileValidate.passwordError(current, next, confirm);
+      if (vErr) {
+          pwMsg.style.color = "#e74c3c";
+          pwMsg.textContent = vErr;
+          return;
+      }
+      fetch("/api/auth/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+              current_password: document.getElementById("current_password").value,
+              new_password: document.getElementById("new_password").value,
+              confirm_password: document.getElementById("confirm_password").value
+          })
+      })
+      .then(res => res.json())
+      .then(r => {
+          pwMsg.style.color = r.success ? "#16a34a" : "#e74c3c";
+          pwMsg.textContent = r.message || (r.success ? "Password updated." : "Failed.");
+          if (r.success) {
+              ["current_password","new_password","confirm_password"].forEach(id => document.getElementById(id).value = "");
+          }
+      })
+      .catch(() => { pwMsg.style.color = "#e74c3c"; pwMsg.textContent = "Request error."; });
+  });
+  if (window.phProfileValidate) {
+      window.phProfileValidate.bindHints(document.getElementById("new_password"), document.getElementById("pwHints"));
+  }
+
+  document.getElementById("profile_avatar_input").addEventListener("change", function () {
+      const file = this.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("profile_image", file);
+
+      fetch("/api/staff/profile-picture", { method: "POST", body: formData })
+          .then(res => res.json())
+          .then(response => {
+              const msg = document.getElementById("message");
+              if (response.success) {
+                  document.getElementById("profile_avatar").src = response.path + "?t=" + Date.now();
+                  const headerAvatar = document.getElementById("headerProfileAvatar");
+                  if (headerAvatar) headerAvatar.src = response.path + "?t=" + Date.now();
+                  msg.style.color = "#16a34a";
+                  msg.textContent = "Profile picture updated!";
+              } else {
+                  msg.style.color = "#e74c3c";
+                  msg.textContent = response.message || "Failed to upload picture.";
+              }
+          })
+          .catch(err => {
+              console.error("Avatar upload error:", err);
+              const msg = document.getElementById("message");
+              msg.style.color = "#e74c3c";
+              msg.textContent = "Upload error.";
+          });
+  });
+  
+</script>
+
+
+
+
+<script src="/assets/theme.js?v=solid-ui10"></script>
+<script src="/assets/activity-clicks.js?v=click1"></script>
+</body>
+
+</html>
