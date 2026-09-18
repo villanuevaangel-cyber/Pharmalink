@@ -299,6 +299,26 @@ def get_profile_photo(request: Request):
     return image
 
 
+@router.post("/profile-picture")
+async def profile_picture(request: Request, profile_image: UploadFile = File(...)):
+    customer_id = require_customer(request)
+    if customer_id is None:
+        return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
+    if not profile_image.filename:
+        return {"success": False, "message": "Please choose an image to upload."}
+    ext = Path(profile_image.filename).suffix.lower().lstrip(".")
+    if ext not in ALLOWED_EXT:
+        return {"success": False, "message": "Only JPG, PNG, WEBP, or GIF images are allowed."}
+    content = await profile_image.read()
+    if len(content) > 3 * 1024 * 1024:
+        return {"success": False, "message": "Image must be under 3MB."}
+    path = store_customer_photo(customer_id, content, ext)
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            write_activity_log(cur, "Update Profile Picture", "Uploaded a new profile picture.", request=request)
+    return {"success": True, "path": path}
+
+
 @router.get("/orders")
 def list_orders(request: Request, type: str = "online", start_date: str = "", end_date: str = ""):
     customer_id = require_customer(request)

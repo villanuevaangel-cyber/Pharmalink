@@ -26,10 +26,7 @@
             if (welcome) welcome.textContent = 'Welcome, ' + fullName;
             const homeName = document.getElementById('homeFirstName');
             if (homeName) homeName.textContent = me.firstName || fullName;
-            if (me.profile_image) {
-                const headerAvatar = document.getElementById('headerProfileAvatar');
-                if (headerAvatar) headerAvatar.src = me.profile_image;
-            }
+            if (me.profile_image) applyAvatar(me.profile_image);
         } else {
             setupGuestShop();
         }
@@ -140,10 +137,7 @@
             form.address.value = c.address || '';
         }
         const avatar = c.profile_image || 'https://cdn-icons-png.flaticon.com/512/2922/2922510.png';
-        const preview = document.getElementById('profilePreview');
-        if (preview) preview.src = avatar;
-        const headerAvatar = document.getElementById('headerProfileAvatar');
-        if (headerAvatar && c.profile_image) headerAvatar.src = c.profile_image;
+        applyAvatar(avatar);
         const nameEl = document.getElementById('profileCardName');
         if (nameEl) nameEl.textContent = `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Customer';
         const welcome = document.getElementById('headerWelcomeName');
@@ -154,6 +148,22 @@
         if (typeEl) typeEl.textContent = c.customer_type || 'Regular';
         const ptsEl = document.getElementById('profilePoints');
         if (ptsEl) ptsEl.textContent = c.loyalty_points || '0.00';
+    }
+
+    const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/2922/2922510.png';
+    function applyAvatar(src) {
+        const avatar = (src && src !== DEFAULT_AVATAR) ? src : DEFAULT_AVATAR;
+        const preview = document.getElementById('profilePreview');
+        if (preview) {
+            preview.src = avatar;
+            preview.onerror = function () { this.onerror = null; this.src = DEFAULT_AVATAR; };
+        }
+        const headerAvatar = document.getElementById('headerProfileAvatar');
+        if (headerAvatar) {
+            headerAvatar.src = avatar;
+            headerAvatar.onerror = function () { this.onerror = null; this.src = DEFAULT_AVATAR; };
+        }
+        return avatar;
     }
 
     function initProfileForm() {
@@ -189,9 +199,28 @@
             if (previewImg) previewImg.src = originalPreview;
             setEditing(false);
         });
-        if (fileInput && previewImg) {
+        if (fileInput) {
             fileInput.addEventListener('change', function () {
-                if (this.files && this.files[0]) previewImg.src = URL.createObjectURL(this.files[0]);
+                const file = this.files && this.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('profile_image', file);
+                if (msg) { msg.textContent = 'Uploading photo...'; msg.style.color = '#6b7280'; }
+                fetch('/api/customer/profile-picture', { method: 'POST', body: formData, credentials: 'same-origin' })
+                    .then((r) => r.json())
+                    .then((data) => {
+                        if (data.success && data.path) {
+                            originalPreview = applyAvatar(data.path + '?t=' + Date.now());
+                            if (msg) { msg.textContent = 'Profile picture updated!'; msg.style.color = '#4BAA8B'; }
+                        } else if (msg) {
+                            msg.textContent = data.message || 'Failed to upload picture.';
+                            msg.style.color = '#e74c3c';
+                        }
+                        fileInput.value = '';
+                    })
+                    .catch(() => {
+                        if (msg) { msg.textContent = 'Network error. Please try again.'; msg.style.color = '#e74c3c'; }
+                    });
             });
         }
         form.addEventListener('submit', function (e) {
@@ -245,12 +274,7 @@
                     if (headerWelcome) headerWelcome.textContent = 'Welcome, ' + fullName;
                     const homeName = document.getElementById('homeFirstName');
                     if (homeName) homeName.textContent = form.first_name.value || 'Customer';
-                    if (data.profile_image && previewImg) {
-                        previewImg.src = data.profile_image + '?t=' + Date.now();
-                        originalPreview = previewImg.src;
-                        const headerAvatar = document.getElementById('headerProfileAvatar');
-                        if (headerAvatar) headerAvatar.src = previewImg.src;
-                    }
+                    if (data.profile_image) originalPreview = applyAvatar(data.profile_image + '?t=' + Date.now());
                     if (fileInput) fileInput.value = '';
                 })
                 .catch(() => {
