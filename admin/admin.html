@@ -3546,11 +3546,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.setAdminSection = setAdminSection;
 
-    setAdminSection('dashboard');
-    
-    // Set Dashboard as active initially
+    const hashId = (location.hash || '').replace(/^#/, '');
+    const startNav = hashId ? document.querySelector('.nav-item[data-target="' + hashId + '"]') : null;
+    const startId = startNav ? hashId : 'dashboard';
+    setAdminSection(startId);
+    navItems.forEach(i => i.classList.remove('active'));
     const dashboardNav = document.querySelector('.nav-item[data-target="dashboard"]');
-    if (dashboardNav) dashboardNav.classList.add('active');
+    (startNav || dashboardNav)?.classList.add('active');
+    if (window.phSetPortalHash) window.phSetPortalHash(startId);
 
     navItems.forEach(item => {
         item.addEventListener('click', function() {
@@ -3584,8 +3587,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
             // Add other module initializations here (e.g., inventory)
+            if (window.phSetPortalHash) window.phSetPortalHash(targetId);
         });
     });
+    if (startNav && startId !== 'dashboard') {
+        startNav.click();
+    }
 
     // ==========================================================
     // 2. Modal Toggles (Inalis ang mga hindi na ginagamit at inayos ang logic)
@@ -4921,7 +4928,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     btn.addEventListener('click', () => window.switchAdminDashPanel(btn.dataset.adPanel));
 });
 </script>
-<script src="/assets/theme.js?v=no-push1"></script>
+<script src="/assets/theme.js?v=spa-hash1"></script>
 <script src="/assets/activity-clicks.js?v=click1"></script>
 </body>
 </html>

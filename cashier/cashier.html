@@ -2249,6 +2249,7 @@ const pages = document.querySelectorAll('.page');
 navItems.forEach(item => {
     item.addEventListener('click', () => {
         const target = item.dataset.page;
+        if (!target) return;
 
         // Switch active tab
         navItems.forEach(n => n.classList.remove('active'));
@@ -2286,6 +2287,7 @@ navItems.forEach(item => {
         else if (target === "customer-segmentation-page") {
             if (window.bootSegmentation) window.bootSegmentation();
         }
+        if (window.phSetPortalHash) window.phSetPortalHash(target);
     });
 });
 
@@ -2967,7 +2969,7 @@ document.getElementById('searchInput').addEventListener('input', function() {
 
 
 
-<script src="/assets/theme.js?v=no-push1"></script>
+<script src="/assets/theme.js?v=spa-hash1"></script>
 <script src="/assets/activity-clicks.js?v=click1"></script>
 </body>
 

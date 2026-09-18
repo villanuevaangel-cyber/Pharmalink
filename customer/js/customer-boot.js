@@ -43,7 +43,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=guest-shop1';
+        script.src = '/customer/js/customer.js?v=spa-hash1';
         document.body.appendChild(script);
     });
 
@@ -57,6 +57,7 @@
         document.querySelectorAll('.sidebar-nav .nav-item').forEach((item) => {
             item.classList.toggle('active', item.getAttribute('data-target') === 'products');
         });
+        if (window.phSetPortalHash) window.phSetPortalHash('products');
         const welcome = document.getElementById('headerWelcomeName');
         if (welcome) welcome.textContent = 'Browsing as guest';
         const authLink = document.getElementById('customerAuthLink');
