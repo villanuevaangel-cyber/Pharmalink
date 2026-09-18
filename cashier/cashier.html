@@ -266,7 +266,7 @@
             <div id="customerModal" class="modal">
                 <div class="pos-modal-card">
                     <h4>Select Customer (Optional)</h4>
-                    <input type="text" id="customerSearch" placeholder="Type customer name...">
+                    <input type="text" id="customerSearch" placeholder="Search name, username, or number..." autocomplete="off">
                     <ul id="customerList"></ul>
                     <button type="button" id="closeModal"><i class="fas fa-xmark"></i> Close</button>
                 </div>
@@ -2324,14 +2324,35 @@ navItems.forEach(item => {
   // Open modal
   selectBtn.addEventListener("click", () => {
     modal.style.display = "flex";
-    renderCustomerList(customers);
     searchInput.value = "";
+    renderCustomerList(customers);
     searchInput.focus();
   });
 
   // Close modal
   closeModal.addEventListener("click", () => {
     modal.style.display = "none";
+  });
+
+  function customerMatches(c, query) {
+    const q = String(query || "").trim().toLowerCase();
+    if (!q) return true;
+    const hay = [c.name, c.username, c.phone_number].filter(Boolean).join(" ").toLowerCase();
+    return q.split(/\s+/).every((part) => hay.includes(part));
+  }
+
+  function filterCustomerList() {
+    const filtered = customers.filter((c) => customerMatches(c, searchInput.value));
+    renderCustomerList(filtered);
+  }
+
+  searchInput.addEventListener("input", filterCustomerList);
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const first = customerList.querySelector("li[data-customer-id]");
+      if (first) first.click();
+    }
   });
 
   // Render list
@@ -2344,6 +2365,7 @@ navItems.forEach(item => {
 
     list.forEach(c => {
       const li = document.createElement("li");
+      li.dataset.customerId = c.customer_id;
       li.textContent = c.name;
       li.style.padding = "8px";
       li.style.cursor = "pointer";

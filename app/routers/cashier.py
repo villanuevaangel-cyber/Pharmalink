@@ -143,13 +143,21 @@ def customers(request: Request):
         """
         SELECT customer_id,
                CONCAT_WS(' ', first_name, middle_name, last_name) AS name,
+               COALESCE(username, '') AS username,
+               COALESCE(phone_number, '') AS phone_number,
                COALESCE(loyalty_points, 0) AS loyalty_points
         FROM customers
         WHERE is_active = 1
         ORDER BY last_name ASC
         """
     )
-    return [{"customer_id": r["customer_id"], "name": r["name"], "loyalty_points": float(r["loyalty_points"] or 0)} for r in rows]
+    return [{
+        "customer_id": r["customer_id"],
+        "name": r["name"],
+        "username": r["username"] or "",
+        "phone_number": r["phone_number"] or "",
+        "loyalty_points": float(r["loyalty_points"] or 0),
+    } for r in rows]
 
 
 @router.get("/promos")
