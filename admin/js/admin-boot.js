@@ -71,12 +71,17 @@
         if (cardName) cardName.textContent = `${staff.first_name || ""} ${staff.last_name || ""}`.trim() || name;
         const userEl = document.getElementById("profileUsername");
         if (userEl && staff.username) userEl.textContent = "@" + staff.username;
-        const avatar = profileImage || staff.profile_image;
-        if (avatar) {
-            const preview = document.getElementById("profile_avatar");
-            if (preview) preview.src = avatar;
-            const headerAvatar = document.getElementById("headerProfileAvatar");
-            if (headerAvatar) headerAvatar.src = avatar;
+        const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/2922/2922510.png";
+        const avatar = [profileImage, staff.profile_image].find((src) => src && src !== DEFAULT_AVATAR) || DEFAULT_AVATAR;
+        const preview = document.getElementById("profile_avatar");
+        if (preview) {
+            preview.src = avatar;
+            preview.onerror = function () { this.onerror = null; this.src = DEFAULT_AVATAR; };
+        }
+        const headerAvatar = document.getElementById("headerProfileAvatar");
+        if (headerAvatar) {
+            headerAvatar.src = avatar;
+            headerAvatar.onerror = function () { this.onerror = null; this.src = DEFAULT_AVATAR; };
         }
         window.profileOriginal = window.profileOriginal || {};
         document.querySelectorAll("#profile .p-input").forEach((input) => {
