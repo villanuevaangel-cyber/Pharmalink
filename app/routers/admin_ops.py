@@ -959,6 +959,69 @@ def _linreg(xs, ys):
     return slope, intercept
 
 
+def _mean(vals):
+    return (sum(vals) / len(vals)) if vals else 0.0
+
+
+def _window_mean(series, last_n):
+    if not series:
+        return 0.0
+    chunk = series[-last_n:] if last_n else series
+    return _mean(chunk)
+
+
+def _run_rate(ys):
+    """Daily level that does not collapse to 0 just because most calendar days are quiet."""
+    for window in (28, 90):
+        level = _window_mean(ys, window)
+        if level >= 1:
+            return level
+    filled_mean = _mean(ys)
+    if filled_mean >= 1:
+        return filled_mean
+    positive = [y for y in ys if y > 0]
+    if positive:
+        return _mean(positive[-30:])
+    return 0.0
+
+
+def _dow_factors(dates, ys):
+    sums = [0.0] * 7
+    counts = [0] * 7
+    overall = _mean([y for y in ys if y > 0]) or _mean(ys) or 1.0
+    for d, y in zip(dates, ys):
+        if y <= 0:
+            continue
+        php_dow = int(datetime.strptime(d, "%Y-%m-%d").strftime("%w"))
+        sums[php_dow] += y / overall
+        counts[php_dow] += 1
+    return [sums[i] / counts[i] if counts[i] else 1.0 for i in range(7)]
+
+
+def _project_daily(dates, ys, today, period):
+    level = _run_rate(ys)
+    last14 = _window_mean(ys, 14)
+    prev14 = _mean(ys[-28:-14]) if len(ys) >= 28 else last14
+    daily_trend = 0.0
+    if level >= 1 and last14 >= 1 and prev14 >= 1:
+        daily_trend = (last14 - prev14) / 14.0
+        cap = level / max(period, 1)
+        daily_trend = max(-cap, min(cap, daily_trend))
+    factors = _dow_factors(dates, ys)
+    labels, values, lower, upper = [], [], [], []
+    total = 0.0
+    for step in range(1, period + 1):
+        future = today + timedelta(days=step)
+        php_dow = int(future.strftime("%w"))
+        pred = max(0.0, (level + daily_trend * step) * factors[php_dow])
+        labels.append(future.strftime("%b %d").replace(" 0", " "))
+        values.append(round(pred, 2))
+        lower.append(round(pred * 0.8, 2))
+        upper.append(round(pred * 1.2, 2))
+        total += pred
+    return labels, values, lower, upper, total
+
+
 def _date_range(start: date, end: date):
     out = []
     cur = start
@@ -974,18 +1037,42 @@ def forecast(request: Request, period: int = 30):
         return _unauthorized()
     if period not in (7, 30, 90):
         period = 30
-    history_days = 180
+    history_days = 365
     history = []
     for row in fetch_all(
         """
-        SELECT s.date_created::date AS sale_date, SUM(s.total_amount) AS daily_total, COALESCE(SUM(si.quantity), 0) AS daily_qty
-        FROM sales s LEFT JOIN sales_items si ON si.sale_id = s.sale_id
-        WHERE s.status = 'completed' AND s.date_created >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
-        GROUP BY s.date_created::date ORDER BY sale_date ASC
+        SELECT sale_date, SUM(daily_total) AS daily_total, SUM(daily_qty) AS daily_qty
+        FROM (
+            SELECT s.date_created::date AS sale_date,
+                   SUM(s.total_amount)::float AS daily_total,
+                   COALESCE(SUM(q.qty), 0)::float AS daily_qty
+            FROM sales s
+            LEFT JOIN (
+                SELECT sale_id, SUM(quantity) AS qty FROM sales_items GROUP BY sale_id
+            ) q ON q.sale_id = s.sale_id
+            WHERE LOWER(TRIM(s.status)) = 'completed'
+              AND s.date_created >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+            GROUP BY s.date_created::date
+            UNION ALL
+            SELECT co.order_date::date AS sale_date,
+                   SUM(co.total_amount)::float AS daily_total,
+                   COALESCE(SUM(od.quantity), 0)::float AS daily_qty
+            FROM customer_orders co
+            LEFT JOIN order_details od ON od.order_id = co.order_id
+            WHERE LOWER(TRIM(co.order_status)) IN ('completed', 'ready for pickup')
+              AND co.order_date >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+            GROUP BY co.order_date::date
+        ) t
+        GROUP BY sale_date
+        ORDER BY sale_date ASC
         """,
-        (history_days,),
+        (history_days, history_days),
     ):
-        history.append({"date": _jsonable(row["sale_date"]), "total": float(row["daily_total"] or 0), "qty": int(row["daily_qty"] or 0)})
+        history.append({
+            "date": _jsonable(row["sale_date"]),
+            "total": float(row["daily_total"] or 0),
+            "qty": int(row["daily_qty"] or 0),
+        })
     if len(history) < 2:
         return {
             "success": True,
@@ -997,20 +1084,37 @@ def forecast(request: Request, period: int = 30):
     per_drug = {}
     for row in fetch_all(
         """
-        SELECT d.drug_id, d.generic_name, d.brand_name, d.category, s.date_created::date AS sale_date, SUM(si.quantity) AS daily_qty
-        FROM sales_items si JOIN sales s ON si.sale_id = s.sale_id JOIN drugs_master d ON si.drug_id = d.drug_id
-        WHERE s.status = 'completed' AND s.date_created >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
-        GROUP BY d.drug_id, d.generic_name, d.brand_name, d.category, s.date_created::date
-        ORDER BY d.drug_id, sale_date ASC
+        SELECT drug_id, generic_name, brand_name, category, sale_date, SUM(daily_qty) AS daily_qty
+        FROM (
+            SELECT d.drug_id, d.generic_name, d.brand_name, d.category,
+                   s.date_created::date AS sale_date, SUM(si.quantity) AS daily_qty
+            FROM sales_items si
+            JOIN sales s ON si.sale_id = s.sale_id
+            JOIN drugs_master d ON si.drug_id = d.drug_id
+            WHERE LOWER(TRIM(s.status)) = 'completed'
+              AND s.date_created >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+            GROUP BY d.drug_id, d.generic_name, d.brand_name, d.category, s.date_created::date
+            UNION ALL
+            SELECT d.drug_id, d.generic_name, d.brand_name, d.category,
+                   co.order_date::date AS sale_date, SUM(od.quantity) AS daily_qty
+            FROM order_details od
+            JOIN customer_orders co ON od.order_id = co.order_id
+            JOIN drugs_master d ON od.drug_id = d.drug_id
+            WHERE LOWER(TRIM(co.order_status)) IN ('completed', 'ready for pickup')
+              AND co.order_date >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+            GROUP BY d.drug_id, d.generic_name, d.brand_name, d.category, co.order_date::date
+        ) t
+        GROUP BY drug_id, generic_name, brand_name, category, sale_date
+        ORDER BY drug_id, sale_date ASC
         """,
-        (history_days,),
+        (history_days, history_days),
     ):
         did = int(row["drug_id"])
         if did not in per_drug:
             label = f"{row['generic_name']}" + (f" ({row['brand_name']})" if row.get("brand_name") else "")
             per_drug[did] = {"name": label, "category": row["category"], "series": []}
         per_drug[did]["series"].append({"date": _jsonable(row["sale_date"]), "qty": int(row["daily_qty"] or 0)})
-    today = date.today()
+    today = _manila_today()
     range_start = today - timedelta(days=history_days)
     payload = json.dumps({
         "period": period,
@@ -1027,8 +1131,10 @@ def forecast(request: Request, period: int = 30):
                 if proc.returncode != 0:
                     continue
                 decoded = json.loads(proc.stdout or "{}")
-                if decoded.get("success"):
-                    return decoded
+                if decoded.get("success") and not decoded.get("insufficient_data"):
+                    vals = (decoded.get("forecast") or {}).get("values") or []
+                    if vals and max(float(v or 0) for v in vals) > 0:
+                        return decoded
             except Exception:
                 continue
     dates = _date_range(range_start, today)
@@ -1039,36 +1145,8 @@ def forecast(request: Request, period: int = 30):
         qty_by[p["date"]] = qty_by.get(p["date"], 0) + p["qty"]
     sales_ys = [total_by.get(d, 0.0) for d in dates]
     qty_ys = [qty_by.get(d, 0.0) for d in dates]
-    xs = list(range(len(dates)))
-    sales_slope, sales_int = _linreg(xs, sales_ys)
-    qty_slope, qty_int = _linreg(xs, qty_ys)
-    dow_sums = [0.0] * 7
-    dow_counts = [0] * 7
-    for i, d in enumerate(dates):
-        trend = sales_slope * i + sales_int
-        if trend <= 0:
-            continue
-        dow = datetime.strptime(d, "%Y-%m-%d").weekday()
-        # PHP date('w') is Sunday=0; Python weekday Monday=0. Convert.
-        php_dow = (dow + 1) % 7
-        ratio = max(0.5, min(1.5, sales_ys[i] / trend))
-        dow_sums[php_dow] += ratio
-        dow_counts[php_dow] += 1
-    dow_factor = [dow_sums[d] / dow_counts[d] if dow_counts[d] else 1.0 for d in range(7)]
-    last_index = len(dates) - 1
-    labels, values = [], []
-    pred_sales = pred_qty = 0.0
-    for d in range(1, period + 1):
-        future_index = last_index + d
-        future = today + timedelta(days=d)
-        php_dow = int(future.strftime("%w"))
-        trend_sales = max(0, sales_slope * future_index + sales_int)
-        seasonal = trend_sales * dow_factor[php_dow]
-        trend_qty = max(0, qty_slope * future_index + qty_int)
-        labels.append(future.strftime("%b %d").replace(" 0", " "))
-        values.append(round(seasonal, 2))
-        pred_sales += seasonal
-        pred_qty += trend_qty
+    labels, values, lower, upper, pred_sales = _project_daily(dates, sales_ys, today, period)
+    pred_qty = _run_rate(qty_ys) * period
     item_forecasts = []
     cat_tot = {}
     for info in per_drug.values():
@@ -1076,11 +1154,7 @@ def forecast(request: Request, period: int = 30):
         for pt in info["series"]:
             qmap[pt["date"]] = qmap.get(pt["date"], 0) + pt["qty"]
         ys = [qmap.get(d, 0.0) for d in dates]
-        slope, intercept = _linreg(list(range(len(dates))), ys)
-        predicted = 0.0
-        for d in range(1, period + 1):
-            predicted += max(0, slope * (last_index + d) + intercept)
-        predicted = round(predicted)
+        predicted = round(_run_rate(ys) * period)
         item_forecasts.append({"name": info["name"], "predicted_qty": predicted})
         cat = info["category"] or "Uncategorized"
         cat_tot[cat] = cat_tot.get(cat, 0) + predicted
@@ -1091,7 +1165,7 @@ def forecast(request: Request, period: int = 30):
         "success": True,
         "insufficient_data": False,
         "period": period,
-        "forecast": {"labels": labels, "values": values},
+        "forecast": {"labels": labels, "values": values, "lower": lower, "upper": upper},
         "predicted_total_sales": round(pred_sales, 2),
         "predicted_items_sold": int(round(pred_qty)),
         "top_category": top_cat,
