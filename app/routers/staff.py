@@ -1,15 +1,14 @@
-import time
 from pathlib import Path
 
 from fastapi import APIRouter, File, Query, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.activity import write_activity_log
 from app.db import fetch_all, fetch_one, get_conn
 from app.deps import require_staff
+from app.profile_photos import ALLOWED_EXT, photo_response, store_staff_photo
 
 router = APIRouter(prefix="/api/staff", tags=["staff"])
-ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _ensure_staff_notification_reads() -> None:
@@ -262,6 +261,23 @@ async def mark_notification_read(request: Request, notif_key: str = Query("")):
     return {"success": True, "count": count, "notifications": notes}
 
 
+@router.get("/profile-photo")
+def get_profile_photo(request: Request):
+    user_id = require_staff(request)
+    if not user_id:
+        return JSONResponse({"success": False, "message": "Not authorized."}, status_code=401)
+    row = fetch_one(
+        "SELECT profile_image, profile_image_data, profile_image_mime FROM staff_info WHERE user_id = %s",
+        (user_id,),
+    )
+    if not row:
+        return JSONResponse({"success": False, "message": "Not found."}, status_code=404)
+    image = photo_response(row.get("profile_image_data"), row.get("profile_image_mime"), row.get("profile_image"))
+    if image is None:
+        return JSONResponse({"success": False, "message": "No photo."}, status_code=404)
+    return image
+
+
 @router.post("/profile-picture")
 async def profile_picture(request: Request, profile_image: UploadFile = File(...)):
     user_id = require_staff(request)
@@ -270,18 +286,13 @@ async def profile_picture(request: Request, profile_image: UploadFile = File(...
     if not profile_image.filename:
         return {"success": False, "message": "Please choose an image to upload."}
     ext = Path(profile_image.filename).suffix.lower().lstrip(".")
-    if ext not in {"jpg", "jpeg", "png", "webp"}:
-        return {"success": False, "message": "Only JPG, PNG, or WEBP images are allowed."}
+    if ext not in ALLOWED_EXT:
+        return {"success": False, "message": "Only JPG, PNG, WEBP, or GIF images are allowed."}
     content = await profile_image.read()
     if len(content) > 3 * 1024 * 1024:
         return {"success": False, "message": "Image must be under 3MB."}
-    dest = ROOT / "uploads" / "profile_pictures"
-    dest.mkdir(parents=True, exist_ok=True)
-    filename = f"staff_{user_id}_{int(time.time())}.{ext}"
-    (dest / filename).write_bytes(content)
-    path = f"/uploads/profile_pictures/{filename}"
+    path = store_staff_photo(user_id, content, ext)
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("UPDATE staff_info SET profile_image = %s WHERE user_id = %s", (path, user_id))
             write_activity_log(cur, "Update Profile Picture", "Uploaded a new profile picture.", request=request)
     return {"success": True, "path": path}

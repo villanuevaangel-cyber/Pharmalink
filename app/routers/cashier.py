@@ -13,6 +13,7 @@ from app.activity import log_event, write_activity_log
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin, require_staff
 from app.payments import CASHIER_PAYMENT_KEYS
+from app.profile_photos import resolve_photo_url, staff_photo_url
 from app.stock import sync_stock_status_for_drug
 from app.validation import prepare_profile_fields
 
@@ -849,7 +850,7 @@ def get_profile(request: Request):
     staff = fetch_one(
         """
         SELECT si.first_name, si.middle_name, si.last_name, si.email, si.phone_number, si.address, si.profile_image,
-               u.username
+               (si.profile_image_data IS NOT NULL) AS has_profile_photo, u.username
         FROM staff_info si
         JOIN users u ON si.user_id = u.user_id
         WHERE si.user_id = %s
@@ -858,7 +859,8 @@ def get_profile(request: Request):
     ) or {}
     staff = dict(staff) if staff else {}
     staff["email"] = staff.get("email") or staff.get("username") or ""
-    staff["profile_image"] = staff.get("profile_image") or DEFAULT_AVATAR
+    has_photo = bool(staff.pop("has_profile_photo", False))
+    staff["profile_image"] = resolve_photo_url(staff.get("profile_image"), has_photo, staff_photo_url(user_id))
     staff["first_name"] = staff.get("first_name") or request.session.get("user_first_name") or "Cashier"
     return {"success": True, "staff": staff}
 

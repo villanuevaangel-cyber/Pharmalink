@@ -5,6 +5,11 @@ from pydantic import BaseModel
 from app.activity import log_event, write_activity_log
 from app.db import fetch_one, get_conn, next_id
 from app.mailer import GENERIC_FORGOT_MESSAGE, send_mail
+from app.profile_photos import (
+    customer_photo_url,
+    resolve_photo_url,
+    staff_photo_url,
+)
 from app.security import hash_password, verify_password
 from app.validation import password_complexity_error, prepare_profile_fields
 
@@ -126,12 +131,18 @@ def me(request: Request):
     extra = {}
     if str(user["role"]).lower() == "customer":
         row = fetch_one(
-            "SELECT first_name, last_name, profile_image FROM customers WHERE customer_id = %s",
+            """
+            SELECT first_name, last_name, profile_image,
+                   (profile_image_data IS NOT NULL) AS has_profile_photo
+            FROM customers WHERE customer_id = %s
+            """,
             (user["user_id"],),
         )
         if row:
-            extra["profile_image"] = row.get("profile_image") or (
-                "https://cdn-icons-png.flaticon.com/512/2922/2922510.png"
+            extra["profile_image"] = resolve_photo_url(
+                row.get("profile_image"),
+                bool(row.get("has_profile_photo")),
+                customer_photo_url(user["user_id"]),
             )
             extra["firstName"] = row.get("first_name") or user["firstName"]
             extra["lastName"] = row.get("last_name") or user.get("lastName") or ""
@@ -145,7 +156,7 @@ def me(request: Request):
         staff = fetch_one(
             """
             SELECT si.first_name, si.middle_name, si.last_name, si.email, si.phone_number, si.address,
-                   si.profile_image, u.username
+                   si.profile_image, (si.profile_image_data IS NOT NULL) AS has_profile_photo, u.username
             FROM staff_info si
             JOIN users u ON si.user_id = u.user_id
             WHERE si.user_id = %s
@@ -153,10 +164,15 @@ def me(request: Request):
             (user["user_id"],),
         )
         if staff:
-            extra["staff"] = dict(staff)
-            extra["profile_image"] = staff.get("profile_image") or (
-                "https://cdn-icons-png.flaticon.com/512/2922/2922510.png"
+            staff = dict(staff)
+            photo = resolve_photo_url(
+                staff.get("profile_image"),
+                bool(staff.pop("has_profile_photo", False)),
+                staff_photo_url(user["user_id"]),
             )
+            staff["profile_image"] = photo
+            extra["staff"] = staff
+            extra["profile_image"] = photo
             extra["firstName"] = staff.get("first_name") or user["firstName"]
             extra["lastName"] = staff.get("last_name") or user.get("lastName") or ""
             request.session["user_first_name"] = extra["firstName"]

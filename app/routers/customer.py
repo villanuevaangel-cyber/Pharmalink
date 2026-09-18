@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, File, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from psycopg2.extras import RealDictCursor
 
 from app.activity import write_activity_log
@@ -15,6 +15,13 @@ from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import session_user_id
 from app.payments import normalize_payment_method
 from app.stock import match_prescription_to_stock, sync_stock_status_for_drug
+from app.profile_photos import (
+    ALLOWED_EXT,
+    customer_photo_url,
+    photo_response,
+    resolve_photo_url,
+    store_customer_photo,
+)
 from app.validation import prepare_profile_fields
 
 router = APIRouter(prefix="/api/customer", tags=["customer"])
@@ -160,7 +167,8 @@ def get_profile(request: Request):
     customer = fetch_one(
         """
         SELECT first_name, middle_name, last_name, email, phone_number, address,
-               customer_type, loyalty_points, profile_image, username
+               customer_type, loyalty_points, profile_image, username,
+               (profile_image_data IS NOT NULL) AS has_profile_photo
         FROM customers WHERE customer_id = %s
         """,
         (customer_id,),
@@ -169,6 +177,10 @@ def get_profile(request: Request):
         return {"success": False, "message": "Customer not found."}
     customer = dict(customer)
     customer["loyalty_points"] = _fmt_money(customer.get("loyalty_points"))
+    has_photo = bool(customer.pop("has_profile_photo", False))
+    customer["profile_image"] = resolve_photo_url(
+        customer.get("profile_image"), has_photo, customer_photo_url(customer_id)
+    )
     return {"success": True, "data": customer}
 
 
@@ -200,16 +212,12 @@ async def update_profile(request: Request):
     upload = form.get("profile_image")
     if upload and getattr(upload, "filename", ""):
         ext = Path(upload.filename).suffix.lower().lstrip(".")
-        if ext not in {"jpg", "jpeg", "png", "webp"}:
-            return {"success": False, "message": "Only JPG, PNG, or WEBP images are allowed."}
+        if ext not in ALLOWED_EXT:
+            return {"success": False, "message": "Only JPG, PNG, WEBP, or GIF images are allowed."}
         content = await upload.read()
         if len(content) > 3 * 1024 * 1024:
             return {"success": False, "message": "Image must be under 3MB."}
-        dest_dir = ROOT / "uploads" / "profile_pictures"
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"customer_{customer_id}_{int(time.time())}.{ext}"
-        (dest_dir / filename).write_bytes(content)
-        profile_image_path = f"/uploads/profile_pictures/{filename}"
+        profile_image_path = store_customer_photo(customer_id, content, ext)
 
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -269,9 +277,46 @@ async def update_profile(request: Request):
     return {
         "success": True,
         "message": "Profile updated successfully.",
-        "profile_image": customer.get("profile_image") or profile_image_path,
+        "profile_image": customer.get("profile_image") or profile_image_path or "",
         "customer": customer,
     }
+
+
+@router.get("/profile-photo")
+def get_profile_photo(request: Request):
+    customer_id = require_customer(request)
+    if customer_id is None:
+        return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
+    row = fetch_one(
+        "SELECT profile_image, profile_image_data, profile_image_mime FROM customers WHERE customer_id = %s",
+        (customer_id,),
+    )
+    if not row:
+        return JSONResponse({"success": False, "message": "Not found."}, status_code=404)
+    image = photo_response(row.get("profile_image_data"), row.get("profile_image_mime"), row.get("profile_image"))
+    if image is None:
+        return JSONResponse({"success": False, "message": "No photo."}, status_code=404)
+    return image
+
+
+@router.post("/profile-picture")
+async def profile_picture(request: Request, profile_image: UploadFile = File(...)):
+    customer_id = require_customer(request)
+    if customer_id is None:
+        return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
+    if not profile_image.filename:
+        return {"success": False, "message": "Please choose an image to upload."}
+    ext = Path(profile_image.filename).suffix.lower().lstrip(".")
+    if ext not in ALLOWED_EXT:
+        return {"success": False, "message": "Only JPG, PNG, WEBP, or GIF images are allowed."}
+    content = await profile_image.read()
+    if len(content) > 3 * 1024 * 1024:
+        return {"success": False, "message": "Image must be under 3MB."}
+    path = store_customer_photo(customer_id, content, ext)
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            write_activity_log(cur, "Update Profile Picture", "Uploaded a new profile picture.", request=request)
+    return {"success": True, "path": path}
 
 
 @router.get("/orders")

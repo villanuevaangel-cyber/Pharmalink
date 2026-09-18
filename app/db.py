@@ -68,6 +68,11 @@ def init_pool() -> None:
             )
         conn.commit()
         try:
+            from app.profile_photos import ensure_profile_photo_columns
+            ensure_profile_photo_columns(conn)
+        except Exception:
+            conn.rollback()
+        try:
             from app.automation import ensure_automation_schema
             ensure_automation_schema(conn)
         except Exception:
