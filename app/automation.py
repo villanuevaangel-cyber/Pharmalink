@@ -211,7 +211,7 @@ def scan_near_expiry(cur) -> int:
             alert_type, severity, window = "expiring_90", "info", "90"
         title = f"Near expiry ({window} days)"
         message = (
-            f"{row['generic_name']} ({row['brand_name']}), lot {row['lot_number']} — "
+            f"{row['generic_name']} ({row['brand_name']}), lot {row['lot_number']} - "
             f"{days} day(s) left, {int(row['current_stock'] or 0)} unit(s) on hand."
         )
         if _upsert_alert(cur, alert_type, f"lot:{lot_id}:{window}", severity, title, message):
@@ -236,11 +236,11 @@ def scan_stock_alerts(cur) -> int:
         status = row["stock_status"]
         on_hand = int(row["on_hand"] or 0)
         if status == "out":
-            msg = f"Out of stock: {row['generic_name']} ({row['brand_name']}) — restock immediately."
+            msg = f"Out of stock: {row['generic_name']} ({row['brand_name']}) - restock immediately."
             severity = "critical"
         else:
             msg = (
-                f"Low stock: {row['generic_name']} ({row['brand_name']}) — {on_hand} left "
+                f"Low stock: {row['generic_name']} ({row['brand_name']}) - {on_hand} left "
                 f"(min {int(row['minimum_stock'] or 0)})."
             )
             severity = "warning"
@@ -308,14 +308,14 @@ def compute_reorder_suggestions() -> dict:
             reasoning = (
                 f"Trend: ~{round(avg, 1)}/day; {days_of_stock} days of unexpired stock left."
                 if has_demand
-                else f"Stock is at or below minimum ({minimum}); no recent sales — minimum-buffer refill."
+                else f"Stock is at or below minimum ({minimum}); no recent sales - minimum-buffer refill."
             )
         elif has_demand and days_of_stock is not None and days_of_stock > overstock:
             action = "decrease"
             qty = 0
             reduce_qty = max(0, current - max(minimum, int(math.ceil(target_stock))))
             reasoning = (
-                f"At ~{round(avg, 1)}/day this covers ~{days_of_stock} days — pause reorders"
+                f"At ~{round(avg, 1)}/day this covers ~{days_of_stock} days - pause reorders"
                 + (f" (about {reduce_qty} units above the 30-day target)." if reduce_qty else ".")
             )
         elif not has_demand and current > minimum * 3 and minimum > 0:
@@ -324,11 +324,11 @@ def compute_reorder_suggestions() -> dict:
             reduce_qty = max(0, current - minimum)
             reasoning = (
                 f"No sales in {window} days, and stock ({current}) is well above minimum ({minimum})"
-                + (f" — {reduce_qty} units can wait." if reduce_qty else ".")
+                + (f" - {reduce_qty} units can wait." if reduce_qty else ".")
             )
         else:
             reasoning = (
-                f"Trend: ~{round(avg, 1)}/day; {days_of_stock} days of stock — sufficient."
+                f"Trend: ~{round(avg, 1)}/day; {days_of_stock} days of stock - sufficient."
                 if has_demand
                 else "No recent sales, and stock is within a reasonable range of the minimum."
             )
@@ -469,7 +469,7 @@ def create_auto_purchase_orders() -> dict:
     ]
     notes = (
         "AUTO: generated from 30-day sales trend. "
-        "Consignment items are excluded — create those POs manually. "
+        "Consignment items are excluded - create those POs manually. "
         "Review quantities before sending to the supplier."
     )
     result = create_purchase_orders_from_needs(needs, "System", notes, raise_alerts=True)
@@ -522,7 +522,7 @@ def email_alert_digest() -> dict:
     if not emails:
         return {"sent": 0, "alerts": len(pending), "reason": "no admin email"}
     items = "".join(
-        f"<li><strong>{row['title']}</strong> — {row['message']}</li>" for row in pending
+        f"<li><strong>{row['title']}</strong> - {row['message']}</li>" for row in pending
     )
     html = (
         "<p>PharmaLink ran automated checks (stock, expiry, purchase orders).</p>"

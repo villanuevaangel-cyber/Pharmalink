@@ -1,5 +1,5 @@
 /* ==========================================================================
-   PHARMALINK — UNIFIED DESIGN SYSTEM
+   PHARMALINK - UNIFIED DESIGN SYSTEM
    Shared by: Admin Portal · Cashier / POS Portal · Customer Portal · Auth
    This file is the single source of truth for color, type, spacing, motion
    and every recurring UI component (sidebar, header, cards, tables, forms,
@@ -50,11 +50,7 @@
   --ph-info-dk:      #1E3A34;
 
   /* ---------- Surfaces & text ---------- */
-<<<<<<< HEAD
   --ph-bg:          #ffffff;
-=======
-  --ph-bg:          #FFF7E6;
->>>>>>> e5eed029ffae0aa7115c2c2eeb7c51e95f32b8be
   --ph-surface:     #FFF7E6;
   --ph-surface-2:   #FFE3B3;
   --ph-border:      #FFC857;
@@ -112,7 +108,7 @@ a{ color:var(--ph-primary-600); }
 *::-webkit-scrollbar-thumb:hover{ background:var(--ph-primary-400); }
 
 /* ==========================================================================
-   SIDEBAR — identical skeleton across admin / cashier / customer
+   SIDEBAR - identical skeleton across admin / cashier / customer
    ========================================================================== */
 .sidebar{
   width:250px;
@@ -471,7 +467,7 @@ section{ animation:phFadeIn .45s var(--ph-ease); }
 @keyframes phFadeIn{ from{opacity:0;} to{opacity:1;} }
 
 /* ==========================================================================
-   PAGE TITLES — same gap as Admin Dashboard on every tab / role
+   PAGE TITLES - same gap as Admin Dashboard on every tab / role
    ========================================================================== */
 .dashboard-header,
 .products-header,
@@ -507,7 +503,7 @@ section{ animation:phFadeIn .45s var(--ph-ease); }
 }
 
 /* ==========================================================================
-   CARDS — dashboard-cards / stats-cards / generic .card
+   CARDS - dashboard-cards / stats-cards / generic .card
    ========================================================================== */
 .dashboard-cards, .stats-cards{
   display:grid;
@@ -568,7 +564,7 @@ section{ animation:phFadeIn .45s var(--ph-ease); }
 .tips-card i{ font-size:19px; color:var(--ph-success); margin-right:10px; }
 
 /* ==========================================================================
-   BUTTONS — one visual language for every button variant in the codebase
+   BUTTONS - one visual language for every button variant in the codebase
    ========================================================================== */
 button, .add-btn, .btn-primary, .btn-process, .btn-complete, .btn-review,
 .update-btn, .upload-btn, .quick-action-btn, .search-section button,
@@ -638,7 +634,7 @@ button:disabled, .add-btn:disabled, input:disabled, .p-input:disabled{
 .qty-minus{ background:var(--ph-danger) !important; }
 .qty-plus{ background:var(--ph-primary-500) !important; }
 
-/* Ripple container (JS adds .ph-ripple span on click — see theme.js) */
+/* Ripple container (JS adds .ph-ripple span on click - see theme.js) */
 .ph-ripple-host{ position:relative; overflow:hidden; }
 .ph-ripple{
   position:absolute; border-radius:50%; pointer-events:none;
@@ -677,7 +673,7 @@ input:focus, textarea:focus, select:focus{
 .search-section input{ flex:1; }
 
 /* ==========================================================================
-   TABLES — one consistent look for every table in the system
+   TABLES - one consistent look for every table in the system
    ========================================================================== */
 .table-wrap{ overflow-x:auto; border-radius:var(--ph-radius-lg); margin-bottom:30px; }
 table{
@@ -707,7 +703,7 @@ tbody tr:hover{ background:var(--ph-primary-50); }
 .expired{ background-color:var(--ph-danger-bg) !important; color:var(--ph-danger-dk); }
 
 /* ==========================================================================
-   STATUS / BADGES — every state label in the app maps to one badge system
+   STATUS / BADGES - every state label in the app maps to one badge system
    ========================================================================== */
 .status, .badge, .role-badge, .status-active,
 .approved, .pending, .completed, .cancelled, .unknown,
@@ -730,7 +726,7 @@ tbody tr:hover{ background:var(--ph-primary-50); }
 .cancelled, .unknown, .status.inactive{ background:var(--ph-danger-bg); color:var(--ph-danger-dk); }
 
 /* ==========================================================================
-   MODALS — one overlay shell for every portal (center + dim + padding)
+   MODALS - one overlay shell for every portal (center + dim + padding)
    ========================================================================== */
 .modal,
 .um-modal-overlay,
@@ -853,7 +849,7 @@ tbody tr:hover{ background:var(--ph-primary-50); }
 }
 
 /* ==========================================================================
-   AUTH SCREENS (login / register) — shared premium look
+   AUTH SCREENS (login / register) - shared premium look
    ========================================================================== */
 .login-container{ width:100%; max-width:400px; padding:20px; }
 .login-card{
@@ -874,7 +870,7 @@ button.login-btn{ background:var(--ph-primary-500); box-shadow:var(--ph-shadow-p
 button.login-btn:hover{ filter:brightness(1.08); }
 
 /* ==========================================================================
-   PROFILE (Admin / Cashier / Customer — same layout)
+   PROFILE (Admin / Cashier / Customer - same layout)
    ========================================================================== */
 .customer-profile-page{ width:100%; margin:0; padding:0 0 28px; }
 .customer-profile-header{ margin:0 0 14px; padding:0; }

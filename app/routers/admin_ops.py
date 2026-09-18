@@ -160,7 +160,7 @@ async def add_promo(request: Request):
             if scope == "drugs":
                 for did in drug_ids:
                     cur.execute("INSERT INTO promo_drugs (promo_id, drug_id) VALUES (%s, %s)", (promo_id, did))
-            note = f" — {len(drug_ids)} selected products" if scope == "drugs" else ""
+            note = f" - {len(drug_ids)} selected products" if scope == "drugs" else ""
             _log(cur, request, "Create Promo", f"Created promo '{name}' ({discount_type} {discount_value}) from {start_date} to {end_date}{note}.")
     return {"success": True, "promo_id": promo_id}
 
@@ -688,7 +688,7 @@ async def create_pos_from_reorder(request: Request):
             continue
         label = row.get("generic_name") or f"Drug #{drug_id}"
         if str(row.get("procurement_type") or "purchase") == "consignment":
-            skipped.append({"name": label, "reason": "consignment — create that PO manually"})
+            skipped.append({"name": label, "reason": "consignment - create that PO manually"})
             continue
         if row.get("action") != "increase" or int(row.get("suggested_qty") or 0) <= 0:
             skipped.append({"name": label, "reason": "does not need reorder"})

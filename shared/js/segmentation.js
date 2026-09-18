@@ -58,13 +58,13 @@
         const active = spend.filter((amt) => Number(amt) > 0).length;
         const revenue = spend.reduce((sum, amt) => sum + Number(amt || 0), 0);
         const avg = active ? revenue / active : 0;
-        let topType = '—';
+        let topType = '-';
         if (typeCounts.length) {
             let maxIdx = 0;
             typeCounts.forEach((count, idx) => {
                 if (Number(count) > Number(typeCounts[maxIdx])) maxIdx = idx;
             });
-            topType = types[maxIdx] || '—';
+            topType = types[maxIdx] || '-';
         }
         const setText = (id, value) => {
             const el = document.getElementById(id);
@@ -192,7 +192,7 @@
             const scoreText = (score !== undefined && score !== null) ? ` &middot; Silhouette Score: <strong>${score}</strong>` : '';
             el.innerHTML = `<i class="fas fa-brain" style="color:#4BAA8B;"></i> K-Means Clustering (scikit-learn)${scoreText}`;
         } else {
-            el.innerHTML = `<i class="fas fa-info-circle"></i> Quantile-based grouping (fallback — K-Means unavailable on this server)`;
+            el.innerHTML = `<i class="fas fa-info-circle"></i> Quantile-based grouping (fallback - K-Means unavailable on this server)`;
         }
     }
 
@@ -220,7 +220,7 @@
         <h3>Distribute Points</h3>
         <button type="button" id="addPointsCancelBtn" aria-label="Close">✕</button>
       </div>
-      <p class="cs-seg-modal-sub">Segment: <strong id="addPointsSegmentLabel">—</strong></p>
+      <p class="cs-seg-modal-sub">Segment: <strong id="addPointsSegmentLabel">-</strong></p>
       <label for="addPointsCustomerSelect">Customer</label>
       <select id="addPointsCustomerSelect"></select>
       <label for="addPointsAmountInput">Points to add</label>
@@ -243,7 +243,7 @@
         <h3>Segment members</h3>
         <button type="button" id="segMembersCloseBtn" aria-label="Close">✕</button>
       </div>
-      <p class="cs-seg-modal-sub">Segment: <strong id="segMembersSegmentLabel">—</strong></p>
+      <p class="cs-seg-modal-sub">Segment: <strong id="segMembersSegmentLabel">-</strong></p>
       <div class="cs-seg-members-wrap">
         <table class="cs-seg-members-table">
           <thead>
@@ -271,7 +271,7 @@
         }
         select.disabled = false;
         select.innerHTML = members.map((m) =>
-            `<option value="${m.customer_id}" data-points="${m.loyalty_points}">${m.name} — ${Number(m.loyalty_points).toLocaleString('en-US', { maximumFractionDigits: 2 })} pts</option>`
+            `<option value="${m.customer_id}" data-points="${m.loyalty_points}">${m.name} - ${Number(m.loyalty_points).toLocaleString('en-US', { maximumFractionDigits: 2 })} pts</option>`
         ).join('');
     }
 
@@ -344,11 +344,11 @@
             .then((data) => {
                 confirmBtn.disabled = false;
                 if (data.success) {
-                    const customerName = select.options[select.selectedIndex].textContent.split(' — ')[0];
+                    const customerName = select.options[select.selectedIndex].textContent.split(' - ')[0];
                     modalMsg.style.color = '#4BAA8B';
                     modalMsg.textContent = `Added ${points} points for ${customerName}. New balance: ${Number(data.new_balance).toLocaleString('en-US', { maximumFractionDigits: 2 })}.`;
                     select.options[select.selectedIndex].dataset.points = data.new_balance;
-                    select.options[select.selectedIndex].textContent = `${customerName} — ${Number(data.new_balance).toLocaleString('en-US', { maximumFractionDigits: 2 })} pts`;
+                    select.options[select.selectedIndex].textContent = `${customerName} - ${Number(data.new_balance).toLocaleString('en-US', { maximumFractionDigits: 2 })} pts`;
                     document.getElementById('addPointsAmountInput').value = '';
                     if (currentSegmentVariant && currentSegmentVariant.members) {
                         for (const bucket of currentSegmentVariant.members) {
@@ -537,7 +537,7 @@
         if (sub) {
             sub.textContent = canManage()
                 ? 'You run the grouping here (how many segments) and can distribute loyalty points. Cashiers only see the result you set.'
-                : 'Read-only. These groups are set by Admin — you can view members, not change clustering or points.';
+                : 'Read-only. These groups are set by Admin - you can view members, not change clustering or points.';
         }
         const h2 = document.querySelector('#customer-segmentation-page .dashboard-header h2');
         if (h2 && !canManage() && !h2.querySelector('.cs-seg-viewonly')) {

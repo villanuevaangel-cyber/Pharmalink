@@ -1,5 +1,5 @@
 /**
- * dashboard.js — powers admin/dashboard.html.
+ * dashboard.js - powers admin/dashboard.html.
  *
  * Talks to: fetch_dashboard.php (summary cards), get_sales_analytics.php
  * (Sales Overview + Category Distribution charts).

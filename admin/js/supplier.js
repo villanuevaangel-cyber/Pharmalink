@@ -1,5 +1,5 @@
 /**
- * supplier.js — Supplier Management module (admin/admin.php, #supplier-section)
+ * supplier.js - Supplier Management module (admin/admin.php, #supplier-section)
  *
  * Talks to: get_suppliers.php, add_supplier.php, update_supplier.php
  *
@@ -58,9 +58,9 @@
                 </div>
             </div>
             <div class="sup-meta">
-                <div><i class="fas fa-phone"></i> ${escapeHtml(s.contact_number) || '—'}</div>
-                <div><i class="fas fa-envelope"></i> ${escapeHtml(s.email) || '—'}</div>
-                <div><i class="fas fa-location-dot"></i> ${escapeHtml(s.address) || '—'}</div>
+                <div><i class="fas fa-phone"></i> ${escapeHtml(s.contact_number) || '-'}</div>
+                <div><i class="fas fa-envelope"></i> ${escapeHtml(s.email) || '-'}</div>
+                <div><i class="fas fa-location-dot"></i> ${escapeHtml(s.address) || '-'}</div>
             </div>
             <div class="sup-meds">
                 <p class="sup-meds-label">Consignment policy</p>

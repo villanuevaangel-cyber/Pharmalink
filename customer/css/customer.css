@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CUSTOMER PORTAL — page-specific styles only.
+   CUSTOMER PORTAL - page-specific styles only.
    Shared chrome comes from /assets/theme.css (linked in customer.html).
    Sidebar, header, nav, cards, tables, buttons, status badges, and the
    dashboard/quick-actions/activity/tips components all now come from
@@ -177,7 +177,7 @@ body {
 }
 
 /* =======================================
-   PRODUCTS PAGE & GRID (layout only — card look comes from theme .product)
+   PRODUCTS PAGE & GRID (layout only - card look comes from theme .product)
    ======================================= */
 .products-container {
     display: flex;
@@ -195,7 +195,7 @@ body {
 }
 
 /* =======================================
-   SHOPPING CART PANEL (#cart-panel) — sticky layout only,
+   SHOPPING CART PANEL (#cart-panel) - sticky layout only,
    look (background/border/shadow) comes from theme's shared card styling
    ======================================= */
 #cart-panel {
@@ -223,7 +223,7 @@ body {
     font-size: 0.95rem;
 }
 
-/* --- QTY CONTROLS (shape only — colors come from theme .qty-minus/.qty-plus) --- */
+/* --- QTY CONTROLS (shape only - colors come from theme .qty-minus/.qty-plus) --- */
 .qty-wrapper {
     display: flex;
     align-items: center;

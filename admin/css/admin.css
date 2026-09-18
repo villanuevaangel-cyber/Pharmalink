@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ADMIN PORTAL — page-specific styles only.
+   ADMIN PORTAL - page-specific styles only.
    Sidebar, header, nav, cards, tables, buttons, modals, forms, status badges
    all now come from assets/theme.css (the shared design system) so the
    Admin portal looks and behaves identically to Cashier and Customer.
@@ -9,7 +9,7 @@
    of the system. Only truly admin-only rules remain below.
    ========================================================================== */
 
-/* Admin dashboard — clickable stat cards */
+/* Admin dashboard - clickable stat cards */
 .dash-card {
   position: relative;
   text-align: left;
@@ -27,7 +27,7 @@
 .dash-card h3 { font-size: 15px; }
 
 /* =======================================
-   ADMIN DASHBOARD — compact + tabs
+   ADMIN DASHBOARD - compact + tabs
    ======================================= */
 #dashboard .ad-dash-header{
   display:flex; flex-wrap:wrap; justify-content:space-between;
@@ -45,29 +45,16 @@
 }
 #dashboard #live-clock{ margin-top:4px; font-size:14px; font-weight:700; color:#1E3A34; }
 #dashboard .ad-dash-toolbar{
-<<<<<<< HEAD
   display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 16px;
   background:#FFF7E6; border:1px solid var(--ph-border-soft, #FFE3B3);
   border-radius:16px; padding:12px 14px; margin-bottom:12px;
-=======
-  display:flex; flex-wrap:wrap; align-items:center; gap:10px;
-  background:#fff; border:1px solid var(--ph-border-soft, #FFE3B3);
-  border-radius:16px; padding:10px 14px; margin-bottom:16px;
->>>>>>> e5eed029ffae0aa7115c2c2eeb7c51e95f32b8be
 }
 #dashboard .ad-dash-dates{
   display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px;
 }
-<<<<<<< HEAD
 #dashboard .ad-dash-dates label{
   display:flex; flex-direction:column; gap:4px;
   font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#1E3A34;
-=======
-#dashboard #sales-period-label{ color:#6b7280; font-size:12px; }
-#dashboard .ad-dash-auto{
-  margin-left:auto; display:flex; flex-wrap:wrap; align-items:center; gap:8px;
-  font-size:12px; color:#1E3A34;
->>>>>>> e5eed029ffae0aa7115c2c2eeb7c51e95f32b8be
 }
 #dashboard .ad-dash-dates input[type="date"]{
   height:36px; padding:0 10px; border-radius:8px; border:1px solid #FFC857;
@@ -182,7 +169,6 @@
 #dashboard .ad-qa-sup{ background:#4BAA8B !important; }
 #dashboard .ad-qa-fc{ background:#4BAA8B !important; }
 #dashboard .ad-qa-users{ background:#1E3A34 !important; }
-<<<<<<< HEAD
 #dashboard .ad-move-head{
   display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between;
   gap:10px; margin-bottom:12px;
@@ -199,14 +185,6 @@
 #dashboard .ad-move-table-wrap{ margin:0; }
 #dashboard #movement-table{ width:100%; }
 #dashboard #movement-table th{ color:#1E3A34; background:#FFF7E6; }
-=======
-#dashboard .ad-dash-move h4{ margin:0 0 10px; font-size:.95rem; }
-#dashboard .ad-dash-move ul{ margin:0; padding-left:18px; color:#374151; font-size:13px; }
-#dashboard .ad-dash-move li{ margin-bottom:6px; }
-#dashboard .ad-dash-slow h4{ color:#1E3A34; }
-#dashboard .ad-dash-move h4{ color:#4BAA8B; }
-#dashboard .ad-dash-slow h4{ color:#1E3A34; }
->>>>>>> e5eed029ffae0aa7115c2c2eeb7c51e95f32b8be
 #dashboard .ad-dash-card-head{
   display:flex; justify-content:space-between; align-items:center;
   gap:10px; flex-wrap:wrap; margin-bottom:12px;

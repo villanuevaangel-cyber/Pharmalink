@@ -172,7 +172,7 @@ if (target === 'orders') {
                 </td>
                 <td>${it.qty}</td>
                 <td>₱${it.spent}</td>
-                <td>${it.last_ordered || '—'}</td>
+                <td>${it.last_ordered || '-'}</td>
             </tr>`;
         }).join('');
     }
@@ -192,10 +192,10 @@ if (target === 'orders') {
             const cls = homeStatusClass(row.order_status);
             return `<tr>
                 <td><strong>#${row.order_id}</strong></td>
-                <td>${row.order_date || '—'}</td>
+                <td>${row.order_date || '-'}</td>
                 <td><span class="dash-kind dash-kind-${kind}">${kindLabel}</span></td>
                 <td><span class="mo-pay">${homePayLabel(row.payment_method)}</span></td>
-                <td><span class="status ${cls}">${row.order_status || '—'}</span></td>
+                <td><span class="status ${cls}">${row.order_status || '-'}</span></td>
                 <td class="mo-amt-cell">₱${row.total_amount}</td>
                 <td><button type="button" class="dash-view" onclick="window.showOrderDetails(${row.order_id}, '${kind}')"><i class="fas fa-eye"></i> View</button></td>
             </tr>`;
@@ -230,7 +230,7 @@ if (target === 'orders') {
     // ===== REAL-TIME PRODUCT STOCK =====
     // The product grid is rendered once (server-side, on page load) for a
     // fast first paint, then kept current here by re-checking real stock
-    // against ../get_products.php — this is the same active/in-stock query
+    // against ../get_products.php - this is the same active/in-stock query
     // the cashier POS already polls, so both screens agree on what's
     // actually available. Only lot IDs still present in the response are
     // in stock; anything that dropped out (sold out, deactivated, expired)
@@ -373,9 +373,9 @@ window.loadCustomerOrders = function(type = 'online', startDate = '', endDate = 
             const kind = row.kind === 'walkin' ? 'walkin' : 'online';
             return `<tr>
                 <td><strong>#${row.order_id}</strong></td>
-                <td>${row.order_date || '—'}</td>
+                <td>${row.order_date || '-'}</td>
                 <td><span class="mo-pay">${pay}</span></td>
-                <td><span class="status ${cls}">${row.order_status || '—'}</span></td>
+                <td><span class="status ${cls}">${row.order_status || '-'}</span></td>
                 <td class="mo-amt-cell">₱${row.total_amount}</td>
                 <td><button type="button" class="mo-view" onclick="showOrderDetails(${row.order_id}, '${kind}')"><i class="fas fa-eye"></i> View</button></td>
             </tr>`;
@@ -707,7 +707,7 @@ function displayOrderDetails(data) {
             if (!response.ok) {
                 // Try to read the real error out of the response body (JSON
                 // message, or a PHP fatal-error HTML page) instead of just
-                // throwing a generic status code — this is what used to get
+                // throwing a generic status code - this is what used to get
                 // swallowed and reported to the customer as a fake "network
                 // error", hiding the actual server-side problem.
                 return response.text().then(text => {
@@ -716,7 +716,7 @@ function displayOrderDetails(data) {
                         const parsed = JSON.parse(text);
                         serverMessage = parsed.message || null;
                     } catch (e) {
-                        // Not JSON — likely a raw PHP fatal error/warning page.
+                        // Not JSON - likely a raw PHP fatal error/warning page.
                         const stripped = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
                         if (stripped) serverMessage = stripped.substring(0, 300);
                     }
@@ -753,26 +753,26 @@ function displayOrderDetails(data) {
             // CRITICAL FIX: a network error/timeout here does NOT mean the
             // order was saved. The previous version of this code assumed
             // success, deleted every item from `cart`, and showed a fake
-            // receipt — that's why items appeared to vanish right after
+            // receipt - that's why items appeared to vanish right after
             // checkout even though nothing had actually been ordered.
             //
             // The cart is now left untouched on failure. The customer can
             // safely click "Submit Order for Pickup" again: process_customer_order.php
             // is idempotent per order_token, so even if the first request
             // actually did reach the server, retrying will NOT create a
-            // duplicate order or double-deduct stock — it just returns the
+            // duplicate order or double-deduct stock - it just returns the
             // original order.
             console.error('Checkout error:', error);
             if (error && error.isServerError) {
-                // The server responded, just with an error — show that real
+                // The server responded, just with an error - show that real
                 // message instead of the misleading "check your connection"
                 // text, which used to hide actual server-side bugs.
                 alert('❌ Order could not be placed: ' + error.message);
             } else {
-                // fetch() itself rejected — this really is a network-level
+                // fetch() itself rejected - this really is a network-level
                 // failure (offline, DNS, CORS, etc.), so the connection
                 // message is accurate here.
-                alert('⚠️ Could not reach the server to place your order. Your cart has been kept — please check your connection and try again.');
+                alert('⚠️ Could not reach the server to place your order. Your cart has been kept - please check your connection and try again.');
             }
         })
         .finally(() => {

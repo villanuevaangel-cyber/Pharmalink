@@ -1,8 +1,8 @@
-# Supabase / DB credentials — never commit real credentials
+# Supabase / DB credentials - never commit real credentials
 .env
 config/config.php
 
-# Email/SMTP credentials — never commit real credentials
+# Email/SMTP credentials - never commit real credentials
 config/mail_config.php
 
 # OS / editor junk

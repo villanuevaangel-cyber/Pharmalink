@@ -1,9 +1,9 @@
 /* ==========================================================================
-   PHARMALINK — shared interaction layer
+   PHARMALINK - shared interaction layer
    Adds the same "premium" micro-interactions to every portal without
    touching any existing page logic: button ripple feedback, a global
    toast helper, and auto-dismiss for any .message/.toast the app already
-   creates. Safe to include everywhere — it only ever ADDS behaviour.
+   creates. Safe to include everywhere - it only ever ADDS behaviour.
    ========================================================================== */
 (function () {
   "use strict";

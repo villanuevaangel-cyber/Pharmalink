@@ -1,5 +1,5 @@
 /**
- * inventory.js — Drug Master + Stock Lot management (admin Inventory tab).
+ * inventory.js - Drug Master + Stock Lot management (admin Inventory tab).
  * New stock lots are created by receiving a delivery, not by a direct add form.
  */
 (function () {
@@ -58,7 +58,7 @@
     }
 
     // ---------------------------------------------------------------
-    // Modals (open/close only — markup already exists in the host page)
+    // Modals (open/close only - markup already exists in the host page)
     // ---------------------------------------------------------------
     function showModal(id) { const m = document.getElementById(id); if (m) m.style.display = 'flex'; }
     function hideModal(id) { const m = document.getElementById(id); if (m) m.style.display = 'none'; }
@@ -161,10 +161,10 @@
         const active = masterDrugs.filter(d => Number(d.is_active) === 1).slice().sort((a, b) =>
             String(a.generic_name || '').localeCompare(String(b.generic_name || ''), undefined, { sensitivity: 'base' })
         );
-        sel.innerHTML = '<option value="">Start blank — or pick a catalog drug to copy</option>' +
+        sel.innerHTML = '<option value="">Start blank - or pick a catalog drug to copy</option>' +
             active.map(d => {
                 const brand = d.brand_name ? ` (${d.brand_name})` : '';
-                return `<option value="${d.drug_id}">${escapeHtml(d.generic_name)}${escapeHtml(brand)} — ${escapeHtml(d.dosage)}, ${escapeHtml(d.form)}</option>`;
+                return `<option value="${d.drug_id}">${escapeHtml(d.generic_name)}${escapeHtml(brand)} - ${escapeHtml(d.dosage)}, ${escapeHtml(d.form)}</option>`;
             }).join('');
         if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
     }
@@ -287,14 +287,14 @@
     function clientDrugError(payload) {
         const nameRe = /^[A-Za-z0-9Ññ][A-Za-z0-9Ññ\s.'/()+\-]{1,79}$/;
         if (!payload.generic_name) return 'Generic name is required.';
-        if (!nameRe.test(payload.generic_name)) return 'Generic name: 2–80 characters, letters/numbers only (plus . \' / ( ) - +).';
-        if (payload.brand_name && !nameRe.test(payload.brand_name)) return 'Brand name: 2–80 characters, letters/numbers only (plus . \' / ( ) - +).';
+        if (!nameRe.test(payload.generic_name)) return 'Generic name: 2-80 characters, letters/numbers only (plus . \' / ( ) - +).';
+        if (payload.brand_name && !nameRe.test(payload.brand_name)) return 'Brand name: 2-80 characters, letters/numbers only (plus . \' / ( ) - +).';
         if (!payload.dosage) return 'Dosage is required.';
         if (!payload.form) return 'Form is required.';
         if (!payload.category) return 'Category is required.';
         const min = Number(payload.minimum_stock);
         if (!Number.isInteger(min) || min < 0 || min > 100000) return 'Minimum stock must be a whole number from 0 to 100,000.';
-        if (payload.barcode && !/^[A-Za-z0-9\-._]{4,64}$/.test(payload.barcode)) return 'Barcode must be 4–64 letters, numbers, dash, dot, or underscore.';
+        if (payload.barcode && !/^[A-Za-z0-9\-._]{4,64}$/.test(payload.barcode)) return 'Barcode must be 4-64 letters, numbers, dash, dot, or underscore.';
         if (!payload.procurement_type || !['purchase', 'consignment'].includes(payload.procurement_type)) {
             return 'Choose Purchased or Consignment. It is not set automatically.';
         }
@@ -482,12 +482,12 @@
             <tr data-drug-id="${d.drug_id}">
                 ${idCell}
                 <td>${escapeHtml(d.generic_name)}</td>
-                <td>${escapeHtml(d.brand_name) || '—'}</td>
+                <td>${escapeHtml(d.brand_name) || '-'}</td>
                 <td>${escapeHtml(d.dosage)}</td>
                 <td>${escapeHtml(d.form)}</td>
                 <td>${escapeHtml(d.category)}${String(d.procurement_type || '') === 'consignment' ? ' <span class="inv-chip">Consignment</span>' : ''}</td>
                 <td>${d.minimum_stock}</td>
-                <td class="inv-mono">${escapeHtml(d.barcode) || '—'}</td>
+                <td class="inv-mono">${escapeHtml(d.barcode) || '-'}</td>
                 ${statusCell}
                 <td class="action-btn-group">
                     <button type="button" class="inv-icon-btn print-barcode-btn" title="Print Barcode Label"><i class="fas fa-barcode"></i></button>
@@ -533,7 +533,7 @@
     }
 
     // ---------------------------------------------------------------
-    // Barcode label printing — opens a small popup with a scannable
+    // Barcode label printing - opens a small popup with a scannable
     // Code128 barcode (via the JsBarcode CDN library) plus the drug name,
     // sized for a standard shelf/sticker label, and triggers the browser
     // print dialog automatically.
@@ -581,14 +581,14 @@
                 alert('Could not draw barcode "' + drug.barcode + '". Try a simpler code (letters and numbers only).');
                 return;
             }
-            const label = `${escapeHtml(drug.generic_name)}${drug.brand_name ? ' (' + escapeHtml(drug.brand_name) + ')' : ''} — ${escapeHtml(drug.dosage)}`;
+            const label = `${escapeHtml(drug.generic_name)}${drug.brand_name ? ' (' + escapeHtml(drug.brand_name) + ')' : ''} - ${escapeHtml(drug.dosage)}`;
             const iframe = document.createElement('iframe');
             iframe.setAttribute('aria-hidden', 'true');
             iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
             document.body.appendChild(iframe);
             const doc = iframe.contentWindow.document;
             doc.open();
-            doc.write(`<!DOCTYPE html><html><head><title>Barcode — ${label}</title>
+            doc.write(`<!DOCTYPE html><html><head><title>Barcode - ${label}</title>
                 <style>
                     body { font-family: Arial, sans-serif; text-align: center; padding: 24px; color: #111; }
                     h3 { margin: 0 0 12px; font-size: 16px; }
@@ -890,18 +890,18 @@
             const hasPolicy = policy === 'returnable' || policy === 'non_returnable';
             const status = String(l.return_status || '').toLowerCase();
             const nearExpiry = !expired && daysLeft <= 90 && l.current_stock > 0;
-            let returnCell = '—';
+            let returnCell = '-';
             if (status === 'returnable') {
                 returnCell = '<span class="inv-chip return-yes">Returnable</span>';
             } else if (status === 'non_returnable') {
                 returnCell = '<span class="inv-chip return-no">Non-returnable</span>';
             } else if (nearExpiry && hasPolicy) {
-                returnCell = '<span class="inv-chip return-flag">Flagged — run check</span>';
+                returnCell = '<span class="inv-chip return-flag">Flagged - run check</span>';
             }
             return `
             <tr data-lot-id="${l.lot_inventory_id}">
                 <td>${escapeHtml(l.generic_name)}</td>
-                <td>${escapeHtml(l.brand_name) || '—'}</td>
+                <td>${escapeHtml(l.brand_name) || '-'}</td>
                 <td>${escapeHtml(l.dosage)}</td>
                 <td>${escapeHtml(l.form)}</td>
                 <td>${escapeHtml(l.category)}</td>
@@ -910,7 +910,7 @@
                 <td class="inv-stock ${stockClass}">${l.current_stock}</td>
                 <td>${l.minimum_stock}</td>
                 <td>${money(l.price)}</td>
-                <td>${l.supplier && suppliersById[l.supplier] ? escapeHtml(suppliersById[l.supplier]) : '—'}</td>
+                <td>${l.supplier && suppliersById[l.supplier] ? escapeHtml(suppliersById[l.supplier]) : '-'}</td>
                 <td>${returnCell}</td>
                 <td><span class="inv-badge ${isActive ? 'active' : 'archived'}">${isActive ? 'Active' : 'Archived'}</span></td>
                 <td class="action-btn-group">
@@ -963,7 +963,7 @@
     function openAdjustStockModal(lot) {
         adjustStockLot = lot;
         const label = document.getElementById('adjust_stock_drug_label');
-        if (label) label.textContent = `${lot.generic_name}${lot.brand_name ? ' (' + lot.brand_name + ')' : ''} — ${lot.dosage}, ${lot.form} — Lot ${lot.lot_number}`;
+        if (label) label.textContent = `${lot.generic_name}${lot.brand_name ? ' (' + lot.brand_name + ')' : ''} - ${lot.dosage}, ${lot.form} - Lot ${lot.lot_number}`;
         const currentEl = document.getElementById('adjust_stock_current');
         if (currentEl) currentEl.textContent = lot.current_stock;
         const form = document.getElementById('adjustStockForm');
@@ -1025,7 +1025,7 @@
 
     function fetchStockAdjustments() {
         const body = document.getElementById('stockAdjustmentsBody');
-        if (!body) return; // widget not present on this page — skip quietly
+        if (!body) return; // widget not present on this page - skip quietly
         fetch('/api/admin/stock-adjustments?limit=50')
             .then(res => res.json())
             .then(data => {
@@ -1043,11 +1043,11 @@
                     <tr>
                         <td>${when}</td>
                         <td>${drugLabel}</td>
-                        <td>${escapeHtml(r.lot_number) || '—'}</td>
+                        <td>${escapeHtml(r.lot_number) || '-'}</td>
                         <td style="color:${changeColor};font-weight:600;">${sign}${r.quantity_change} (${r.previous_stock} → ${r.new_stock})</td>
                         <td>${escapeHtml(r.reason)}</td>
-                        <td>${escapeHtml(r.notes) || '—'}</td>
-                        <td>${escapeHtml(r.admin_name) || '—'}</td>
+                        <td>${escapeHtml(r.notes) || '-'}</td>
+                        <td>${escapeHtml(r.admin_name) || '-'}</td>
                     </tr>`;
                 }).join('');
             })
@@ -1078,7 +1078,7 @@
         const body = document.getElementById('markupSettingsBody');
         if (!body) return;
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#6b7280;padding:15px;">No categories yet — add a drug first.</td></tr>';
+            body.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#6b7280;padding:15px;">No categories yet - add a drug first.</td></tr>';
             return;
         }
         body.innerHTML = rows.map(r => `
@@ -1154,7 +1154,7 @@
         const nameSpan = document.getElementById('editDrugName');
         if (nameSpan) nameSpan.textContent = lot.generic_name;
         const label = document.getElementById('edit_drug_label');
-        if (label) label.textContent = `${lot.generic_name}${lot.brand_name ? ' (' + lot.brand_name + ')' : ''} — ${lot.dosage}, ${lot.form}`;
+        if (label) label.textContent = `${lot.generic_name}${lot.brand_name ? ' (' + lot.brand_name + ')' : ''} - ${lot.dosage}, ${lot.form}`;
 
         document.getElementById('edit_lot_inventory_id').value = lot.lot_inventory_id;
         document.getElementById('edit_lot_number').value = lot.lot_number || '';
@@ -1303,7 +1303,7 @@
     window.initializeInventoryModule = init;
 
     // Lets other parts of the app (e.g. Dashboard cards) deep-link into a
-    // specific Inventory filter — e.g. clicking "Expiring Within 30 Days" on
+    // specific Inventory filter - e.g. clicking "Expiring Within 30 Days" on
     // the Dashboard jumps to Inventory already filtered to expiring30.
     window.applyInventoryCardFilter = function (filter) {
         switchInvPanel('lots');

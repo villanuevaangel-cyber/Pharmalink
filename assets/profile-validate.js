@@ -58,9 +58,9 @@
     host.innerHTML =
       '<ul class="pw-rules">' +
         '<li data-rule="length">At least 8 characters</li>' +
-        '<li data-rule="upper">One uppercase letter (A–Z)</li>' +
-        '<li data-rule="lower">One lowercase letter (a–z)</li>' +
-        '<li data-rule="number">One number (0–9)</li>' +
+        '<li data-rule="upper">One uppercase letter (A-Z)</li>' +
+        '<li data-rule="lower">One lowercase letter (a-z)</li>' +
+        '<li data-rule="number">One number (0-9)</li>' +
         '<li data-rule="special">One special character (!@#$…)</li>' +
       "</ul>";
   }
@@ -81,7 +81,7 @@
   function usernameError(username) {
     var u = String(username || "").trim();
     if (!u) return "Username is required.";
-    if (!USERNAME_RE.test(u)) return "Username must start with a letter and be 3–30 characters (letters, numbers, dot, underscore, hyphen).";
+    if (!USERNAME_RE.test(u)) return "Username must start with a letter and be 3-30 characters (letters, numbers, dot, underscore, hyphen).";
     return "";
   }
 
