@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
-    <link rel="stylesheet" href="/assets/theme.css?v=solid-ui13">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=um-clip3">
-    <link rel="stylesheet" href="/shared/css/segmentation.css?v=seg4">
+    <link rel="stylesheet" href="/assets/theme.css?v=palette1">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=palette1">
+    <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
         /* Page-specific tweaks only — shared cards, tables, modals, buttons,
@@ -31,8 +31,8 @@
             text-align:left; background:#fff; border:1px solid #e5e7eb; border-radius:12px;
             padding:18px 18px 16px; box-shadow:0 2px 8px rgba(15,23,42,0.05);
         }
-        .report-hub-card:hover{ border-color:#c7d2fe; box-shadow:0 6px 18px rgba(37,99,235,0.12); }
-        .report-hub-card h3{ margin:0 0 6px; font-size:15px; color:#1e3a8a; }
+        .report-hub-card:hover{ border-color:#FFC857; box-shadow:0 6px 18px rgba(37,99,235,0.12); }
+        .report-hub-card h3{ margin:0 0 6px; font-size:15px; color:#1E3A34; }
         .report-hub-card p{ margin:0; font-size:13px; color:#6b7280; line-height:1.4; }
         .report-hub-card .hub-value{ display:block; margin:10px 0 8px; font-size:1.35rem; font-weight:700; }
         .report-hub-card .hub-actions, .rpt-export-row{
@@ -43,7 +43,7 @@
             display:flex; flex-wrap:nowrap; align-items:center; gap:8px; margin-bottom:22px; width:100%;
         }
         #forecast .forecast-controls label{
-            margin:0; font-weight:700; font-size:13px; color:#334155; white-space:nowrap; flex:0 0 auto;
+            margin:0; font-weight:700; font-size:13px; color:#4BAA8B; white-space:nowrap; flex:0 0 auto;
         }
         #forecast .forecast-controls select#forecastPeriod{
             flex:1 1 auto; width:auto !important; min-width:140px; max-width:none; height:40px;
@@ -70,16 +70,16 @@
         .modal .rpt-btn:hover, .rpt-upload-row .rpt-btn:hover{
             transform:none !important; filter:brightness(1.06);
         }
-        #forecast .generate-btn{ background:#16a34a !important; color:#fff !important; }
+        #forecast .generate-btn{ background:#4BAA8B !important; color:#fff !important; }
         .rpt-btn.pdf{ background:#dc2626 !important; color:#fff !important; }
-        .rpt-btn.xlsx{ background:#0f766e !important; color:#fff !important; }
-        .rpt-btn.navy{ background:#1e3a8a !important; color:#fff !important; }
-        .rpt-btn.ghost{ background:#f1f5f9 !important; color:#334155 !important; }
+        .rpt-btn.xlsx{ background:#1E3A34 !important; color:#fff !important; }
+        .rpt-btn.navy{ background:#1E3A34 !important; color:#fff !important; }
+        .rpt-btn.ghost{ background:#f1f5f9 !important; color:#4BAA8B !important; }
         .rpt-upload-card{
             background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px 18px; margin-bottom:16px;
             box-shadow:0 2px 8px rgba(15,23,42,0.05);
         }
-        .rpt-upload-card h3{ margin:0 0 6px; color:#1e3a8a; font-size:1.05rem; }
+        .rpt-upload-card h3{ margin:0 0 6px; color:#1E3A34; font-size:1.05rem; }
         .rpt-upload-card p{ margin:0 0 12px; color:#6b7280; font-size:13px; }
         .rpt-upload-row{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
         .rpt-upload-row input[type=file]{ font-size:13px; }
@@ -97,11 +97,11 @@
             padding:8px 16px !important; border-radius:8px !important; cursor:pointer; font-weight:600; font-size:13px;
             box-shadow:none !important; width:auto !important; transform:none !important;
         }
-        .um-subnav button.active{ background:#1e3a8a !important; color:#fff !important; border-color:#1e3a8a !important; }
+        .um-subnav button.active{ background:#1E3A34 !important; color:#fff !important; border-color:#1E3A34 !important; }
         .um-panel{ display:none; }
         .um-panel.active{ display:block; }
         .um-card{
-            background:#fff; border:1px solid var(--ph-border-soft, #eef0f6);
+            background:#fff; border:1px solid var(--ph-border-soft, #FFE3B3);
             border-radius:16px; box-shadow:0 2px 8px rgba(23,26,43,.07); padding:20px 22px 18px;
         }
         .um-card-head{
@@ -109,11 +109,11 @@
             margin-bottom:16px;
         }
         .um-card-head > div{ min-width:0; flex:1; }
-        .um-card-head h3{ margin:0; color:#1e3a8a; font-size:1.08rem; font-weight:700; }
+        .um-card-head h3{ margin:0; color:#1E3A34; font-size:1.08rem; font-weight:700; }
         .um-card-head p{ margin:4px 0 0; color:#6b7280; font-size:0.84rem; }
         .um-toolbar{
             display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-            background:#f8f9fd; border:1px solid #eef0f6; border-radius:10px;
+            background:#FFE3B3; border:1px solid #FFE3B3; border-radius:10px;
             padding:10px 12px; margin-bottom:14px;
         }
         .um-search{ position:relative; flex:1; min-width:180px; }
@@ -128,8 +128,8 @@
             width:auto !important; margin:0 0 0 auto !important; padding:10px 16px !important;
             font-size:13px !important; box-shadow:none !important; flex-shrink:0; white-space:nowrap;
         }
-        .um-add-btn.staff{ background:#1e3a8a !important; }
-        .um-add-btn.customer{ background:#059669 !important; }
+        .um-add-btn.staff{ background:#1E3A34 !important; }
+        .um-add-btn.customer{ background:#4BAA8B !important; }
         #user-management{
             position:relative; z-index:2; isolation:isolate;
             background:var(--ph-bg, #f4f6fb);
@@ -144,8 +144,8 @@
         #user-management th:last-child, #user-management td:last-child{
             white-space:nowrap; min-width:210px;
         }
-        #user-management thead th:last-child{ background:var(--ph-surface-2, #f8f9fd); }
-        #user-management tbody tr:hover td:last-child{ background:var(--ph-primary-50, #eef2ff); }
+        #user-management thead th:last-child{ background:var(--ph-surface-2, #FFE3B3); }
+        #user-management tbody tr:hover td:last-child{ background:var(--ph-primary-50, #FFE3B3); }
         #user-management .action-btn-group{ display:flex; flex-wrap:nowrap; gap:6px; }
         .um-btn{
             border:none; border-radius:7px; padding:6px 9px !important; color:#fff !important;
@@ -154,10 +154,10 @@
             box-shadow:none !important; transform:none !important; white-space:nowrap;
         }
         .um-btn:hover{ transform:none !important; filter:brightness(1.05); }
-        .um-btn-edit{ background:#2563eb !important; }
-        .um-btn-reset{ background:#7c3aed !important; }
+        .um-btn-edit{ background:#4BAA8B !important; }
+        .um-btn-reset{ background:#4BAA8B !important; }
         .um-btn-danger{ background:#dc2626 !important; }
-        .um-btn-activate{ background:#059669 !important; }
+        .um-btn-activate{ background:#4BAA8B !important; }
         .um-status{
             display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px;
             font-size:12px; font-weight:700; white-space:nowrap;
@@ -172,7 +172,7 @@
         .um-pw-hints .pw-rules li.ok{ color:#047857; }
         .um-role{
             display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px;
-            font-size:12px; font-weight:700; background:#eff6ff; color:#1d4ed8; white-space:nowrap;
+            font-size:12px; font-weight:700; background:#FFE3B3; color:#1E3A34; white-space:nowrap;
         }
         .um-role.cashier{ background:#ecfdf5; color:#047857; }
         .um-page-btn{
@@ -193,9 +193,9 @@
         }
         .um-modal-head{
             display:flex; justify-content:space-between; align-items:center; gap:12px;
-            padding:16px 20px 12px; border-bottom:1px solid #eef0f6;
+            padding:16px 20px 12px; border-bottom:1px solid #FFE3B3;
         }
-        .um-modal-head h3{ margin:0; font-size:1.05rem; color:#1e3a8a; }
+        .um-modal-head h3{ margin:0; font-size:1.05rem; color:#1E3A34; }
         .um-modal-head .close-modal{ cursor:pointer; font-size:22px; color:#6b7280; line-height:1; }
         .um-modal-card form{ padding:8px 20px 20px; }
         .um-modal-card label{ display:block; font-size:0.8rem; font-weight:700; color:#1e2333; margin:10px 0 6px; }
@@ -676,7 +676,7 @@
                     <h3>Admin Accounts</h3>
                     <p>Administrator logins. Search and filter by status, then edit, reset, deactivate, or activate.</p>
                 </div>
-                <button type="button" id="addAdminUserBtn" class="um-add-btn staff add-staff-btn-trigger" style="background: #2563eb;">
+                <button type="button" id="addAdminUserBtn" class="um-add-btn staff add-staff-btn-trigger" style="background: #4BAA8B;">
                     <i class="fas fa-plus"></i> Add Admin
                 </button>
             </div>
@@ -721,7 +721,7 @@
                     <h3>Cashier Accounts</h3>
                     <p>Cashier/Pharmacist logins. Search and filter by status, then edit, reset, deactivate, or activate.</p>
                 </div>
-                <button type="button" id="addCashierUserBtn" class="um-add-btn staff add-staff-btn-trigger" style="background: #2563eb;">
+                <button type="button" id="addCashierUserBtn" class="um-add-btn staff add-staff-btn-trigger" style="background: #4BAA8B;">
                     <i class="fas fa-plus"></i> Add Cashier
                 </button>
             </div>
@@ -766,7 +766,7 @@
                     <h3>Customer Accounts</h3>
                     <p>Registered shoppers. Search and filter by status, then edit, deactivate, or activate.</p>
                 </div>
-                <button type="button" id="addCustomerUserBtn" class="um-add-btn customer add-btn" style="background: #16a34a;">
+                <button type="button" id="addCustomerUserBtn" class="um-add-btn customer add-btn" style="background: #4BAA8B;">
                     <i class="fas fa-plus"></i> Add Customer
                 </button>
             </div>
@@ -976,16 +976,16 @@
 <!-- Forecast Cards -->
 <div class="forecast-cards" style="display:flex; gap:15px; margin-bottom:30px;">
     <div class="card" style="flex:1; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-        <h3 style="color:#16a34a;">Predicted Total Sales</h3>
-        <p class="value" style="font-size:1.5em; color:#16a34a;">₱0</p>
+        <h3 style="color:#4BAA8B;">Predicted Total Sales</h3>
+        <p class="value" style="font-size:1.5em; color:#4BAA8B;">₱0</p>
     </div>
     <div class="card" style="flex:1; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-        <h3 style="color:#2563eb;">Predicted Items Sold</h3>
-        <p class="value" style="font-size:1.5em; color:#2563eb;">0</p>
+        <h3 style="color:#4BAA8B;">Predicted Items Sold</h3>
+        <p class="value" style="font-size:1.5em; color:#4BAA8B;">0</p>
     </div>
     <div class="card" style="flex:1; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-        <h3 style="color:#f59e0b;">Top Forecasted Category</h3>
-        <p class="value" style="font-size:1.5em; color:#f59e0b;">N/A</p>
+        <h3 style="color:#FFC857;">Top Forecasted Category</h3>
+        <p class="value" style="font-size:1.5em; color:#FFC857;">N/A</p>
     </div>
 </div>
 
@@ -993,9 +993,9 @@
 <div class="forecast-main" style="display:flex; align-items:flex-start; gap:20px; margin-bottom:30px;">
     <!-- Main Forecast Chart (70%) -->
     <div class="forecast-chart" style="flex:7; position:relative; height:420px; max-height:420px; overflow:hidden; background:#ffffff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); box-sizing:border-box;">
-        <h3 style="color:#1e3a8a; margin:0 0 8px 0; font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px;">
+        <h3 style="color:#1E3A34; margin:0 0 8px 0; font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px;">
             📊 Predicted Sales Trend
-            <span id="forecastEngineBadge" style="font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:#eef2ff; color:#4338ca; display:none;"></span>
+            <span id="forecastEngineBadge" style="font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:#FFE3B3; color:#1E3A34; display:none;"></span>
         </h3>
         <div style="position:relative; width:100%; height:calc(100% - 28px);">
             <canvas id="forecastChart"></canvas>
@@ -1009,7 +1009,7 @@
 
     <!-- Top Forecasted Items Chart (30%) -->
     <div class="top-items-chart" style="flex:3; height:420px; max-height:420px; overflow:hidden; background:#ffffff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); box-sizing:border-box; display:flex; flex-direction:column;">
-        <h3 style="color:#1e3a8a; text-align:center; margin:0 0 10px 0; font-size:15px; font-weight:600;">🔥 Top Forecasted Items</h3>
+        <h3 style="color:#1E3A34; text-align:center; margin:0 0 10px 0; font-size:15px; font-weight:600;">🔥 Top Forecasted Items</h3>
         <div style="position:relative; width:100%; flex:1; min-height:0;">
             <canvas id="topItemsChart"></canvas>
         </div>
@@ -1034,13 +1034,13 @@
         </div>
         <p id="rptUploadMsg"></p>
     </div>
-    <h3 style="color:#1e3a8a; margin:0 0 10px; font-size:1.15rem;">Operational reports</h3>
+    <h3 style="color:#1E3A34; margin:0 0 10px; font-size:1.15rem;">Operational reports</h3>
     <p class="subtitle" style="margin-top:0;">Generate a report on screen, then download PDF or Excel for each one.</p>
     <div class="report-hub">
         <div class="report-hub-card">
             <h3><i class="fas fa-calendar-days"></i> Monthly Consumption</h3>
             <p>Units sold per drug, by month — for seasonal demand and bulk orders.</p>
-            <span class="hub-value" id="hub-consumption-total" style="color:#2563eb;">—</span>
+            <span class="hub-value" id="hub-consumption-total" style="color:#4BAA8B;">—</span>
             <div class="hub-actions">
                 <button type="button" class="rpt-btn navy" data-report-modal="consumptionReportModal"><i class="fas fa-chart-column"></i> Generate report</button>
                 <button type="button" class="rpt-btn pdf" data-rpt-kind="consumption" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
@@ -1050,7 +1050,7 @@
         <div class="report-hub-card">
             <h3><i class="fas fa-file-invoice-dollar"></i> Procurement Cost</h3>
             <p>On-hand inventory valued at unit cost, by supplier and category.</p>
-            <span class="hub-value" id="hub-procurement-cost" style="color:#1e3a8a;">₱0</span>
+            <span class="hub-value" id="hub-procurement-cost" style="color:#1E3A34;">₱0</span>
             <div class="hub-actions">
                 <button type="button" class="rpt-btn navy" data-report-modal="procurementReportModal"><i class="fas fa-chart-column"></i> Generate report</button>
                 <button type="button" class="rpt-btn pdf" data-rpt-kind="procurement" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
@@ -1093,7 +1093,7 @@
         <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">Units sold per drug, per month (from completed sales) — useful for spotting seasonal demand shifts and planning bulk orders.</p>
 
         <div style="background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); margin-bottom:20px; height:280px;">
-            <h4 style="margin:0 0 8px; color:#1e3a8a; font-size:14px;">Total Units Consumed per Month</h4>
+            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Total Units Consumed per Month</h4>
             <div style="position:relative; height:220px;">
                 <canvas id="consumptionTrendChart"></canvas>
             </div>
@@ -1126,35 +1126,35 @@
 
     <div style="display:flex; gap:15px; margin-bottom:16px; flex-wrap:wrap;">
         <div class="card" style="flex:1; min-width:180px; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-            <h3 style="color:#1e3a8a; margin:0;">Total Inventory Cost</h3>
-            <p class="value" id="procurement-total-cost" style="font-size:1.5em; color:#1e3a8a;">₱0</p>
+            <h3 style="color:#1E3A34; margin:0;">Total Inventory Cost</h3>
+            <p class="value" id="procurement-total-cost" style="font-size:1.5em; color:#1E3A34;">₱0</p>
         </div>
         <div class="card" style="flex:1; min-width:180px; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-            <h3 style="color:#2563eb; margin:0;">Total Units on Hand</h3>
-            <p class="value" id="procurement-total-units" style="font-size:1.5em; color:#2563eb;">0</p>
+            <h3 style="color:#4BAA8B; margin:0;">Total Units on Hand</h3>
+            <p class="value" id="procurement-total-units" style="font-size:1.5em; color:#4BAA8B;">0</p>
         </div>
         <div class="card" style="flex:1; min-width:180px; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-            <h3 style="color:#7c3aed; margin:0;">Active Suppliers (with stock)</h3>
-            <p class="value" id="procurement-supplier-count" style="font-size:1.5em; color:#7c3aed;">0</p>
+            <h3 style="color:#4BAA8B; margin:0;">Active Suppliers (with stock)</h3>
+            <p class="value" id="procurement-supplier-count" style="font-size:1.5em; color:#4BAA8B;">0</p>
         </div>
     </div>
 
     <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
         <div style="flex:1; min-width:320px; background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); height:300px;">
-            <h4 style="margin:0 0 8px; color:#1e3a8a; font-size:14px;">Inventory Cost by Supplier</h4>
+            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Inventory Cost by Supplier</h4>
             <div style="position:relative; height:240px;">
                 <canvas id="procurementSupplierChart"></canvas>
             </div>
         </div>
         <div style="flex:1; min-width:320px; background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); height:300px;">
-            <h4 style="margin:0 0 8px; color:#1e3a8a; font-size:14px;">Inventory Cost by Category</h4>
+            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Inventory Cost by Category</h4>
             <div style="position:relative; height:240px;">
                 <canvas id="procurementCategoryChart"></canvas>
             </div>
         </div>
     </div>
 
-    <h4 style="color:#1e3a8a; margin:0 0 4px; font-size:14px;">💡 Price Comparison Across Suppliers</h4>
+    <h4 style="color:#1E3A34; margin:0 0 4px; font-size:14px;">💡 Price Comparison Across Suppliers</h4>
     <p style="color:#6b7280; font-size:13px; margin:0 0 10px;">Drugs currently stocked at more than one price — worth checking if you can consolidate future orders with the cheaper supplier.</p>
     <div class="table-wrap">
         <table id="procurementComparisonTable">
@@ -1192,7 +1192,7 @@
         </div>
         <div class="card" style="flex:1; min-width:180px;">
             <h3>Total Units Lost</h3>
-            <p class="value" id="expiry-total-units" style="color:#b45309;">0</p>
+            <p class="value" id="expiry-total-units" style="color:#1E3A34;">0</p>
         </div>
         <div class="card" style="flex:1; min-width:180px;">
             <h3>Most-Affected Category</h3>
@@ -1203,24 +1203,24 @@
             <p class="value" id="expiry-record-count">0</p>
         </div>
     </div>
-    <p id="expiry-estimate-note" style="display:none; color:#b45309; font-size:12px; margin:-8px 0 14px;"><i class="fas fa-circle-info"></i> Some figures are estimated using selling price where a lot had no recorded cost price.</p>
+    <p id="expiry-estimate-note" style="display:none; color:#1E3A34; font-size:12px; margin:-8px 0 14px;"><i class="fas fa-circle-info"></i> Some figures are estimated using selling price where a lot had no recorded cost price.</p>
 
     <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
         <div style="flex:2; min-width:320px; background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); height:300px;">
-            <h4 style="margin:0 0 8px; color:#1e3a8a; font-size:14px;">Value Lost to Expiry — Last 12 Months</h4>
+            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Value Lost to Expiry — Last 12 Months</h4>
             <div style="position:relative; height:240px;">
                 <canvas id="expiryMonthlyChart"></canvas>
             </div>
         </div>
         <div style="flex:1; min-width:280px; background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); height:300px;">
-            <h4 style="margin:0 0 8px; color:#1e3a8a; font-size:14px;">By Category</h4>
+            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">By Category</h4>
             <div style="position:relative; height:240px;">
                 <canvas id="expiryCategoryChart"></canvas>
             </div>
         </div>
     </div>
 
-    <h4 style="color:#1e3a8a; margin:0 0 4px; font-size:14px;">Recent Write-offs</h4>
+    <h4 style="color:#1E3A34; margin:0 0 4px; font-size:14px;">Recent Write-offs</h4>
     <div class="table-wrap">
         <table id="expiryDetailTable">
             <thead>
@@ -1275,7 +1275,7 @@
                     <h3>Promos</h3>
                     <p>Percent-off or fixed peso discounts for a drug, a category, or storewide. They apply at Cashier within the date range you set.</p>
                 </div>
-                <button type="button" id="addPromoBtn" class="add-btn" style="background:#7c3aed;"><i class="fas fa-plus"></i> Create Promo</button>
+                <button type="button" id="addPromoBtn" class="add-btn" style="background:#4BAA8B;"><i class="fas fa-plus"></i> Create Promo</button>
             </div>
             <div class="table-wrap">
                 <table id="promosTable">
@@ -1455,7 +1455,7 @@
       .then(res => res.json())
       .then(response => {
           if (response.success) {
-              msg.style.color = "#16a34a";
+              msg.style.color = "#4BAA8B";
               msg.textContent = response.message || "Profile updated successfully!";
 
               // Use what the server actually verified was persisted in the DB
@@ -1518,7 +1518,7 @@
       })
       .then(res => res.json())
       .then(r => {
-          pwMsg.style.color = r.success ? "#16a34a" : "#e74c3c";
+          pwMsg.style.color = r.success ? "#4BAA8B" : "#e74c3c";
           pwMsg.textContent = r.message || (r.success ? "Password updated." : "Failed.");
           if (r.success) {
               ["current_password","new_password","confirm_password"].forEach(id => document.getElementById(id).value = "");
@@ -1543,7 +1543,7 @@
                   document.getElementById("profile_avatar").src = response.path + "?t=" + Date.now();
                   const headerAvatar = document.getElementById("headerProfileAvatar");
                   if (headerAvatar) headerAvatar.src = response.path + "?t=" + Date.now();
-                  msg.style.color = "#16a34a";
+                  msg.style.color = "#4BAA8B";
                   msg.textContent = "Profile picture updated!";
               } else {
                   msg.style.color = "#e74c3c";
@@ -1575,7 +1575,7 @@
     const forecastCards = document.querySelectorAll('.forecast-cards .card .value');
     // forecastCards[0] = Predicted Total Sales, [1] = Predicted Items Sold, [2] = Top Forecasted Category
 
-    const PALETTE = ['#2563eb', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899'];
+    const PALETTE = ['#4BAA8B', '#4BAA8B', '#FFC857', '#FFC857', '#FFC857'];
 
     // Gradient bars — same hue family as PharmaLink's brand blue, gives the
     // "top items" chart some depth instead of flat fills.
@@ -1610,11 +1610,11 @@
             layout: { padding: { right: 8 } },
             plugins: {
                 legend: { display: false },
-                tooltip: { enabled: true, backgroundColor: '#1e3a8a', padding: 10, cornerRadius: 8 }
+                tooltip: { enabled: true, backgroundColor: '#1E3A34', padding: 10, cornerRadius: 8 }
             },
             scales: {
                 x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11 } }, grid: { color: '#eef2f7' } },
-                y: { ticks: { color: '#334155', font: { size: 12 } }, grid: { display: false } }
+                y: { ticks: { color: '#4BAA8B', font: { size: 12 } }, grid: { display: false } }
             }
         }
     });
@@ -1648,7 +1648,7 @@
                 {
                     label: 'Forecasted Sales (₱)',
                     data: [],
-                    borderColor: '#2563eb',
+                    borderColor: '#4BAA8B',
                     backgroundColor: (ctx) => {
                         const chartArea = ctx.chart.chartArea;
                         if (!chartArea) return 'rgba(37,99,235,0.12)';
@@ -1662,7 +1662,7 @@
                     borderWidth: 2.5,
                     pointRadius: 3,
                     pointHoverRadius: 6,
-                    pointBackgroundColor: '#2563eb',
+                    pointBackgroundColor: '#4BAA8B',
                     pointBorderColor: '#fff',
                     pointBorderWidth: 1.5
                 }
@@ -1684,7 +1684,7 @@
                     }
                 },
                 tooltip: {
-                    backgroundColor: '#1e3a8a',
+                    backgroundColor: '#1E3A34',
                     padding: 10,
                     cornerRadius: 8,
                     filter: (item) => item.dataset.label === 'Forecasted Sales (₱)',
@@ -1774,8 +1774,8 @@
                     if (data.engine === 'prophet') {
                         badge.textContent = '🤖 Prophet ML';
                         badge.title = 'Forecast generated by Facebook Prophet (linear trend + weekly seasonality).';
-                        badge.style.background = '#eef2ff';
-                        badge.style.color = '#4338ca';
+                        badge.style.background = '#FFE3B3';
+                        badge.style.color = '#1E3A34';
                         badge.style.display = 'inline-block';
                     } else if (data.engine === 'linear_regression_fallback') {
                         badge.textContent = '📐 Trend model';
@@ -1886,7 +1886,7 @@
             type: 'bar',
             data: {
                 labels: labels,
-                datasets: [{ label: 'Units Sold', data: values, backgroundColor: '#6366f1', borderRadius: 4 }],
+                datasets: [{ label: 'Units Sold', data: values, backgroundColor: '#4BAA8B', borderRadius: 4 }],
             },
             options: {
                 responsive: true,
@@ -1952,7 +1952,7 @@
     }
 
     function renderProcurementCharts(bySupplier, byCategory) {
-        const palette = ['#6366f1', '#16a34a', '#f59e0b', '#dc2626', '#0ea5e9', '#a855f7', '#f97316', '#14b8a6'];
+        const palette = ['#4BAA8B', '#4BAA8B', '#FFC857', '#dc2626', '#4BAA8B', '#4BAA8B', '#FFC857', '#4BAA8B'];
 
         const supplierCtx = document.getElementById('procurementSupplierChart')?.getContext('2d');
         if (supplierCtx) {
@@ -1965,7 +1965,7 @@
             } else if (labels.length) {
                 procurementSupplierChart = new Chart(supplierCtx, {
                     type: 'bar',
-                    data: { labels, datasets: [{ label: 'Inventory Cost', data: values, backgroundColor: '#6366f1', borderRadius: 4 }] },
+                    data: { labels, datasets: [{ label: 'Inventory Cost', data: values, backgroundColor: '#4BAA8B', borderRadius: 4 }] },
                     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
                 });
             }
@@ -2004,7 +2004,7 @@
             return `
             <tr>
                 <td>${label}</td>
-                <td style="color:#16a34a;font-weight:600;">${peso(r.min_price)} — ${cheapest}</td>
+                <td style="color:#4BAA8B;font-weight:600;">${peso(r.min_price)} — ${cheapest}</td>
                 <td style="color:#dc2626;">${peso(r.max_price)} — ${priciest}</td>
                 <td style="font-weight:600;">${r.savings_pct}%</td>
                 <td style="color:#6b7280;font-size:12px;">${offersText}</td>
@@ -2041,7 +2041,7 @@
     }
 
     function renderExpiryCharts(monthly, byCategory) {
-        const palette = ['#dc2626', '#f59e0b', '#6366f1', '#16a34a', '#0ea5e9', '#a855f7', '#f97316', '#14b8a6'];
+        const palette = ['#dc2626', '#FFC857', '#4BAA8B', '#4BAA8B', '#4BAA8B', '#4BAA8B', '#FFC857', '#4BAA8B'];
 
         const monthlyCtx = document.getElementById('expiryMonthlyChart')?.getContext('2d');
         if (monthlyCtx) {
@@ -2086,7 +2086,7 @@
         const body = document.getElementById('expiryDetailBody');
         if (!body) return;
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#16a34a;padding:15px;"><i class="fas fa-circle-check"></i> No expiry write-offs logged yet.</td></tr>';
+            body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#4BAA8B;padding:15px;"><i class="fas fa-circle-check"></i> No expiry write-offs logged yet.</td></tr>';
             return;
         }
         body.innerHTML = rows.map(r => `
@@ -2095,7 +2095,7 @@
                 <td>${r.label}</td>
                 <td>${r.lot_number || '—'}</td>
                 <td>${r.units}</td>
-                <td>${peso(r.value)}${r.is_estimate ? ' <span style="color:#b45309;font-size:11px;" title="Estimated using selling price — this lot had no recorded cost price">(est.)</span>' : ''}</td>
+                <td>${peso(r.value)}${r.is_estimate ? ' <span style="color:#1E3A34;font-size:11px;" title="Estimated using selling price — this lot had no recorded cost price">(est.)</span>' : ''}</td>
                 <td>${r.admin_name || '—'}</td>
                 <td style="color:#6b7280;font-size:12px;">${r.notes || '—'}</td>
             </tr>`).join('');
@@ -2187,7 +2187,7 @@
                 const data = await res.json();
                 if (data.success) {
                     if (msg) {
-                        msg.style.color = '#16a34a';
+                        msg.style.color = '#4BAA8B';
                         let extra = data.skipped_count ? ` ${data.skipped_count} row(s) skipped.` : '';
                         msg.textContent = (data.message || 'Uploaded.') + extra;
                     }
@@ -2248,7 +2248,7 @@
         if (!body) return;
         const allRows = reorderFilter === 'all' ? reorderData : reorderData.filter(r => r.action === reorderFilter);
         if (!allRows.length) {
-            body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:#16a34a;padding:15px;"><i class="fas fa-circle-check"></i> Nothing here right now.</td></tr>`;
+            body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:#4BAA8B;padding:15px;"><i class="fas fa-circle-check"></i> Nothing here right now.</td></tr>`;
             updateReorderPager(0, 0);
             updateDraftPoButtonState();
             return;
@@ -2266,9 +2266,9 @@
             if (r.action === 'increase') {
                 actionBadge = `<span style="background:#fee2e2;color:#dc2626;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">↑ Order +${r.suggested_qty}</span>`;
             } else if (r.action === 'decrease') {
-                actionBadge = `<span style="background:#fef3c7;color:#b45309;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">↓ Reduce${r.suggested_reduce_qty ? ' ~' + r.suggested_reduce_qty : ''} / pause</span>`;
+                actionBadge = `<span style="background:#fef3c7;color:#1E3A34;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">↓ Reduce${r.suggested_reduce_qty ? ' ~' + r.suggested_reduce_qty : ''} / pause</span>`;
             } else {
-                actionBadge = `<span style="background:#dcfce7;color:#16a34a;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">✓ Sufficient</span>`;
+                actionBadge = `<span style="background:#FFE3B3;color:#4BAA8B;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">✓ Sufficient</span>`;
             }
             // Only "needs reorder" rows are selectable for a draft PO —
             // overstocked/sufficient rows have nothing to order.
@@ -2333,7 +2333,7 @@
         reorderFilter = filter || 'increase';
         document.querySelectorAll('.reorder-filter-btn').forEach(b => {
             const key = b.getAttribute('data-filter');
-            const color = key === 'increase' ? '#dc2626' : (key === 'decrease' ? '#f59e0b' : '#6b7280');
+            const color = key === 'increase' ? '#dc2626' : (key === 'decrease' ? '#FFC857' : '#6b7280');
             const on = key === reorderFilter;
             b.classList.toggle('active', on);
             b.style.background = on ? color : '#fff';
@@ -2412,7 +2412,7 @@
             body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#6b7280;padding:15px;">No promos yet. Click "Create Promo" to add one.</td></tr>';
             return;
         }
-        const statusColor = { Active: '#16a34a', Scheduled: '#2563eb', Expired: '#6b7280', Disabled: '#dc2626' };
+        const statusColor = { Active: '#4BAA8B', Scheduled: '#4BAA8B', Expired: '#6b7280', Disabled: '#dc2626' };
         body.innerHTML = rows.map(p => {
             const discountText = p.discount_type === 'percent' ? `${p.discount_value}%` : `₱${Number(p.discount_value).toFixed(2)}`;
             const color = statusColor[p.status] || '#6b7280';
@@ -2423,7 +2423,7 @@
                 <td>${escapeHtmlPromo(p.scope)}</td>
                 <td>${p.start_date} – ${p.end_date}</td>
                 <td><span style="background:${color}20;color:${color};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">${p.status}</span></td>
-                <td><button type="button" class="toggle-promo-btn" data-id="${p.promo_id}" style="background:${p.is_active ? '#dc2626' : '#16a34a'};color:#fff;border:none;border-radius:4px;padding:5px 10px;cursor:pointer;font-size:12px;">${p.is_active ? 'Disable' : 'Enable'}</button></td>
+                <td><button type="button" class="toggle-promo-btn" data-id="${p.promo_id}" style="background:${p.is_active ? '#dc2626' : '#4BAA8B'};color:#fff;border:none;border-radius:4px;padding:5px 10px;cursor:pointer;font-size:12px;">${p.is_active ? 'Disable' : 'Enable'}</button></td>
             </tr>`;
         }).join('');
     }
@@ -3048,7 +3048,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
         rows.forEach((r) => { r.style.outline = ''; });
-        row.style.outline = '2px solid #2563eb';
+        row.style.outline = '2px solid #4BAA8B';
         row.scrollIntoView({ behavior: 'smooth', block: 'center' });
         if (qtyEl && !(parseInt(qtyEl.value, 10) > 0)) qtyEl.value = 1;
         const today = manilaTodayYmd();
@@ -3205,18 +3205,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p class="value" id="reorder-increase-count" style="font-size:1.4em; color:#dc2626; margin:6px 0 0;">0</p>
                 </div>
                 <div class="card" data-reorder-filter="decrease" style="flex:1; min-width:160px; padding:12px; border-radius:8px; background:#fff; cursor:pointer;">
-                    <h3 style="color:#f59e0b; margin:0; font-size:14px;">Overstocked</h3>
-                    <p class="value" id="reorder-decrease-count" style="font-size:1.4em; color:#f59e0b; margin:6px 0 0;">0</p>
+                    <h3 style="color:#FFC857; margin:0; font-size:14px;">Overstocked</h3>
+                    <p class="value" id="reorder-decrease-count" style="font-size:1.4em; color:#FFC857; margin:6px 0 0;">0</p>
                 </div>
                 <div class="card" data-reorder-filter="ok" style="flex:1; min-width:160px; padding:12px; border-radius:8px; background:#fff; cursor:pointer;">
-                    <h3 style="color:#16a34a; margin:0; font-size:14px;">Sufficient Stock</h3>
-                    <p class="value" id="reorder-ok-count" style="font-size:1.4em; color:#16a34a; margin:6px 0 0;">0</p>
+                    <h3 style="color:#4BAA8B; margin:0; font-size:14px;">Sufficient Stock</h3>
+                    <p class="value" id="reorder-ok-count" style="font-size:1.4em; color:#4BAA8B; margin:6px 0 0;">0</p>
                 </div>
             </div>
             <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                 <div>
                     <button type="button" class="reorder-filter-btn active" data-filter="increase" style="padding:6px 14px;border:1px solid #dc2626;border-radius:20px;background:#dc2626;color:#fff;cursor:pointer;font-size:13px;margin-right:6px;">Needs Reorder</button>
-                    <button type="button" class="reorder-filter-btn" data-filter="decrease" style="padding:6px 14px;border:1px solid #f59e0b;border-radius:20px;background:#fff;color:#f59e0b;cursor:pointer;font-size:13px;margin-right:6px;">Overstocked</button>
+                    <button type="button" class="reorder-filter-btn" data-filter="decrease" style="padding:6px 14px;border:1px solid #FFC857;border-radius:20px;background:#fff;color:#FFC857;cursor:pointer;font-size:13px;margin-right:6px;">Overstocked</button>
                     <button type="button" class="reorder-filter-btn" data-filter="all" style="padding:6px 14px;border:1px solid #6b7280;border-radius:20px;background:#fff;color:#6b7280;cursor:pointer;font-size:13px;">Show All</button>
                 </div>
                 <button type="button" id="createDraftPoBtn" class="action-btn" disabled>
@@ -3297,7 +3297,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button type="button" id="scanNewBarcodeBtn"><i class="fas fa-barcode"></i> Scan</button>
                 </div>
                 <p class="barcode-hint">Leave blank to auto-generate. USB scanner or Scan for camera.</p>
-                <button type="submit" style="background: #2563eb;" class="save"><i class="fas fa-plus"></i> Create Drug Definition</button>
+                <button type="submit" style="background: #4BAA8B;" class="save"><i class="fas fa-plus"></i> Create Drug Definition</button>
             </form>
         </div>
     </div>
@@ -3340,7 +3340,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="text" id="edit_barcode" placeholder="Scan, type, or leave blank to auto-generate" autocomplete="off">
                     <button type="button" id="scanEditBarcodeBtn"><i class="fas fa-barcode"></i> Scan</button>
                 </div>
-                <button type="submit" style="background: #f59e0b;" class="update"><i class="fas fa-pen"></i> Update Definition</button>
+                <button type="submit" style="background: #FFC857;" class="update"><i class="fas fa-pen"></i> Update Definition</button>
             </form>
         </div>
     </div>
@@ -3365,12 +3365,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="number" step="0.01" id="edit_cost_price" required>
                 <label for="edit_price">Selling Price (₱) — from cost + category markup:</label>
                 <input type="number" step="0.01" id="edit_price" readonly tabindex="-1" style="background:#f3f4f6;">
-                <p id="edit_price_suggestion_hint" style="font-size:12px;color:#16a34a;margin:-8px 0 8px;min-height:16px;"></p>
+                <p id="edit_price_suggestion_hint" style="font-size:12px;color:#4BAA8B;margin:-8px 0 8px;min-height:16px;"></p>
         
 <label for="edit_supplier">Supplier:</label>
 <select id="edit_supplier" name="supplier" required>
 </select>
-                <button type="submit" style="background: #f59e0b;" class="update"><i class="fas fa-pen"></i> Update Lot</button>
+                <button type="submit" style="background: #FFC857;" class="update"><i class="fas fa-pen"></i> Update Lot</button>
             </form>
         </div>
     </div>
@@ -3424,7 +3424,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <label for="promo_end_date">End Date:</label>
                 <input type="date" id="promo_end_date" required>
 
-                <button type="button" id="submitPromoBtn" style="background: #7c3aed;margin-top:12px;" class="update"><i class="fas fa-check"></i> Create Promo</button>
+                <button type="button" id="submitPromoBtn" style="background: #4BAA8B;margin-top:12px;" class="update"><i class="fas fa-check"></i> Create Promo</button>
             </form>
         </div>
     </div>
@@ -3466,7 +3466,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <label for="adjust_notes">Notes (optional, required if "Other"):</label>
                 <textarea id="adjust_notes" rows="2" style="width:100%;padding:8px;border-radius:6px;border:1px solid #d1d5db;"></textarea>
 
-                <button type="submit" style="background: #7c3aed;margin-top:12px;" class="update"><i class="fas fa-check"></i> Apply Adjustment</button>
+                <button type="submit" style="background: #4BAA8B;margin-top:12px;" class="update"><i class="fas fa-check"></i> Apply Adjustment</button>
             </form>
         </div>
     </div>
@@ -3480,7 +3480,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <video id="drugBarcodeScannerVideo" style="width:100%;border-radius:6px;background:#000;" playsinline></video>
             <p id="drugBarcodeScannerStatus" style="color:#6b7280;font-size:13px;margin:10px 0 0;">Point the camera at the barcode, or type it below and press Enter.</p>
             <input type="text" id="drugBarcodeManualInput" placeholder="Type barcode and press Enter or click Use" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;">
-            <button type="button" id="useDrugBarcodeBtn" style="width:100%;margin-top:8px;padding:8px;border:none;border-radius:6px;background:#5a5fe0;color:#fff;cursor:pointer;">Use barcode</button>
+            <button type="button" id="useDrugBarcodeBtn" style="width:100%;margin-top:8px;padding:8px;border:none;border-radius:6px;background:#4BAA8B;color:#fff;cursor:pointer;">Use barcode</button>
         </div>
     </div>
 
@@ -4011,12 +4011,12 @@ function attachResetPasswordEvents() {
                     modalContainer.className = 'um-modal-overlay';
                     modalContainer.innerHTML = `
                         <div class="modal-content um-modal-card" style="width:min(420px,100%); padding:20px !important;">
-                            <h2 style="margin:0 0 10px; font-size:1.1rem; color:#1e3a8a;"><i class="fas fa-key"></i> Password Reset</h2>
+                            <h2 style="margin:0 0 10px; font-size:1.1rem; color:#1E3A34;"><i class="fas fa-key"></i> Password Reset</h2>
                             <p>New temporary password for <strong>${res.staff_name}</strong> (${res.username}):</p>
                             <p style="font-size:20px;font-weight:700;background:#f3f4f6;padding:12px 16px;border-radius:8px;letter-spacing:1px;text-align:center;" id="tempPasswordDisplay">${res.temp_password}</p>
                             <p style="font-size:12px;color:#6b7280;">Relay this to them directly (chat, text, in person). It will not be shown again — ask them to change it from their Profile page after logging in.</p>
                             <div style="display:flex; gap:8px; margin-top:12px;">
-                                <button type="button" id="copyTempPasswordBtn" style="flex:1;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:10px;cursor:pointer;"><i class="fas fa-copy"></i> Copy</button>
+                                <button type="button" id="copyTempPasswordBtn" style="flex:1;background:#4BAA8B;color:#fff;border:none;border-radius:6px;padding:10px;cursor:pointer;"><i class="fas fa-copy"></i> Copy</button>
                                 <button type="button" id="closeTempPasswordModal" style="flex:1;background:#e5e7eb;border:none;border-radius:6px;padding:10px;cursor:pointer;">Close</button>
                             </div>
                         </div>`;
@@ -4046,7 +4046,7 @@ function initializeUserManagementEvents() {
     const customerTable = document.getElementById('customer-table-body');
     const addAdminBtn = document.getElementById('addAdminUserBtn');
     const addCashierBtn = document.getElementById('addCashierUserBtn');
-    const addCustomerBtn = document.getElementById('addCustomerUserBtn') || document.querySelector('#user-management button[style*="background: #16a34a;"]');
+    const addCustomerBtn = document.getElementById('addCustomerUserBtn') || document.querySelector('#user-management button[style*="background: #4BAA8B;"]');
 
     document.querySelectorAll('#user-management .um-tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -4356,7 +4356,7 @@ if (userManagementSection && userManagementSection.style.display === 'block') {
 // Monthly Sales Trend + Top Categories (year-aware)
 let monthlySalesChartInstance = null;
 let topCategoriesChartInstance = null;
-const catColors = ['#2563eb','#f59e0b','#10b981','#8b5cf6','#ef4444','#f97316','#0ea5e9','#ec4899'];
+const catColors = ['#4BAA8B','#FFC857','#4BAA8B','#FFC857','#ef4444','#FFC857','#4BAA8B','#FFC857'];
 
 let seasonalTrendChartInstance = null;
 
@@ -4371,7 +4371,7 @@ function renderSeasonalChart(labels, salesData) {
             datasets: [{
                 label: 'Sales by month (all years)',
                 data: salesData || [],
-                backgroundColor: '#0ea5e9',
+                backgroundColor: '#4BAA8B',
                 borderRadius: 4,
             }],
         },
@@ -4404,7 +4404,7 @@ function renderSalesCharts(labels, salesData, catLabels, catData) {
                 datasets: [{
                     label: 'Sales',
                     data: salesData,
-                    borderColor: '#2563eb',
+                    borderColor: '#4BAA8B',
                     backgroundColor: 'rgba(37,99,235,0.08)',
                     fill: true,
                     tension: 0.35,
@@ -4597,12 +4597,12 @@ document.getElementById('analytics-year')?.addEventListener('change', function (
                 if (!body) return;
                 const items = d.items || [];
                 if (!items.length) {
-                    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#16a34a;padding:15px;"><i class="fas fa-circle-check"></i> No medicines expiring within 30 days.</td></tr>';
+                    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#4BAA8B;padding:15px;"><i class="fas fa-circle-check"></i> No medicines expiring within 30 days.</td></tr>';
                     return;
                 }
                 body.innerHTML = items.map(i => {
                     const critical = i.days_left <= 7;
-                    const dayColor = critical ? '#dc2626' : '#f97316';
+                    const dayColor = critical ? '#dc2626' : '#FFC857';
                     const money = '₱' + Number(i.value_at_risk || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     return `
                     <tr>
@@ -4750,7 +4750,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     btn.addEventListener('click', () => window.switchAdminDashPanel(btn.dataset.adPanel));
 });
 </script>
-<script src="/assets/theme.js?v=solid-ui10"></script>
+<script src="/assets/theme.js?v=no-push1"></script>
 <script src="/assets/activity-clicks.js?v=click1"></script>
 </body>
 </html>

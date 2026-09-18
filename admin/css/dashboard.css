@@ -76,7 +76,7 @@ header {
 }
 
 header h1 {
-  color: #1e3a8a;
+  color: #1E3A34;
   font-size: 28px;
 }
 
@@ -104,7 +104,7 @@ header h1 {
 
 .card h3 {
   font-size: 16px;
-  color: #1e3a8a;
+  color: #1E3A34;
   margin-bottom: 10px;
 }
 
@@ -114,7 +114,7 @@ header h1 {
 }
 
 .change.up {
-  color: #16a34a;
+  color: #4BAA8B;
   font-weight: 600;
 }
 
@@ -146,7 +146,7 @@ header h1 {
 /* POS-style buttons for future actions */
 button {
   border: none;
-  background: #2563eb;
+  background: #4BAA8B;
   color: white;
   padding: 8px 12px;
   border-radius: 8px;
@@ -155,20 +155,20 @@ button {
 }
 
 button:hover {
-  background: #1d4ed8;
+  background: #1E3A34;
 }
 
 .add-btn {
-  background: #16a34a;
+  background: #4BAA8B;
   margin-bottom: 10px;
 }
 
 .checkout {
-  background: #16a34a;
+  background: #4BAA8B;
 }
 
 .checkout:hover {
-  background: #15803d;
+  background: #1E3A34;
 }
 
 /* Responsive */

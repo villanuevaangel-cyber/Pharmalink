@@ -56,7 +56,7 @@
                             datasets: [{
                                 label: 'Sales (₱)',
                                 data: data.monthly_data || [],
-                                borderColor: '#2563eb',
+                                borderColor: '#4BAA8B',
                                 backgroundColor: 'rgba(37,99,235,0.1)',
                                 tension: 0.3,
                                 fill: true,
@@ -74,7 +74,7 @@
                             labels: data.category_labels || [],
                             datasets: [{
                                 data: data.category_data || [],
-                                backgroundColor: ['#2563eb', '#16a34a', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'],
+                                backgroundColor: ['#4BAA8B', '#4BAA8B', '#FFC857', '#ef4444', '#FFC857', '#4BAA8B', '#FFC857', '#4BAA8B'],
                             }]
                         },
                         options: { responsive: true }

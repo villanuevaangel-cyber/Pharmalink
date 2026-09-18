@@ -92,25 +92,6 @@ def ensure_automation_schema(conn) -> None:
         )
         cur.execute(
             """
-            CREATE TABLE IF NOT EXISTS push_subscriptions (
-                subscription_id INTEGER PRIMARY KEY,
-                user_id INTEGER,
-                audience VARCHAR(20) NOT NULL DEFAULT 'staff',
-                endpoint TEXT NOT NULL,
-                p256dh TEXT,
-                auth TEXT,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-            """
-        )
-        cur.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint
-            ON push_subscriptions (endpoint)
-            """
-        )
-        cur.execute(
-            """
             ALTER TABLE suppliers
             ADD COLUMN IF NOT EXISTS consignment_policy VARCHAR(20) NOT NULL DEFAULT 'none'
             """

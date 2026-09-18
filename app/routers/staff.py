@@ -5,7 +5,7 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.activity import write_activity_log
-from app.db import fetch_all, fetch_one, get_conn, next_id
+from app.db import fetch_all, fetch_one, get_conn
 from app.deps import require_staff
 
 router = APIRouter(prefix="/api/staff", tags=["staff"])
@@ -285,34 +285,3 @@ async def profile_picture(request: Request, profile_image: UploadFile = File(...
             cur.execute("UPDATE staff_info SET profile_image = %s WHERE user_id = %s", (path, user_id))
             write_activity_log(cur, "Update Profile Picture", "Uploaded a new profile picture.", request=request)
     return {"success": True, "path": path}
-
-
-@router.post("/push-subscribe")
-async def push_subscribe(request: Request):
-    user_id = require_staff(request)
-    if not user_id:
-        return JSONResponse({"success": False, "message": "Not authorized."}, status_code=401)
-    data = await request.json()
-    endpoint = str(data.get("endpoint") or "").strip()
-    keys = data.get("keys") or {}
-    if not endpoint:
-        return {"success": False, "message": "Missing push endpoint."}
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT subscription_id FROM push_subscriptions WHERE endpoint = %s", (endpoint,))
-            row = cur.fetchone()
-            if row:
-                cur.execute(
-                    "UPDATE push_subscriptions SET user_id = %s, p256dh = %s, auth = %s WHERE endpoint = %s",
-                    (user_id, keys.get("p256dh"), keys.get("auth"), endpoint),
-                )
-            else:
-                sid = next_id(cur, "push_subscriptions", "subscription_id")
-                cur.execute(
-                    """
-                    INSERT INTO push_subscriptions (subscription_id, user_id, audience, endpoint, p256dh, auth)
-                    VALUES (%s, %s, 'staff', %s, %s, %s)
-                    """,
-                    (sid, user_id, endpoint, keys.get("p256dh"), keys.get("auth")),
-                )
-    return {"success": True}

@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
-    <link rel="stylesheet" href="/assets/theme.css?v=solid-ui13">
-    <link rel="stylesheet" href="/cashier/css/cashier.css?v=sales-log3">
-    <link rel="stylesheet" href="/shared/css/segmentation.css?v=seg4">
+    <link rel="stylesheet" href="/assets/theme.css?v=palette1">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=palette1">
+    <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1252,7 +1252,7 @@ function updateCart() {
         const displayPrice = `(₱${item.price.toFixed(2)})`;
         // Descriptive name fix is already applied when adding to cart
         const promoBadge = item.promo_name
-            ? `<br><span style="background:#f3e8ff;color:#7c3aed;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;">🏷️ ${item.promo_name}</span>`
+            ? `<br><span style="background:#FFE3B3;color:#4BAA8B;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;">🏷️ ${item.promo_name}</span>`
             : '';
         const displayName = `${item.name} <span style="font-weight:normal; color:#666; font-size:0.9em;">${displayPrice}</span>${promoBadge}`;
         const subtotalCellText = itemPromoDiscount > 0
@@ -2376,7 +2376,7 @@ function renderDailySalesChart() {
                 type: 'line',
                 data: {
                     labels: data.labels,
-                    datasets: [{ label: 'Sales (₱)', data: data.data, borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)', fill: true, tension: 0.3 }]
+                    datasets: [{ label: 'Sales (₱)', data: data.data, borderColor: '#4BAA8B', backgroundColor: 'rgba(102,126,234,0.1)', fill: true, tension: 0.3 }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
             });
@@ -2390,7 +2390,7 @@ function renderDailySalesChart() {
  * left-to-right gradient-fill bars, so bar charts look consistent across
  * the whole system instead of each page inventing its own colors.
  */
-window.CHART_PALETTE = ['#2563eb', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9'];
+window.CHART_PALETTE = ['#4BAA8B', '#4BAA8B', '#FFC857', '#FFC857', '#FFC857', '#4BAA8B'];
 window.chartBarGradient = function (ctx, color) {
     color = color || CHART_PALETTE[0]; // guard: Chart.js can resolve this before a real index/color exists
     const chartArea = ctx.chart.chartArea;
@@ -2462,12 +2462,12 @@ function renderTopMedicinesChart(start, end) {
                     animation: { duration: 600, easing: 'easeOutQuart' },
                     scales: {
                         x: { beginAtZero: true, title: { display: true, text: 'Units Sold' }, grid: { color: '#eef2f7' } },
-                        y: { grid: { display: false }, ticks: { color: '#334155', font: { size: 12 } } }
+                        y: { grid: { display: false }, ticks: { color: '#4BAA8B', font: { size: 12 } } }
                     },
                     plugins: {
                         legend: { display: false },
                         title: { display: false },
-                        tooltip: { backgroundColor: '#1e3a8a', padding: 10, cornerRadius: 8 }
+                        tooltip: { backgroundColor: '#1E3A34', padding: 10, cornerRadius: 8 }
                     }
                 }
             });
@@ -2693,7 +2693,7 @@ function printSalesReport() {
         ' · Items: ' + (document.getElementById('srItems')?.textContent || '0');
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write('<html><head><title>Sales Report</title><style>body{font-family:Inter,Arial,sans-serif;padding:20px;color:#111}h2{color:#1e3a8a}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #eee;padding:8px;text-align:left;font-size:13px}button{display:none}</style></head><body>');
+    w.document.write('<html><head><title>Sales Report</title><style>body{font-family:Inter,Arial,sans-serif;padding:20px;color:#111}h2{color:#1E3A34}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #eee;padding:8px;text-align:left;font-size:13px}button{display:none}</style></head><body>');
     w.document.write('<h2>PharmaLink Sales Report</h2><p>' + start + ' to ' + end + '</p><p>' + summary + '</p>' + table);
     w.document.write('</body></html>');
     w.document.close();
@@ -2856,7 +2856,7 @@ document.getElementById('searchInput').addEventListener('input', function() {
       .then(res => res.json())
       .then(response => {
           if (response.success) {
-              cMsg.style.color = "#16a34a";
+              cMsg.style.color = "#4BAA8B";
               cMsg.textContent = response.message || "Profile updated successfully!";
 
               // Use what the server actually verified was persisted in the DB
@@ -2920,7 +2920,7 @@ document.getElementById('searchInput').addEventListener('input', function() {
       })
       .then(res => res.json())
       .then(r => {
-          pwMsg.style.color = r.success ? "#16a34a" : "#e74c3c";
+          pwMsg.style.color = r.success ? "#4BAA8B" : "#e74c3c";
           pwMsg.textContent = r.message || (r.success ? "Password updated." : "Failed.");
           if (r.success) {
               ["current_password","new_password","confirm_password"].forEach(id => document.getElementById(id).value = "");
@@ -2947,7 +2947,7 @@ document.getElementById('searchInput').addEventListener('input', function() {
                   document.getElementById("profile_avatar").src = response.path + "?t=" + Date.now();
                   const headerAvatar = document.getElementById("headerProfileAvatar");
                   if (headerAvatar) headerAvatar.src = response.path + "?t=" + Date.now();
-                  msg.style.color = "#16a34a";
+                  msg.style.color = "#4BAA8B";
                   msg.textContent = "Profile picture updated!";
               } else {
                   msg.style.color = "#e74c3c";
@@ -2967,7 +2967,7 @@ document.getElementById('searchInput').addEventListener('input', function() {
 
 
 
-<script src="/assets/theme.js?v=solid-ui10"></script>
+<script src="/assets/theme.js?v=no-push1"></script>
 <script src="/assets/activity-clicks.js?v=click1"></script>
 </body>
 

@@ -987,7 +987,7 @@
         preview.textContent = result < 0
             ? `⚠️ Would go below zero (${current} → ${result})`
             : `New stock will be: ${current} → ${result}`;
-        preview.style.color = result < 0 ? '#dc2626' : '#16a34a';
+        preview.style.color = result < 0 ? '#dc2626' : '#4BAA8B';
     }
 
     function handleAdjustStockSubmit(e) {
@@ -1036,7 +1036,7 @@
                 }
                 body.innerHTML = rows.map(r => {
                     const sign = r.quantity_change > 0 ? '+' : '';
-                    const changeColor = r.quantity_change > 0 ? '#16a34a' : '#dc2626';
+                    const changeColor = r.quantity_change > 0 ? '#4BAA8B' : '#dc2626';
                     const when = new Date(r.created_at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
                     const drugLabel = `${escapeHtml(r.generic_name)}${r.brand_name ? ' (' + escapeHtml(r.brand_name) + ')' : ''}`;
                     return `
@@ -1085,7 +1085,7 @@
             <tr data-category="${escapeHtml(r.category)}">
                 <td>${escapeHtml(r.category)}</td>
                 <td><input type="number" step="0.1" min="0" class="markup-input" value="${r.markup_percent}" style="width:90px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;"> %</td>
-                <td><button type="button" class="save-markup-btn" style="background:#16a34a;color:#fff;border:none;border-radius:4px;padding:5px 12px;cursor:pointer;">Save</button></td>
+                <td><button type="button" class="save-markup-btn" style="background:#4BAA8B;color:#fff;border:none;border-radius:4px;padding:5px 12px;cursor:pointer;">Save</button></td>
             </tr>`).join('');
     }
 

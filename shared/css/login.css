@@ -6,7 +6,7 @@
 /* Body */
 body {
   font-family: "Poppins", sans-serif;
-  background: #0f172a;
+  background: #FFF7E6;
   margin: 0;
   min-height: 100vh;
 }
@@ -28,7 +28,7 @@ body {
   justify-content: center;
   padding: 60px 70px 60px 300px;
   color: #f1f5f9;
-  background: #0f172a;
+  background: #1E3A34;
   overflow: hidden;
 }
 .login-branding::before {
@@ -42,8 +42,8 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 28px;
-  background: #5a5fe0;
-  box-shadow: 0 10px 25px rgba(59,130,246,0.35);
+  background: #4BAA8B;
+  box-shadow: 0 10px 25px rgba(75, 170, 139, 0.35);
   margin-bottom: 26px;
   position: relative;
 }
@@ -79,7 +79,7 @@ body {
   color: #e2e8f0;
 }
 .brand-points li i {
-  color: #22c55e;
+  color: #FFC857;
   font-size: 16px;
 }
 
@@ -92,7 +92,7 @@ body {
   align-items: center;
   min-height: 100vh;
   padding: 20px;
-  background: #f8fafc;
+  background: #FFF7E6;
 }
 
 @media (max-width: 860px) {
@@ -104,7 +104,7 @@ body {
 
 /* Login Card */
 .login-card {
-  background: #1e293b;
+  background: #1E3A34;
   border-radius: 15px;
   padding: 40px 30px;
   color: #f1f5f9;
@@ -117,7 +117,7 @@ body {
 /* Lock Icon at top */
 .login-icon {
   font-size: 40px;
-  background: #5a5fe0;
+  background: #4BAA8B;
   width: 60px;
   height: 60px;
   display: flex;
@@ -165,8 +165,8 @@ body {
   width: 100%;
   padding: 12px 40px 12px 40px; /* padding for icons */
   border-radius: 8px;
-  border: 1px solid #334155;
-  background: #0f172a;
+  border: 1px solid #4BAA8B;
+  background: #1E3A34;
   color: #f1f5f9;
   font-size: 15px;
   box-sizing: border-box;
@@ -200,7 +200,7 @@ body {
 
 /* Demo credentials box */
 .demo-credentials {
-  background: #334155;
+  background: #4BAA8B;
   padding: 10px;
   border-radius: 8px;
   font-size: 13px;
@@ -228,7 +228,7 @@ button.login-btn {
   border-radius: 10px;
   font-weight: 600;
   font-size: 16px;
-  background: #5a5fe0;
+  background: #4BAA8B;
   color: white;
   justify-content: center;
   cursor: pointer;
@@ -236,7 +236,7 @@ button.login-btn {
 }
 
 button.login-btn:hover {
-  background: #4c4fd6;
+  background: #1E3A34;
 }
 
 /* Signup text */
@@ -247,7 +247,7 @@ button.login-btn:hover {
 }
 
 .signup-text a {
-  color: #3b82f6;
+  color: #4BAA8B;
   text-decoration: none;
 }
 
@@ -257,7 +257,7 @@ button.login-btn:hover {
   font-size:13px;
 }
 .browse-shop-text a{
-  color:#1e3a8a;
+  color:#FFC857;
   font-weight:700;
   text-decoration:none;
 }
@@ -375,7 +375,7 @@ button.login-btn:hover {
     left: 0;
 }
 .pw-hints .pw-rules li.ok {
-    color: #34d399;
+    color: #FFC857;
 }
 .pw-hints .pw-rules li.ok::before {
     content: "●";

@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const customerTable = document.querySelector('#customerTable');
 
     // ===== Add Customer =====
-    const addCustomerBtn = document.querySelector('#user-management button[style*="background: #16a34a;"]');
+    const addCustomerBtn = document.querySelector('#user-management button[style*="background: #4BAA8B;"]');
     if(addCustomerBtn) addCustomerBtn.addEventListener('click', () => {
         const username = prompt("Enter Customer Username:");
         const email = prompt("Enter Customer Email:");
