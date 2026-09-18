@@ -688,7 +688,7 @@ async def create_sale(request: Request):
                         raise ValueError(f"Item (lot #{lot_id}) no longer exists or is inactive.")
                     if int(lot["current_stock"]) < qty:
                         raise ValueError(
-                            f"Not enough stock for lot #{lot_id} — only {lot['current_stock']} left, but {qty} requested. Please refresh and try again."
+                            f"Not enough stock for lot #{lot_id} - only {lot['current_stock']} left, but {qty} requested. Please refresh and try again."
                         )
 
                 points_redeemed = 0.0
@@ -696,7 +696,7 @@ async def create_sale(request: Request):
                 new_loyalty_balance = None
                 if points_requested > 0:
                     if customer_id is None:
-                        raise ValueError("Points can only be redeemed for a registered customer — this sale has no customer selected.")
+                        raise ValueError("Points can only be redeemed for a registered customer - this sale has no customer selected.")
                     cur.execute(
                         "SELECT loyalty_points FROM customers WHERE customer_id = %s AND is_active = 1 FOR UPDATE",
                         (customer_id,),
@@ -709,7 +709,7 @@ async def create_sale(request: Request):
                         if points_requested - available <= 1.0:
                             points_requested = available
                         else:
-                            raise ValueError(f"Not enough loyalty points — only {available:.2f} available.")
+                            raise ValueError(f"Not enough loyalty points - only {available:.2f} available.")
                     points_discount_value = round(points_requested * POINTS_TO_PESO_RATE, 2)
                     if points_discount_value > subtotal:
                         points_discount_value = subtotal
@@ -790,7 +790,7 @@ async def create_sale(request: Request):
                 for drug_id in affected:
                     sync_stock_status_for_drug(cur, drug_id)
 
-                details = f"Sale #{sale_id} — total ₱{total_amount:.2f}, {len(items)} item(s)."
+                details = f"Sale #{sale_id} - total ₱{total_amount:.2f}, {len(items)} item(s)."
                 if points_redeemed > 0:
                     details += f" Points redeemed: {points_redeemed:.2f} (₱{points_discount_value:.2f})."
                 write_activity_log(cur, "POS Sale", details, request=request)
@@ -828,7 +828,7 @@ async def loyalty_points(request: Request):
                 return {"success": False, "message": "Customer not found."}
             new_balance = max(0.0, float(row["loyalty_points"] or 0) + points)
             cur.execute("UPDATE customers SET loyalty_points = %s WHERE customer_id = %s", (new_balance, customer_id))
-            details = f"Customer ID {customer_id} points {points:+} (new balance: {new_balance}) — via Customer Segmentation."
+            details = f"Customer ID {customer_id} points {points:+} (new balance: {new_balance}) - via Customer Segmentation."
             write_activity_log(cur, "Adjust Loyalty Points", details, request=request)
     return {"success": True, "new_balance": new_balance}
 

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ADMIN PORTAL — page-specific styles only.
+   ADMIN PORTAL - page-specific styles only.
    Sidebar, header, nav, cards, tables, buttons, modals, forms, status badges
    all now come from assets/theme.css (the shared design system) so the
    Admin portal looks and behaves identically to Cashier and Customer.
@@ -9,7 +9,7 @@
    of the system. Only truly admin-only rules remain below.
    ========================================================================== */
 
-/* Admin dashboard — clickable stat cards */
+/* Admin dashboard - clickable stat cards */
 .dash-card {
   position: relative;
   text-align: left;
@@ -27,7 +27,7 @@
 .dash-card h3 { font-size: 15px; }
 
 /* =======================================
-   ADMIN DASHBOARD — compact + tabs
+   ADMIN DASHBOARD - compact + tabs
    ======================================= */
 #dashboard .ad-dash-header{
   display:flex; flex-wrap:wrap; justify-content:space-between;

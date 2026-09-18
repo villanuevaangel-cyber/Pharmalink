@@ -101,13 +101,13 @@
         const active = spend.filter((amt) => Number(amt) > 0).length;
         const revenue = spend.reduce((sum, amt) => sum + Number(amt || 0), 0);
         const avg = active ? revenue / active : 0;
-        let topType = '—';
+        let topType = '-';
         if (typeCounts.length) {
             let maxIdx = 0;
             typeCounts.forEach((count, idx) => {
                 if (Number(count) > Number(typeCounts[maxIdx])) maxIdx = idx;
             });
-            topType = types[maxIdx] || '—';
+            topType = types[maxIdx] || '-';
         }
         const setText = (id, value) => {
             const el = document.getElementById(id);

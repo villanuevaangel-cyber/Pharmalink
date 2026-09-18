@@ -116,7 +116,7 @@ def dashboard(
         if start == end == today:
             period_label = "Today"
         else:
-            period_label = f"{start.strftime('%b %d, %Y')} – {end.strftime('%b %d, %Y')}"
+            period_label = f"{start.strftime('%b %d, %Y')} - {end.strftime('%b %d, %Y')}"
     elif period == "today":
         start = end = today
         period_label = "Today"
@@ -180,7 +180,7 @@ def dashboard(
         "low_stock": low_stock,
         "out_stock": out_stock,
         "expiring_30_count": expiring_30_count,
-        "server_datetime": datetime.now().strftime("%A, %B %d, %Y — %I:%M:%S %p").replace(" 0", " "),
+        "server_datetime": datetime.now().strftime("%A, %B %d, %Y - %I:%M:%S %p").replace(" 0", " "),
     }
 
 
@@ -567,7 +567,7 @@ async def adjust_stock(request: Request):
     if new_stock < 0:
         return {"success": False, "message": f"That would bring stock below zero (current: {previous}). Please check the quantity."}
     if change == 0:
-        return {"success": False, "message": "No change in stock — nothing to adjust."}
+        return {"success": False, "message": "No change in stock - nothing to adjust."}
     admin_name = request.session.get("user_first_name") or "Admin"
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -773,7 +773,7 @@ async def update_supplier(request: Request):
                 """,
                 (name, data.get("contact") or "", data.get("email") or "", data.get("address") or "", status, inactive_reason, policy, supplier_id),
             )
-            extra = f" — Reason: {inactive_reason}" if status == "Inactive" else ""
+            extra = f" - Reason: {inactive_reason}" if status == "Inactive" else ""
             _log(cur, request, "Edit Supplier", f"Updated supplier: {name} (ID {supplier_id}){extra}")
     return {"success": True}
 

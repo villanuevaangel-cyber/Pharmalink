@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 title PharmaLink
 echo.
-echo PharmaLink — XAMPP is not required. Database is Supabase.
+echo PharmaLink - XAMPP is not required. Database is Supabase.
 echo Folder: %CD%
 echo When you see "Uvicorn running", open: http://127.0.0.1:8080
 echo Press Ctrl+C in this window to stop.

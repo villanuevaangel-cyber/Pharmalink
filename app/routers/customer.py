@@ -496,7 +496,7 @@ async def place_order(request: Request):
                 for drug_id in affected:
                     sync_stock_status_for_drug(cur, drug_id)
 
-                details = f"Online order #{order_id} placed — total ₱{server_total:.2f}."
+                details = f"Online order #{order_id} placed - total ₱{server_total:.2f}."
                 write_activity_log(cur, "Online Order", details, request=request)
 
         import secrets

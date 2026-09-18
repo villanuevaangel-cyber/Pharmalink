@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CASHIER / POS PORTAL — page-specific styles only.
+   CASHIER / POS PORTAL - page-specific styles only.
    Sidebar, header, nav, cards, tables, buttons, modals, forms, status badges
    all now come from assets/theme.css (the shared design system) so the
    Cashier portal looks and behaves identically to Admin and Customer.
@@ -10,7 +10,7 @@
    rule (unique to this portal) remains below.
    ========================================================================== */
 
-/* CRITICAL RULE FOR PAGE SWITCHING — do not remove */
+/* CRITICAL RULE FOR PAGE SWITCHING - do not remove */
 .page {
     display: none;
 }

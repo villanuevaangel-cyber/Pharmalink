@@ -292,7 +292,7 @@
         }
         function peso(n) {
             const v = Number(n);
-            if (!Number.isFinite(v)) return '—';
+            if (!Number.isFinite(v)) return '-';
             return '₱' + v.toFixed(2);
         }
         function attr(value) {
@@ -314,7 +314,7 @@
                 : `<span class="rx-pill rx-pill-bad">Out of stock</span>`;
             return `<div class="rx-stock-row">
                 <strong>${escapeHtml(label)}</strong>
-                <span class="rx-price">${ok ? escapeHtml(peso(m.price)) : '—'}</span>
+                <span class="rx-price">${ok ? escapeHtml(peso(m.price)) : '-'}</span>
                 ${action}
             </div>`;
         }

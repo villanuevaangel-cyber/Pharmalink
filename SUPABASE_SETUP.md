@@ -1,4 +1,4 @@
-# PharmaLink — FastAPI + Supabase
+# PharmaLink - FastAPI + Supabase
 
 The app is HTML/CSS/JS on the front end and Python FastAPI on the back end.
 The database is Supabase (PostgreSQL). PHP is not used.
@@ -6,7 +6,7 @@ The database is Supabase (PostgreSQL). PHP is not used.
 ## 1. Create a Supabase project
 
 1. Go to https://supabase.com → New Project.
-2. Save the database password — you will need it in step 3.
+2. Save the database password - you will need it in step 3.
 
 ## 2. Load the database schema
 
@@ -14,7 +14,7 @@ The database is Supabase (PostgreSQL). PHP is not used.
 2. Copy the full contents of `database/pharmacy_postgres.sql`.
 3. Paste and **Run**. This creates tables, keys, indexes, and seed data.
    You do not need to run the historical `OLD_MYSQL_*.sql` files in
-   `database/` — keep them only as reference.
+   `database/` - keep them only as reference.
 
 ## 3. Configure the connection
 

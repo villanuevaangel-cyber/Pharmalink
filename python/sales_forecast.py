@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 import matplotlib.pyplot as plt
 
 # --- Supabase (PostgreSQL) credentials ---
-# Standalone/offline script — not called by the PHP app itself (unlike
+# Standalone/offline script - not called by the PHP app itself (unlike
 # forecast_prophet.py and segment_kmeans.py, which receive their data via
 # stdin JSON from PHP). Run this manually, e.g. `python sales_forecast.py`.
 # Fill these in from Supabase Dashboard -> Project Settings -> Database.
@@ -62,7 +62,7 @@ plt.grid(True)
 plt.show()
 
 # --- 3️⃣ Top Selling Categories ---
-# NOTE: this query predates the current schema — sales_items has no
+# NOTE: this query predates the current schema - sales_items has no
 # `category` or `amount` column, and sales' primary key is `sale_id`, not
 # `id` (see database/pharmacy_postgres.sql). Left as-is from the original
 # file; fix the column/table names below before running this section.

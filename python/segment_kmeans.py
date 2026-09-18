@@ -24,7 +24,7 @@ Contract (stdin -> stdout, both JSON):
 
     All requested k values are clustered in this ONE process run (the
     feature matrix is only built/normalized once and reused for every
-    k) — this used to be one subprocess call per k (2, 3, 4, 5), which
+    k) - this used to be one subprocess call per k (2, 3, 4, 5), which
     meant paying Python + numpy/sklearn's startup cost 4 times on every
     single page load. Batching into one call cuts that overhead ~4x.
 
@@ -40,7 +40,7 @@ Contract (stdin -> stdout, both JSON):
 
     Each entry under "results" follows the same per-k shape as before.
     A given k can fail independently (e.g. not enough customers for
-    that many clusters) while others succeed — the PHP caller falls
+    that many clusters) while others succeed - the PHP caller falls
     back to quantile grouping only for the k values that failed.
 
   OUT (top-level failure): {"success": false, "error": "..."}  (exit code 1)
@@ -77,7 +77,7 @@ def cluster_one_k(k, X, X_norm, ids):
         if len(set(labels.tolist())) >= 2:
             silhouette = float(silhouette_score(X_norm, labels))
     except Exception:
-        silhouette = None  # non-fatal — just omit it from the response
+        silhouette = None  # non-fatal - just omit it from the response
 
     cluster_stats = {}
     for cid in range(k):
@@ -136,7 +136,7 @@ def main():
         dtype=float,
     )
 
-    # Z-score normalization — computed ONCE and reused for every k — so
+    # Z-score normalization - computed ONCE and reused for every k - so
     # Monetary (₱ hundreds/thousands) doesn't dominate Frequency (single
     # digits) or Recency (days) purely due to scale. Same normalization
     # approach used in the segmentation literature this study is based

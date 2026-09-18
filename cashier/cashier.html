@@ -345,7 +345,7 @@
 
   <div class="dashboard-header">
     <h2>Customer Segmentation</h2>
-    <p class="subtitle">Read-only. These groups are set by Admin — you can view members, not change clustering or points.</p>
+    <p class="subtitle">Read-only. These groups are set by Admin - you can view members, not change clustering or points.</p>
   </div>
 
   <div class="cs-seg-stats">
@@ -373,7 +373,7 @@
     <div class="cs-seg-stat">
       <div class="cs-seg-icon cs-seg-violet"><i class="fas fa-star"></i></div>
       <div>
-        <strong id="segTopType">—</strong>
+        <strong id="segTopType">-</strong>
         <span>Top Customer Type</span>
       </div>
     </div>
@@ -382,7 +382,7 @@
   <div class="chart-card cs-seg-main">
     <div class="cs-seg-toolbar">
       <div>
-        <h3>Customer Segments <span>— by real spend</span></h3>
+        <h3>Customer Segments <span>- by real spend</span></h3>
         <div id="segmentEngineBadge"></div>
       </div>
       <div class="ph-select-wrap">
@@ -485,7 +485,7 @@
         </div>
         <div class="stat-card">
             <div class="stat-icon cs-icon-violet"><i class="fas fa-wallet"></i></div>
-            <div class="stat-content"><h3 id="srPayMix">—</h3><p>Cash / GCash / Maya</p></div>
+            <div class="stat-content"><h3 id="srPayMix">-</h3><p>Cash / GCash / Maya</p></div>
         </div>
     </div>
 
@@ -709,7 +709,7 @@ function computePromoDiscountPerUnit(promo, unitPrice) {
     if (promo.discount_type === 'percent') {
         return unitPrice * (promo.discount_value / 100);
     }
-    // Fixed peso amount off — never let a single item's discount exceed its own price.
+    // Fixed peso amount off - never let a single item's discount exceed its own price.
     return Math.min(promo.discount_value, unitPrice);
 }
 
@@ -805,7 +805,7 @@ function fetchOnlineOrders() {
                                         </button>`;
                         pendingCount++; 
                     } else {
-                        actionButton = '—';
+                        actionButton = '-';
                     }
 
                     const row = `
@@ -922,7 +922,7 @@ window.clearCart = function() {
     selectedCustomer = null;
 
     // Reset the loyalty points box back to hidden/unchecked for the next
-    // customer — updateCart() (called above) will also do this once
+    // customer - updateCart() (called above) will also do this once
     // selectedCustomer is null, but we do it explicitly here too since
     // clearCart() can run before updateCart() re-reads it in some flows.
     const loyaltyBox = document.getElementById('loyaltyPointsBox');
@@ -970,12 +970,12 @@ function printReceipt(responseData, saleData, printWindow) {
         `;
     }).join('');
 
-    // ⭐ Loyalty points line — only shown when points were actually redeemed on this sale ⭐
+    // ⭐ Loyalty points line - only shown when points were actually redeemed on this sale ⭐
     const pointsLineHtml = (responseData.points_redeemed && responseData.points_redeemed > 0)
         ? `<tr><td class="right">Points Redeemed:</td><td class="right">${Number(responseData.points_redeemed).toFixed(2)} (₱${Number(responseData.points_discount_value || 0).toFixed(2)})</td></tr>`
         : '';
 
-    // Payment method line(s) — Cash shows the tendered amount + change as
+    // Payment method line(s) - Cash shows the tendered amount + change as
     // before; GCash/Maya/Card show the method name and an optional
     // reference number instead (there's no "change" for an exact e-wallet
     // or card payment).
@@ -1313,7 +1313,7 @@ cartTable.innerHTML += row;
 
     // 4️⃣ Apply loyalty points discount (on top of everything else, if a
     // registered customer with points is selected and the box is checked).
-    // The peso cap can never exceed whatever total is left at this point —
+    // The peso cap can never exceed whatever total is left at this point -
     // a customer can never redeem their way into a negative total.
     const loyaltyBox = document.getElementById("loyaltyPointsBox");
     const applyPointsToggle = document.getElementById("applyPointsToggle");
@@ -1781,7 +1781,7 @@ const calculatedTaxRate = (TAX_RATE * 100).toFixed(0); // e.g., 12
 
 // ===== LOAD PRODUCTS =====
 // Wrapped in a named function (was a one-shot inline fetch) so it can also
-// be called again right after a successful sale — that's what keeps the
+// be called again right after a successful sale - that's what keeps the
 // on-screen stock numbers accurate against the real database instead of
 // relying only on the client-side "visual" decrement, which could drift
 // out of sync if another cashier or an online order sells the same item.
@@ -1839,7 +1839,7 @@ document.querySelectorAll(".add-btn").forEach(btn => {
         if (currentQtyInCart >= maxStock) {
             btn.disabled = true;
             btn.style.opacity = 0.5;
-            alert("⚠️ Only " + maxStock + " in stock — cannot add more.");
+            alert("⚠️ Only " + maxStock + " in stock - cannot add more.");
             return;
         }
 
@@ -1888,7 +1888,7 @@ loadPOSProducts();
 
 // ===== BARCODE SCANNER (camera-based, via ZXing) =====
 // Reuses the existing per-row "Add" button click handler instead of
-// duplicating cart logic — once we find the matching product row by its
+// duplicating cart logic - once we find the matching product row by its
 // lot_inventory_id, we just click its button, which already handles the
 // max-stock check, cart push/increment, and visual stock update.
 let barcodeReader = null;
@@ -2050,7 +2050,7 @@ confirmSale.addEventListener("click", () => {
 
     // Points actually being redeemed on this sale (authoritative peso value
     // was already computed and capped by updateCart() into pointsDiscountValue).
-    // Convert back to a points count only for what we send the server — the
+    // Convert back to a points count only for what we send the server - the
     // server itself recomputes and re-validates this against the real DB
     // balance and rate, so this is just a request, not the final word.
     const pointsRedeemed = pointsDiscountValue > 0
@@ -2063,8 +2063,8 @@ confirmSale.addEventListener("click", () => {
     }
 
     // Payment method drives how "cash"/"change" are computed. GCash/Maya/
-    // Card payments are for the exact total — there's no physical change to
-    // hand back — so cash_received is just set equal to the total, and we
+    // Card payments are for the exact total - there's no physical change to
+    // hand back - so cash_received is just set equal to the total, and we
     // capture an optional reference/transaction number instead.
     const paymentMethod = document.getElementById('paymentMethodSelect')?.value || 'cash';
     const isCashPayment = paymentMethod === 'cash';
@@ -2184,7 +2184,7 @@ confirmSale.addEventListener("click", () => {
             loadTransactionHistory();
 
             // Pull the real, current stock from the database now that the
-            // sale has been committed — keeps the POS grid accurate even
+            // sale has been committed - keeps the POS grid accurate even
             // if another cashier or an online order affected the same items.
             loadPOSProducts();
 
@@ -2276,7 +2276,7 @@ navItems.forEach(item => {
         }
 
         // 🔧 FIX: the Customer Segmentation charts are NOT built at page
-        // load anymore (that's what caused the cut-off/overlapping donut —
+        // load anymore (that's what caused the cut-off/overlapping donut -
         // Chart.js was measuring a 0-size box since the tab was hidden).
         // They're now created lazily, right here, the first time this tab
         // is actually visible and has its real, final size.
@@ -2386,7 +2386,7 @@ function renderDailySalesChart() {
 
 /**
  * Shared bar-chart look, matching the "Top Forecasted Items" chart style
- * used on the Admin > Sales Forecasting page — same color palette and same
+ * used on the Admin > Sales Forecasting page - same color palette and same
  * left-to-right gradient-fill bars, so bar charts look consistent across
  * the whole system instead of each page inventing its own colors.
  */
@@ -2627,7 +2627,7 @@ function loadSalesReport() {
                     '<td>' + srEsc(t.customer_name) + '</td>' +
                     '<td>' + srEsc(t.cashier_name) + '</td>' +
                     '<td><span class="sr-pay ' + srEsc(pay) + '">' + srEsc(srPayLabel(pay)) + '</span></td>' +
-                    '<td>' + srEsc(t.payment_reference || '—') + '</td>' +
+                    '<td>' + srEsc(t.payment_reference || '-') + '</td>' +
                     '<td>₱' + Number(t.total_amount || 0).toFixed(2) + '</td>' +
                     '<td><button type="button" class="sr-view-btn" data-sale-id="' + t.sale_id + '"><i class="fas fa-eye"></i> View</button></td>' +
                     '</tr>';
@@ -2723,7 +2723,7 @@ setInterval(() => {
 // The POS product/stock grid was previously only reloaded right after this
 // terminal's own sale. Poll it too, so a sale rung up on another cashier
 // terminal (or an online order that just ate the last of a lot) shows up
-// here without waiting for this terminal to sell something itself — the
+// here without waiting for this terminal to sell something itself - the
 // #1 way stock counts used to drift and cause overselling. Skipped while
 // the POS page isn't the one showing, or while the cashier is typing in
 // the product search box.
@@ -2827,7 +2827,7 @@ document.getElementById('searchInput').addEventListener('input', function() {
       cMsg.textContent = "";
   };
 
-  // SAVE PROFILE (AJAX) — stays on the Profile page after saving
+  // SAVE PROFILE (AJAX) - stays on the Profile page after saving
   cSaveBtn.onclick = () => {
 
       const data = {

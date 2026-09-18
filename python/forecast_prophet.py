@@ -19,7 +19,7 @@ Contract (stdin -> stdout, both JSON):
       }
     }
     `daily_sales`/`items[*].series` only need to contain rows for days that
-    HAD sales — this script zero-fills every day between `range_start` and
+    HAD sales - this script zero-fills every day between `range_start` and
     `today` before fitting, so Prophet correctly learns "no sales that day"
     as a real zero rather than a gap in the timeline.
 
@@ -34,7 +34,7 @@ Contract (stdin -> stdout, both JSON):
     The PHP caller falls back to a simpler trend model when this happens.
 
 Model: linear-growth Prophet, weekly seasonality enabled once there's at
-least ~2 weeks of history (yearly/daily seasonality stay off — a pharmacy's
+least ~2 weeks of history (yearly/daily seasonality stay off - a pharmacy's
 history is rarely long/granular enough to estimate those reliably).
 """
 import sys

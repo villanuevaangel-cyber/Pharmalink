@@ -174,7 +174,7 @@ def _unread_staff_notes(user_id: int) -> tuple[int, list[dict]]:
             _pack_note(
                 key,
                 "low_stock",
-                f"Low stock: {row['generic_name']} ({row['brand_name']}) — {row['on_hand']} left (min {row['minimum_stock']}). Reorder soon.",
+                f"Low stock: {row['generic_name']} ({row['brand_name']}) - {row['on_hand']} left (min {row['minimum_stock']}). Reorder soon.",
             )
         )
     for row in fetch_all(
@@ -187,7 +187,7 @@ def _unread_staff_notes(user_id: int) -> tuple[int, list[dict]]:
             _pack_note(
                 key,
                 "out_of_stock",
-                f"Out of stock: {row['generic_name']} ({row['brand_name']}) — restock immediately.",
+                f"Out of stock: {row['generic_name']} ({row['brand_name']}) - restock immediately.",
             )
         )
     for row in fetch_all(
@@ -211,7 +211,7 @@ def _unread_staff_notes(user_id: int) -> tuple[int, list[dict]]:
             _pack_note(
                 key,
                 "expiring",
-                f"Expiring soon: {row['generic_name']} ({row['brand_name']}), lot {row['lot_number']} — {row['days_left']} day(s) left.",
+                f"Expiring soon: {row['generic_name']} ({row['brand_name']}), lot {row['lot_number']} - {row['days_left']} day(s) left.",
             )
         )
     return len(notes), notes

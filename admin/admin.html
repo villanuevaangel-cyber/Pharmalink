@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
-        /* Page-specific tweaks only — shared cards, tables, modals, buttons,
+        /* Page-specific tweaks only - shared cards, tables, modals, buttons,
            badges, toasts, and Profile layout live in assets/theme.css */
         section[id]:not(.is-shown){
             display:none !important;
@@ -315,7 +315,7 @@
         <small>Completed POS only</small>
     </div>
 
-    <div class="dash-card card" data-nav="supplier-section" data-tooltip="Suppliers currently marked Active. Inactive suppliers were manually deactivated — open Suppliers to see the reason." role="button" tabindex="0">
+    <div class="dash-card card" data-nav="supplier-section" data-tooltip="Suppliers currently marked Active. Inactive suppliers were manually deactivated - open Suppliers to see the reason." role="button" tabindex="0">
         <div class="ad-stat-icon ad-stat-violet"><i class="fas fa-truck"></i></div>
         <h3>Active Suppliers</h3>
         <p class="value" id="card-supplier-count">0</p>
@@ -422,7 +422,7 @@
     </div>
     <div class="ad-dash-card">
         <h4>Seasonal Trends (all years)</h4>
-        <p class="ad-dash-note">Peso sales by calendar month across all completed POS sales — peaks show seasonal demand.</p>
+        <p class="ad-dash-note">Peso sales by calendar month across all completed POS sales - peaks show seasonal demand.</p>
         <div class="ad-dash-chart"><canvas id="seasonalTrendChart"></canvas></div>
     </div>
 </div>
@@ -626,7 +626,7 @@
     <div class="cs-seg-stat">
       <div class="cs-seg-icon cs-seg-violet"><i class="fas fa-star"></i></div>
       <div>
-        <strong id="segTopType">—</strong>
+        <strong id="segTopType">-</strong>
         <span>Top Customer Type</span>
       </div>
     </div>
@@ -635,7 +635,7 @@
   <div class="chart-card cs-seg-main">
     <div class="cs-seg-toolbar">
       <div>
-        <h3>Customer Segments <span>— by real spend</span></h3>
+        <h3>Customer Segments <span>- by real spend</span></h3>
         <div id="segmentEngineBadge"></div>
       </div>
       <div class="ph-select-wrap">
@@ -881,7 +881,7 @@
 <section id="deliveries" style="display:none;">
     <div class="dashboard-header">
         <h2>Deliveries from Suppliers</h2>
-        <p class="subtitle">Create a Purchase Order for a supplier, then receive the delivery when it arrives — this is what actually adds stock lots to Inventory.</p>
+        <p class="subtitle">Create a Purchase Order for a supplier, then receive the delivery when it arrives - this is what actually adds stock lots to Inventory.</p>
     </div>
 
     <div class="controls">
@@ -1076,8 +1076,8 @@
     <div class="report-hub">
         <div class="report-hub-card">
             <h3><i class="fas fa-calendar-days"></i> Monthly Consumption</h3>
-            <p>Units sold per drug, by month — for seasonal demand and bulk orders.</p>
-            <span class="hub-value" id="hub-consumption-total" style="color:#4BAA8B;">—</span>
+            <p>Units sold per drug, by month - for seasonal demand and bulk orders.</p>
+            <span class="hub-value" id="hub-consumption-total" style="color:#4BAA8B;">-</span>
             <div class="hub-actions">
                 <button type="button" class="rpt-btn navy" data-report-modal="consumptionReportModal"><i class="fas fa-chart-column"></i> Generate report</button>
                 <button type="button" class="rpt-btn pdf" data-rpt-kind="consumption" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
@@ -1096,7 +1096,7 @@
         </div>
         <div class="report-hub-card">
             <h3><i class="fas fa-triangle-exclamation"></i> Expiry &amp; Waste</h3>
-            <p>Write-offs tagged Expired / Disposed — value lost and where.</p>
+            <p>Write-offs tagged Expired / Disposed - value lost and where.</p>
             <span class="hub-value" id="hub-expiry-value" style="color:#dc2626;">₱0</span>
             <div class="hub-actions">
                 <button type="button" class="rpt-btn navy" data-report-modal="expiryWasteReportModal"><i class="fas fa-chart-column"></i> Generate report</button>
@@ -1127,7 +1127,7 @@
             </select>
         </div>
         </div>
-        <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">Units sold per drug, per month (from completed sales) — useful for spotting seasonal demand shifts and planning bulk orders.</p>
+        <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">Units sold per drug, per month (from completed sales) - useful for spotting seasonal demand shifts and planning bulk orders.</p>
 
         <div style="background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); margin-bottom:20px; height:280px;">
             <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Total Units Consumed per Month</h4>
@@ -1192,7 +1192,7 @@
     </div>
 
     <h4 style="color:#1E3A34; margin:0 0 4px; font-size:14px;">💡 Price Comparison Across Suppliers</h4>
-    <p style="color:#6b7280; font-size:13px; margin:0 0 10px;">Drugs currently stocked at more than one price — worth checking if you can consolidate future orders with the cheaper supplier.</p>
+    <p style="color:#6b7280; font-size:13px; margin:0 0 10px;">Drugs currently stocked at more than one price - worth checking if you can consolidate future orders with the cheaper supplier.</p>
     <div class="table-wrap">
         <table id="procurementComparisonTable">
             <thead>
@@ -1220,7 +1220,7 @@
             </div>
             <span class="close" data-close-report-modal="expiryWasteReportModal">&times;</span>
         </div>
-        <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">Every stock write-off logged as "Expired / Disposed" via Inventory's Adjust Stock — how much stock, and how much value, is actually being lost to expiry, and where.</p>
+        <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">Every stock write-off logged as "Expired / Disposed" via Inventory's Adjust Stock - how much stock, and how much value, is actually being lost to expiry, and where.</p>
 
     <div style="display:flex; gap:15px; margin-bottom:16px; flex-wrap:wrap;">
         <div class="card" style="flex:1; min-width:180px;">
@@ -1233,7 +1233,7 @@
         </div>
         <div class="card" style="flex:1; min-width:180px;">
             <h3>Most-Affected Category</h3>
-            <p class="value" id="expiry-top-category" style="font-size:1.3rem;">—</p>
+            <p class="value" id="expiry-top-category" style="font-size:1.3rem;">-</p>
         </div>
         <div class="card" style="flex:1; min-width:180px;">
             <h3>Write-off Records</h3>
@@ -1244,7 +1244,7 @@
 
     <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
         <div style="flex:2; min-width:320px; background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); height:300px;">
-            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Value Lost to Expiry — Last 12 Months</h4>
+            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Value Lost to Expiry - Last 12 Months</h4>
             <div style="position:relative; height:240px;">
                 <canvas id="expiryMonthlyChart"></canvas>
             </div>
@@ -1614,7 +1614,7 @@
 
     const PALETTE = ['#4BAA8B', '#4BAA8B', '#FFC857', '#FFC857', '#FFC857'];
 
-    // Gradient bars — same hue family as PharmaLink's brand blue, gives the
+    // Gradient bars - same hue family as PharmaLink's brand blue, gives the
     // "top items" chart some depth instead of flat fills.
     function barGradient(ctx, color) {
         color = color || PALETTE[0]; // guard: Chart.js can resolve this before a real index/color exists
@@ -1662,7 +1662,7 @@
             labels: [],
             datasets: [
                 {
-                    // Prophet's upper confidence bound — invisible line, fills
+                    // Prophet's upper confidence bound - invisible line, fills
                     // down to the "Lower bound" dataset right after it to draw
                     // the shaded uncertainty band. Empty data (linear-regression
                     // fallback has no interval) simply draws nothing.
@@ -1869,7 +1869,7 @@
     });
 
     // Reorder Suggestions now lives on the Inventory tab, but its data-loading
-    // JS is defined here — load it immediately on page load (same as the
+    // JS is defined here - load it immediately on page load (same as the
     // other Inventory widgets in inventory.js) rather than gating it behind
     // a tab click.
     loadReorderSuggestions();
@@ -1955,7 +1955,7 @@
         }
 
         body.innerHTML = rows.map(r => {
-            const label = `${r.generic_name}${r.brand_name ? ' (' + r.brand_name + ')' : ''} — ${r.dosage}, ${r.form}`;
+            const label = `${r.generic_name}${r.brand_name ? ' (' + r.brand_name + ')' : ''} - ${r.dosage}, ${r.form}`;
             const monthCells = months.map(m => `<td>${r.monthly[m] || 0}</td>`).join('');
             return `<tr><td>${label}</td><td>${r.category}</td>${monthCells}<td style="font-weight:600;">${r.total}</td></tr>`;
         }).join('');
@@ -2030,19 +2030,19 @@
         const body = document.getElementById('procurementComparisonBody');
         if (!body) return;
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#6b7280;padding:15px;">No price variance found — every drug currently in stock has a single consistent price across suppliers.</td></tr>';
+            body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#6b7280;padding:15px;">No price variance found - every drug currently in stock has a single consistent price across suppliers.</td></tr>';
             return;
         }
         body.innerHTML = rows.map(r => {
-            const label = `${r.generic_name}${r.brand_name ? ' (' + r.brand_name + ')' : ''} — ${r.dosage}, ${r.form}`;
+            const label = `${r.generic_name}${r.brand_name ? ' (' + r.brand_name + ')' : ''} - ${r.dosage}, ${r.form}`;
             const cheapest = r.offers.filter(o => o.price === r.min_price).map(o => o.supplier_name).join(', ');
             const priciest = r.offers.filter(o => o.price === r.max_price).map(o => o.supplier_name).join(', ');
             const offersText = r.offers.map(o => `${o.supplier_name}: ${peso(o.price)} (${o.current_stock} on hand)`).join(' · ');
             return `
             <tr>
                 <td>${label}</td>
-                <td style="color:#4BAA8B;font-weight:600;">${peso(r.min_price)} — ${cheapest}</td>
-                <td style="color:#dc2626;">${peso(r.max_price)} — ${priciest}</td>
+                <td style="color:#4BAA8B;font-weight:600;">${peso(r.min_price)} - ${cheapest}</td>
+                <td style="color:#dc2626;">${peso(r.max_price)} - ${priciest}</td>
                 <td style="font-weight:600;">${r.savings_pct}%</td>
                 <td style="color:#6b7280;font-size:12px;">${offersText}</td>
             </tr>`;
@@ -2064,7 +2064,7 @@
                 const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
                 setText('expiry-total-value', peso(data.summary.total_value));
                 setText('expiry-total-units', data.summary.total_units.toLocaleString());
-                setText('expiry-top-category', data.summary.top_category || '—');
+                setText('expiry-top-category', data.summary.top_category || '-');
                 setText('expiry-record-count', data.summary.record_count.toLocaleString());
                 setText('hub-expiry-value', peso(data.summary.total_value));
 
@@ -2130,11 +2130,11 @@
             <tr>
                 <td>${r.date}</td>
                 <td>${r.label}</td>
-                <td>${r.lot_number || '—'}</td>
+                <td>${r.lot_number || '-'}</td>
                 <td>${r.units}</td>
-                <td>${peso(r.value)}${r.is_estimate ? ' <span style="color:#1E3A34;font-size:11px;" title="Estimated using selling price — this lot had no recorded cost price">(est.)</span>' : ''}</td>
-                <td>${r.admin_name || '—'}</td>
-                <td style="color:#6b7280;font-size:12px;">${r.notes || '—'}</td>
+                <td>${peso(r.value)}${r.is_estimate ? ' <span style="color:#1E3A34;font-size:11px;" title="Estimated using selling price - this lot had no recorded cost price">(est.)</span>' : ''}</td>
+                <td>${r.admin_name || '-'}</td>
+                <td style="color:#6b7280;font-size:12px;">${r.notes || '-'}</td>
             </tr>`).join('');
     }
 
@@ -2297,8 +2297,8 @@
         const rows = allRows.slice(start, start + REORDER_PAGE_SIZE);
         updateReorderPager(reorderPage, totalPages);
         body.innerHTML = rows.map(r => {
-            const label = `${r.generic_name}${r.brand_name ? ' (' + r.brand_name + ')' : ''} — ${r.dosage}, ${r.form}`;
-            const daysText = r.days_of_stock === null ? '—' : r.days_of_stock + ' days';
+            const label = `${r.generic_name}${r.brand_name ? ' (' + r.brand_name + ')' : ''} - ${r.dosage}, ${r.form}`;
+            const daysText = r.days_of_stock === null ? '-' : r.days_of_stock + ' days';
             let actionBadge;
             if (r.action === 'increase') {
                 actionBadge = `<span style="background:#fee2e2;color:#dc2626;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">↑ Order +${r.suggested_qty}</span>`;
@@ -2307,14 +2307,14 @@
             } else {
                 actionBadge = `<span style="background:#FFE3B3;color:#4BAA8B;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">✓ Sufficient</span>`;
             }
-            // Only "needs reorder" rows are selectable for a draft PO —
+            // Only "needs reorder" rows are selectable for a draft PO -
             // overstocked/sufficient rows have nothing to order.
             const checkboxCell = r.action === 'increase'
                 ? `<input type="checkbox" class="reorder-select-cb" data-drug-id="${r.drug_id}" ${reorderSelectedIds.has(r.drug_id) ? 'checked' : ''}>`
                 : '';
             const supplierText = r.suggested_supplier_name
                 ? r.suggested_supplier_name
-                : (r.action === 'increase' ? '<span style="color:#9ca3af;">No history — pick one</span>' : '—');
+                : (r.action === 'increase' ? '<span style="color:#9ca3af;">No history - pick one</span>' : '-');
             return `
             <tr>
                 <td>${checkboxCell}</td>
@@ -2458,7 +2458,7 @@
                 <td>${escapeHtmlPromo(p.name)}</td>
                 <td>${discountText}</td>
                 <td>${escapeHtmlPromo(p.scope)}</td>
-                <td>${p.start_date} – ${p.end_date}</td>
+                <td>${p.start_date} - ${p.end_date}</td>
                 <td><span style="background:${color}20;color:${color};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">${p.status}</span></td>
                 <td><button type="button" class="toggle-promo-btn" data-id="${p.promo_id}" style="background:${p.is_active ? '#dc2626' : '#4BAA8B'};color:#fff;border:none;border-radius:4px;padding:5px 10px;cursor:pointer;font-size:12px;">${p.is_active ? 'Disable' : 'Enable'}</button></td>
             </tr>`;
@@ -2489,7 +2489,7 @@
                 if (catSel) catSel.innerHTML = categories.map(c => `<option value="${escapeHtmlPromo(c)}">${escapeHtmlPromo(c)}</option>`).join('');
 
                 const drugSel = document.getElementById('promo_drug_id');
-                if (drugSel) drugSel.innerHTML = promosDrugList.map(d => `<option value="${d.drug_id}">${escapeHtmlPromo(d.generic_name)}${d.brand_name ? ' (' + escapeHtmlPromo(d.brand_name) + ')' : ''} — ${escapeHtmlPromo(d.dosage)}</option>`).join('');
+                if (drugSel) drugSel.innerHTML = promosDrugList.map(d => `<option value="${d.drug_id}">${escapeHtmlPromo(d.generic_name)}${d.brand_name ? ' (' + escapeHtmlPromo(d.brand_name) + ')' : ''} - ${escapeHtmlPromo(d.dosage)}</option>`).join('');
 
                 renderPromoDrugsChecklist(promosDrugList);
             })
@@ -2508,7 +2508,7 @@
             return;
         }
         box.innerHTML = list.map(d => {
-            const label = `${escapeHtmlPromo(d.generic_name)}${d.brand_name ? ' (' + escapeHtmlPromo(d.brand_name) + ')' : ''} — ${escapeHtmlPromo(d.dosage)}`;
+            const label = `${escapeHtmlPromo(d.generic_name)}${d.brand_name ? ' (' + escapeHtmlPromo(d.brand_name) + ')' : ''} - ${escapeHtmlPromo(d.dosage)}`;
             const checked = promoSelectedDrugIds.has(String(d.drug_id)) ? 'checked' : '';
             return `
                 <label style="display:flex;align-items:center;gap:8px;padding:4px 2px;font-weight:400;cursor:pointer;">
@@ -2537,12 +2537,12 @@
     // <script> tag. Since this script runs inline (synchronously, as soon
     // as the parser reaches it) and NOT after the whole page has loaded,
     // those elements did not exist yet at the moment these listeners were
-    // being attached — so document.getElementById(...) returned null and,
+    // being attached - so document.getElementById(...) returned null and,
     // thanks to the `?.` optional chaining, the addEventListener calls
     // silently did nothing. Net effect: clicking "Create Promo" inside the
     // modal ran no JS at all, so the browser fell back to a native form
     // submit (a full page GET reload back to admin.php / the Dashboard tab)
-    // instead of the intended fetch() POST to add_promo.php — which is why
+    // instead of the intended fetch() POST to add_promo.php - which is why
     // nothing ever showed up in the Promos table.
     //
     // Fix: defer attaching these specific listeners until DOMContentLoaded,
@@ -2684,8 +2684,8 @@
 // DELIVERIES FROM SUPPLIERS: Purchase Order -> Receive Delivery
 // ============================================================
 // Everything here is deferred to DOMContentLoaded from the start (learned
-// from the earlier Promos bug: this section's own markup — #createPoModal,
-// #viewPoModal, etc. — sits further down the page than this <script> tag,
+// from the earlier Promos bug: this section's own markup - #createPoModal,
+// #viewPoModal, etc. - sits further down the page than this <script> tag,
 // so binding to it synchronously at parse time would silently find nothing).
 document.addEventListener('DOMContentLoaded', () => {
     function escapeHtmlPo(str) {
@@ -2774,8 +2774,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             <td>${escapeHtmlPo(po.po_number)}</td>
                             <td>${escapeHtmlPo(po.supplier_name)}</td>
                             <td>${escapeHtmlPo(po.order_date)}</td>
-                            <td>${escapeHtmlPo(po.expected_date || '—')}</td>
-                            <td>${po.item_count} item(s) — ${po.quantity_received_total}/${po.quantity_ordered_total}</td>
+                            <td>${escapeHtmlPo(po.expected_date || '-')}</td>
+                            <td>${po.item_count} item(s) - ${po.quantity_received_total}/${po.quantity_ordered_total}</td>
                             <td><span class="status ${statusClass}">${escapeHtmlPo(po.status)}</span></td>
                             <td>
                                 <button type="button" class="view-po-btn action-btn" data-po-id="${po.po_id}"><i class="fas fa-eye"></i> View / Receive</button>
@@ -2818,7 +2818,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function poDrugOptionLabel(d) {
-        return `${escapeHtmlPo(d.generic_name)}${d.brand_name ? ' (' + escapeHtmlPo(d.brand_name) + ')' : ''} — ${escapeHtmlPo(d.dosage)}`;
+        return `${escapeHtmlPo(d.generic_name)}${d.brand_name ? ' (' + escapeHtmlPo(d.brand_name) + ')' : ''} - ${escapeHtmlPo(d.dosage)}`;
     }
 
     function poDrugOptionsHtml(selectedId) {
@@ -2978,7 +2978,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!result.success) { alert(result.message || 'Failed to load purchase order.'); return; }
                 const po = result.po;
 
-                document.getElementById('viewPoTitle').innerHTML = `<i class="fas fa-truck-loading"></i> ${escapeHtmlPo(po.po_number)} — ${escapeHtmlPo(po.supplier_name)}`;
+                document.getElementById('viewPoTitle').innerHTML = `<i class="fas fa-truck-loading"></i> ${escapeHtmlPo(po.po_number)} - ${escapeHtmlPo(po.supplier_name)}`;
                 document.getElementById('viewPoMeta').textContent =
                     `Ordered ${po.order_date}${po.expected_date ? ' • Expected ' + po.expected_date : ''} • Status: ${po.status}${po.notes ? ' • Notes: ' + po.notes : ''}`;
 
@@ -2989,11 +2989,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const receiveBody = document.getElementById('poReceiveBody');
                 if (receiveBody) {
                     receiveBody.innerHTML = po.items.map(it => {
-                        const label = `${escapeHtmlPo(it.generic_name)}${it.brand_name ? ' (' + escapeHtmlPo(it.brand_name) + ')' : ''} — ${escapeHtmlPo(it.dosage)}`;
+                        const label = `${escapeHtmlPo(it.generic_name)}${it.brand_name ? ' (' + escapeHtmlPo(it.brand_name) + ')' : ''} - ${escapeHtmlPo(it.dosage)}`;
                         const done = it.quantity_outstanding <= 0;
                         // Inputs/selects already get their sizing, padding,
                         // border, and focus states from the global
-                        // input/select rule in theme.css — no need to
+                        // input/select rule in theme.css - no need to
                         // restate any of that here.
                         const labelStyle = 'display:block;font-size:11px;color:var(--ph-text-faint);margin-bottom:2px;font-weight:600;';
                         return `
@@ -3021,9 +3021,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         historyEl.innerHTML = po.deliveries.map(d => `
                             <div style="border:1.5px solid var(--ph-border-soft);border-radius:var(--ph-radius-sm);padding:8px 12px;margin-bottom:8px;">
-                                <strong>${escapeHtmlPo(d.delivery_date)}</strong> — received by ${escapeHtmlPo(d.received_by || 'Unknown')}${d.reference_number ? ' • Ref: ' + escapeHtmlPo(d.reference_number) : ''}
+                                <strong>${escapeHtmlPo(d.delivery_date)}</strong> - received by ${escapeHtmlPo(d.received_by || 'Unknown')}${d.reference_number ? ' • Ref: ' + escapeHtmlPo(d.reference_number) : ''}
                                 <ul style="margin:6px 0 0 18px;">
-                                    ${d.items.map(di => `<li>${escapeHtmlPo(di.generic_name)}${di.brand_name ? ' (' + escapeHtmlPo(di.brand_name) + ')' : ''} — Lot ${escapeHtmlPo(di.lot_number)}, qty ${di.quantity_received}, exp ${escapeHtmlPo(di.expiration_date)}</li>`).join('')}
+                                    ${d.items.map(di => `<li>${escapeHtmlPo(di.generic_name)}${di.brand_name ? ' (' + escapeHtmlPo(di.brand_name) + ')' : ''} - Lot ${escapeHtmlPo(di.lot_number)}, qty ${di.quantity_received}, exp ${escapeHtmlPo(di.expiration_date)}</li>`).join('')}
                                 </ul>
                             </div>`).join('');
                     }
@@ -3297,11 +3297,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <form id="addDrugForm">
                 <label for="new_copy_from">Fill from existing drug:</label>
                 <select id="new_copy_from">
-                    <option value="">Start blank — or pick a catalog drug to copy</option>
+                    <option value="">Start blank - or pick a catalog drug to copy</option>
                 </select>
                 <p class="barcode-hint">Copies the fields below. Change dosage if this is a new strength. Barcode stays blank so it can auto-generate.</p>
                 <label for="new_generic_name">Generic Name:</label>
-                <input type="text" id="new_generic_name" list="genericNameSuggestions" placeholder="Start typing — existing names appear" maxlength="80" required autocomplete="off">
+                <input type="text" id="new_generic_name" list="genericNameSuggestions" placeholder="Start typing - existing names appear" maxlength="80" required autocomplete="off">
                 <datalist id="genericNameSuggestions"></datalist>
                 <p id="new_autofill_hint" class="barcode-hint" style="min-height:16px;"></p>
                 <label for="new_brand_name">Brand Name (optional):</label>
@@ -3326,7 +3326,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <select id="new_procurement_type" required>
                     <option value="">Select procurement</option>
                     <option value="purchase">Purchased stock</option>
-                    <option value="consignment">Consignment (manual — not auto-ordered)</option>
+                    <option value="consignment">Consignment (manual - not auto-ordered)</option>
                 </select>
                 <label for="new_barcode">Barcode (optional):</label>
                 <div class="barcode-input-row">
@@ -3370,7 +3370,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <select id="edit_procurement_type" required>
                     <option value="">Select procurement</option>
                     <option value="purchase">Purchased stock</option>
-                    <option value="consignment">Consignment (manual — not auto-ordered)</option>
+                    <option value="consignment">Consignment (manual - not auto-ordered)</option>
                 </select>
                 <label for="edit_barcode">Barcode:</label>
                 <div class="barcode-input-row">
@@ -3398,9 +3398,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="date" id="edit_expiration_date" required>
                 <label for="edit_current_stock">Current Stock Quantity:</label>
                 <input type="number" id="edit_current_stock" required>
-                <label for="edit_cost_price">Unit Cost (₱) — what you paid the supplier:</label>
+                <label for="edit_cost_price">Unit Cost (₱) - what you paid the supplier:</label>
                 <input type="number" step="0.01" id="edit_cost_price" required>
-                <label for="edit_price">Selling Price (₱) — from cost + category markup:</label>
+                <label for="edit_price">Selling Price (₱) - from cost + category markup:</label>
                 <input type="number" step="0.01" id="edit_price" readonly tabindex="-1" style="background:#f3f4f6;">
                 <p id="edit_price_suggestion_hint" style="font-size:12px;color:#4BAA8B;margin:-8px 0 8px;min-height:16px;"></p>
         
@@ -4019,7 +4019,7 @@ function attachActivateEvents(){
 }
 
 // Admin-initiated password reset for a staff (Cashier/Admin) account. No
-// email involved — the generated temp password is shown directly to the
+// email involved - the generated temp password is shown directly to the
 // acting Admin to relay personally, matching how Customer forgot-password
 // (real email, self-service) and this flow are deliberately different.
 function attachResetPasswordEvents() {
@@ -4030,7 +4030,7 @@ function attachResetPasswordEvents() {
             const userId = row.dataset.id;
             const staffName = row.children[0]?.textContent?.trim() || `User #${userId}`;
 
-            const confirmReset = `Reset the password for ${staffName}? A new temporary password will be generated — the current password stops working immediately.`;
+            const confirmReset = `Reset the password for ${staffName}? A new temporary password will be generated - the current password stops working immediately.`;
             const runReset = () => {
             fetch('/api/admin/staff/reset-password', {
                 method: 'POST',
@@ -4041,7 +4041,7 @@ function attachResetPasswordEvents() {
                 .then(res => {
                     if (!res.success) { alert(res.message || 'Failed to reset password.'); return; }
 
-                    // Shown once, with a Copy button — this is the ONLY place
+                    // Shown once, with a Copy button - this is the ONLY place
                     // the plain-text temp password ever appears; it is not
                     // stored anywhere after this response.
                     const modalContainer = document.createElement('div');
@@ -4051,7 +4051,7 @@ function attachResetPasswordEvents() {
                             <h2 style="margin:0 0 10px; font-size:1.1rem; color:#1E3A34;"><i class="fas fa-key"></i> Password Reset</h2>
                             <p>New temporary password for <strong>${res.staff_name}</strong> (${res.username}):</p>
                             <p style="font-size:20px;font-weight:700;background:#f3f4f6;padding:12px 16px;border-radius:8px;letter-spacing:1px;text-align:center;" id="tempPasswordDisplay">${res.temp_password}</p>
-                            <p style="font-size:12px;color:#6b7280;">Relay this to them directly (chat, text, in person). It will not be shown again — ask them to change it from their Profile page after logging in.</p>
+                            <p style="font-size:12px;color:#6b7280;">Relay this to them directly (chat, text, in person). It will not be shown again - ask them to change it from their Profile page after logging in.</p>
                             <div style="display:flex; gap:8px; margin-top:12px;">
                                 <button type="button" id="copyTempPasswordBtn" style="flex:1;background:#4BAA8B;color:#fff;border:none;border-radius:6px;padding:10px;cursor:pointer;"><i class="fas fa-copy"></i> Copy</button>
                                 <button type="button" id="closeTempPasswordModal" style="flex:1;background:#e5e7eb;border:none;border-radius:6px;padding:10px;cursor:pointer;">Close</button>
@@ -4783,7 +4783,7 @@ document.getElementById('analytics-year')?.addEventListener('change', function (
                     return `
                     <tr>
                         <td>${i.generic_name}</td>
-                        <td>${i.brand_name || '—'}</td>
+                        <td>${i.brand_name || '-'}</td>
                         <td>${i.lot_number}</td>
                         <td>${i.expiration_date}</td>
                         <td style="color:${dayColor};font-weight:600;">${i.days_left} day${i.days_left === 1 ? '' : 's'}${critical ? ' ⚠️' : ''}</td>
@@ -4864,7 +4864,7 @@ document.getElementById('analytics-year')?.addEventListener('change', function (
     setInterval(refreshExpiringMeds, 60000);
 })();
 
-// Dashboard cards — clickable navigation + tooltips
+// Dashboard cards - clickable navigation + tooltips
 (function () {
     function openAdminSection(target, invFilter) {
         if (target === 'sales-analytics') {

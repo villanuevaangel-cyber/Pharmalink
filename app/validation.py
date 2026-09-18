@@ -27,7 +27,7 @@ def validate_username(username: str) -> str | None:
     if not username:
         return "Username is required."
     if not USERNAME_RE.match(username):
-        return "Username must start with a letter and be 3–30 characters (letters, numbers, dot, underscore, hyphen)."
+        return "Username must start with a letter and be 3-30 characters (letters, numbers, dot, underscore, hyphen)."
     return None
 
 
@@ -111,9 +111,9 @@ def validate_drug_fields(
     if not generic_name:
         return "Generic name is required."
     if not DRUG_NAME_RE.match(generic_name):
-        return "Generic name must be 2–80 characters (letters, numbers, spaces, and . ' / ( ) - +)."
+        return "Generic name must be 2-80 characters (letters, numbers, spaces, and . ' / ( ) - +)."
     if brand_name and not DRUG_NAME_RE.match(brand_name):
-        return "Brand name must be 2–80 characters (letters, numbers, spaces, and . ' / ( ) - +)."
+        return "Brand name must be 2-80 characters (letters, numbers, spaces, and . ' / ( ) - +)."
     if not dosage:
         return "Dosage is required."
     if len(dosage) > 40:
@@ -125,7 +125,7 @@ def validate_drug_fields(
     if not category:
         return "Category is required."
     if not CATEGORY_RE.match(category):
-        return "Category must be 2–60 characters (letters, numbers, spaces, /, &, -)."
+        return "Category must be 2-60 characters (letters, numbers, spaces, /, &, -)."
     try:
         min_stock = int(minimum_stock)
     except (TypeError, ValueError):
@@ -133,5 +133,5 @@ def validate_drug_fields(
     if min_stock < 0 or min_stock > 100000:
         return "Minimum stock must be between 0 and 100,000."
     if barcode and not BARCODE_RE.match(barcode):
-        return "Barcode must be 4–64 characters (letters, numbers, dash, dot, underscore)."
+        return "Barcode must be 4-64 characters (letters, numbers, dash, dot, underscore)."
     return None
