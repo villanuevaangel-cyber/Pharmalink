@@ -557,4 +557,63 @@
     e.stopPropagation();
     showLogoutConfirm();
   }, true);
+
+  /* Stay on the same portal module after reload (admin/cashier/customer SPAs). */
+  function portalSectionIdFromNav(nav) {
+    if (!nav || !nav.getAttribute) return '';
+    if (nav.matches('a[href*="logout"], #logoutBtn')) return '';
+    return nav.getAttribute('data-target') || nav.getAttribute('data-page') || '';
+  }
+
+  function portalNavForSection(id) {
+    if (!id) return null;
+    var safe = String(id).replace(/\\/g, '').replace(/"/g, '');
+    return document.querySelector('.nav-item[data-target="' + safe + '"], .nav-item[data-page="' + safe + '"]');
+  }
+
+  window.phSetPortalHash = function (id) {
+    if (!id) return;
+    var next = '#' + id;
+    if (location.hash !== next) {
+      try { history.replaceState(null, '', next); } catch (err) { location.hash = next; }
+    }
+  };
+
+  window.phRestorePortalHash = function () {
+    if (document.getElementById('loginForm') || document.getElementById('loginPage')) return false;
+    var id = (location.hash || '').replace(/^#/, '');
+    if (window.CUSTOMER_GUEST && id && id !== 'products') {
+      id = 'products';
+      window.phSetPortalHash(id);
+    }
+    if (!id) {
+      var active = document.querySelector('.nav-item.active[data-target], .nav-item.active[data-page]');
+      var current = portalSectionIdFromNav(active);
+      if (current) window.phSetPortalHash(current);
+      return false;
+    }
+    var nav = portalNavForSection(id);
+    if (!nav) return false;
+    if (!nav.classList.contains('active')) nav.click();
+    else window.phSetPortalHash(id);
+    return true;
+  };
+
+  document.addEventListener('click', function (e) {
+    var nav = e.target.closest && e.target.closest('.nav-item');
+    if (!nav) return;
+    var id = portalSectionIdFromNav(nav);
+    if (id) window.phSetPortalHash(id);
+  }, true);
+
+  window.addEventListener('hashchange', function () {
+    window.phRestorePortalHash();
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    if (document.getElementById('productGrid') && !window.CUSTOMER_ID && window.CUSTOMER_GUEST === undefined) {
+      return;
+    }
+    window.phRestorePortalHash();
+  });
 })();

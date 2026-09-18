@@ -176,6 +176,18 @@ body {
   color: #94a3b8;
 }
 
+.ph-signup-phone input { padding-left: 92px; }
+.ph-signup-cc {
+  position: absolute;
+  left: 38px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 6;
+  font-weight: 800;
+  color: #FFE3B3;
+  font-size: 14px;
+}
+
 /* Toggle password eye icon */
 .toggle-password {
     /* CRITICAL FIX: I-OVERRIDE ang 'left' at 'right' */

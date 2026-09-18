@@ -43,7 +43,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=guest-shop1';
+        script.src = '/customer/js/customer.js?v=spa-hash2';
         document.body.appendChild(script);
     });
 
@@ -57,6 +57,7 @@
         document.querySelectorAll('.sidebar-nav .nav-item').forEach((item) => {
             item.classList.toggle('active', item.getAttribute('data-target') === 'products');
         });
+        if (window.phSetPortalHash) window.phSetPortalHash('products');
         const welcome = document.getElementById('headerWelcomeName');
         if (welcome) welcome.textContent = 'Browsing as guest';
         const authLink = document.getElementById('customerAuthLink');
@@ -133,7 +134,9 @@
             form.middle_name.value = c.middle_name || '';
             form.last_name.value = c.last_name || '';
             form.email.value = c.email || '';
-            form.phone_number.value = c.phone_number || '';
+            form.phone_number.value = window.phProfileValidate
+                ? window.phProfileValidate.displayPhone(c.phone_number || '')
+                : (c.phone_number || '');
             form.address.value = c.address || '';
         }
         const avatar = c.profile_image || 'https://cdn-icons-png.flaticon.com/512/2922/2922510.png';
@@ -165,6 +168,11 @@
         const original = {};
         let originalPreview = previewImg ? previewImg.src : '';
         if (!form || !editBtn || !saveBtn || !cancelBtn) return;
+        const pv = window.phProfileValidate;
+        if (pv) {
+            pv.bindNameCaps(form);
+            pv.bindPhoneDigits(form.phone_number);
+        }
         inputs.forEach((input) => { original[input.name] = input.value; });
 
         function setEditing(isEditing) {
@@ -188,23 +196,33 @@
         }
         form.addEventListener('submit', function (e) {
             e.preventDefault();
+            if (pv) {
+                form.first_name.value = pv.titleCaseName(form.first_name.value);
+                form.middle_name.value = pv.titleCaseName(form.middle_name.value);
+                form.last_name.value = pv.titleCaseName(form.last_name.value);
+            }
             const payload = {
                 first_name: form.first_name.value,
                 middle_name: form.middle_name.value,
                 last_name: form.last_name.value,
                 email: form.email.value,
-                phone_number: form.phone_number.value,
+                phone_number: pv ? (pv.e164Phone(form.phone_number.value) || form.phone_number.value) : form.phone_number.value,
                 address: form.address.value,
             };
-            const vErr = window.phProfileValidate && window.phProfileValidate.profileError(payload);
-            if (vErr) {
-                if (msg) { msg.textContent = vErr; msg.style.color = '#e74c3c'; }
+            const errors = pv ? pv.fieldErrors(payload) : {};
+            if (pv && Object.keys(errors).length) {
+                pv.paintFieldErrors(form, errors);
+                if (msg) { msg.textContent = 'Please fix the highlighted fields.'; msg.style.color = '#e74c3c'; }
                 return;
             }
+            if (pv) pv.paintFieldErrors(form, {});
+            const nationalPhone = form.phone_number.value;
+            form.phone_number.value = payload.phone_number;
             if (msg) { msg.textContent = 'Saving...'; msg.style.color = '#6b7280'; }
             fetch('/api/customer/profile', { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
                 .then((r) => r.json())
                 .then((data) => {
+                    form.phone_number.value = nationalPhone;
                     if (msg) {
                         msg.textContent = data.message || (data.success ? 'Profile updated.' : 'Failed to update profile.');
                         msg.style.color = data.success ? '#4BAA8B' : '#e74c3c';
@@ -212,7 +230,11 @@
                     if (!data.success) return;
                     const customer = data.customer || {};
                     inputs.forEach((input) => {
-                        if (Object.prototype.hasOwnProperty.call(customer, input.name)) input.value = customer[input.name] || '';
+                        if (Object.prototype.hasOwnProperty.call(customer, input.name)) {
+                            input.value = input.name === 'phone_number' && pv
+                                ? pv.displayPhone(customer[input.name] || '')
+                                : (customer[input.name] || '');
+                        }
                         original[input.name] = input.value;
                     });
                     setEditing(false);
@@ -232,6 +254,7 @@
                     if (fileInput) fileInput.value = '';
                 })
                 .catch(() => {
+                    form.phone_number.value = nationalPhone;
                     if (msg) { msg.textContent = 'Network error. Please try again.'; msg.style.color = '#e74c3c'; }
                 });
         });

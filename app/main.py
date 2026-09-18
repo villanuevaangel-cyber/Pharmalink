@@ -92,6 +92,13 @@ def cashier_portal(request: Request):
     return FileResponse(ROOT / "cashier" / "cashier.html")
 
 
+@app.get("/admin/dashboard.html")
+@app.get("/admin/dashboard.php")
+@app.get("/admin/upload_prescription.html")
+def admin_legacy_pages():
+    return RedirectResponse(url="/admin/admin.html", status_code=302)
+
+
 @app.get("/admin/admin.php")
 @app.get("/admin/admin.html")
 def admin_portal(request: Request):

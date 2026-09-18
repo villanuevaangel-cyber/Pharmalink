@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink - Customer Portal</title>
-    <link rel="stylesheet" href="/assets/theme.css?v=palette-w1">
+    <link rel="stylesheet" href="/assets/theme.css?v=palette-w2">
     <link rel="stylesheet" href="/customer/css/customer.css?v=palette1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -314,26 +314,27 @@
 
 <section id="profile">
 <div class="customer-profile-page">
-    <div class="customer-profile-header"><div><h2>My Profile</h2><p>Manage your account information and login password.</p></div></div>
+    <div class="customer-profile-header"><div><h2>My Profile</h2><p>Manage your information and login password in one place.</p></div></div>
     <div class="customer-profile-layout">
-        <aside class="profile-summary-card">
-            <div class="profile-avatar-wrap">
-                <img id="profilePreview" src="https://cdn-icons-png.flaticon.com/512/2922/2922510.png" alt="Profile photo">
-                <label for="profile_image_input" class="profile-photo-btn" title="Change profile picture"><i class="fas fa-camera"></i></label>
-                <input type="file" id="profile_image_input" name="profile_image" accept="image/png,image/jpeg,image/webp" form="customerProfileForm">
-            </div>
-            <h3 id="profileCardName">Customer</h3>
-            <p class="profile-username">@<span id="profileUsername">customer</span></p>
-            <div class="profile-pill-row">
-                <span class="profile-pill profile-pill-blue"><i class="fas fa-id-card"></i><span id="profileType">Regular</span> Customer</span>
-                <span class="profile-pill profile-pill-gold"><i class="fas fa-star"></i><span id="profilePoints">0.00</span> Points</span>
-            </div>
-        </aside>
         <div class="profile-main-col">
         <div class="profile-details-card">
             <form id="customerProfileForm" enctype="multipart/form-data">
             <div class="profile-card-head">
-                <div><h3>Account Details</h3><p>Click Edit Profile to update your contact information.</p></div>
+                <div class="profile-hero">
+                    <div class="profile-avatar-wrap">
+                        <img id="profilePreview" src="https://cdn-icons-png.flaticon.com/512/2922/2922510.png" alt="Profile photo">
+                        <label for="profile_image_input" class="profile-photo-btn" title="Change profile picture"><i class="fas fa-camera"></i></label>
+                        <input type="file" id="profile_image_input" name="profile_image" accept="image/png,image/jpeg,image/webp" form="customerProfileForm">
+                    </div>
+                    <div class="profile-hero-copy">
+                        <h3 id="profileCardName">Customer</h3>
+                        <p class="profile-username">@<span id="profileUsername">customer</span></p>
+                        <div class="profile-pill-row">
+                            <span class="profile-pill profile-pill-blue"><i class="fas fa-id-card"></i><span id="profileType">Regular</span> Customer</span>
+                            <span class="profile-pill profile-pill-gold"><i class="fas fa-star"></i><span id="profilePoints">0.00</span> Points</span>
+                        </div>
+                    </div>
+                </div>
                 <div class="profile-action-row">
                     <button type="button" id="profile_editBtn" class="profile-btn profile-btn-primary"><i class="fas fa-pen"></i>Edit Profile</button>
                     <button type="submit" id="profile_saveBtn" class="profile-btn profile-btn-success" hidden><i class="fas fa-check"></i>Save Changes</button>
@@ -341,12 +342,20 @@
                 </div>
             </div>
                 <div class="profile-form-grid">
-                    <label><span>First Name</span><input type="text" name="first_name" class="p-input" disabled required></label>
-                    <label><span>Middle Name</span><input type="text" name="middle_name" class="p-input" disabled></label>
-                    <label><span>Last Name</span><input type="text" name="last_name" class="p-input" disabled required></label>
-                    <label><span>Email</span><input type="email" name="email" class="p-input" disabled required></label>
-                    <label class="profile-field-wide"><span>Phone</span><input type="text" name="phone_number" class="p-input" disabled></label>
-                    <label class="profile-field-wide"><span>Address</span><textarea name="address" class="p-input" disabled></textarea></label>
+                    <label><span>First Name</span><input type="text" name="first_name" class="p-input" maxlength="49" autocomplete="given-name" disabled required><small class="field-error" data-err="first_name"></small></label>
+                    <label><span>Middle Name</span><input type="text" name="middle_name" class="p-input" maxlength="49" autocomplete="additional-name" disabled><small class="field-error" data-err="middle_name"></small></label>
+                    <label><span>Last Name</span><input type="text" name="last_name" class="p-input" maxlength="49" autocomplete="family-name" disabled required><small class="field-error" data-err="last_name"></small></label>
+                    <label><span>Email Address</span><input type="email" name="email" class="p-input" autocomplete="email" disabled required><small class="field-error" data-err="email"></small></label>
+                    <label class="profile-field-wide">
+                        <span>Contact Number</span>
+                        <div class="ph-phone-row">
+                            <span class="ph-phone-prefix" title="Philippines">+63</span>
+                            <input type="tel" name="phone_number" class="p-input" inputmode="numeric" maxlength="10" placeholder="9XXXXXXXXX" autocomplete="tel-national" disabled>
+                        </div>
+                        <small class="ph-phone-hint">Philippine mobile. Type 9 and 9 more digits (example: 9171234567).</small>
+                        <small class="field-error" data-err="phone_number"></small>
+                    </label>
+                    <label class="profile-field-wide"><span>Address</span><textarea name="address" class="p-input" maxlength="200" autocomplete="street-address" disabled></textarea><small class="field-error" data-err="address"></small></label>
                 </div>
                 <p id="profileFormMsg" class="profile-form-msg" aria-live="polite"></p>
             </form>
@@ -355,21 +364,21 @@
             <div class="profile-card-head">
                 <div>
                     <h3><i class="fas fa-lock"></i> Change Password</h3>
-                    <p>This only updates your login password. It does not change your name, email, or contact info.</p>
+                    <p>This only updates your login password.</p>
                 </div>
             </div>
             <form id="customerPasswordForm">
                 <label>
-                    <span>Current password</span>
+                    <span>Current Password</span>
                     <input type="password" name="current_password" autocomplete="current-password" required>
                 </label>
                 <label>
-                    <span>New password</span>
-                    <input type="password" name="new_password" autocomplete="new-password" placeholder="8+ chars, upper, lower, number, symbol" required>
+                    <span>New Password</span>
+                    <input type="password" name="new_password" autocomplete="new-password" placeholder="8+ characters, upper, lower, number, symbol" required>
                 </label>
                 <div id="pwHints" class="pw-hints"></div>
                 <label>
-                    <span>Confirm new password</span>
+                    <span>Confirm New Password</span>
                     <input type="password" name="confirm_password" autocomplete="new-password" required>
                 </label>
                 <button type="submit" class="profile-btn profile-btn-danger"><i class="fas fa-key"></i> Update Password</button>
@@ -400,9 +409,9 @@
         window.CUSTOMER_ID = null;
         window.GLOBAL_UNIQUE_TOKEN_FROM_PHP_SESSION = 'no_token';
     </script>
-    <script src="/assets/theme.js?v=no-push1"></script>
-    <script src="/assets/profile-validate.js?v=pv1"></script>
-    <script src="/customer/js/customer-boot.js?v=hdr-name1"></script>
+    <script src="/assets/theme.js?v=spa-hash1"></script>
+    <script src="/assets/profile-validate.js?v=pv3"></script>
+    <script src="/customer/js/customer-boot.js?v=spa-hash3"></script>
     <script src="/assets/activity-clicks.js?v=click1"></script>
 </body>
 </html>

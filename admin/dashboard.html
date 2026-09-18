@@ -2,78 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pharmacy System Dashboard</title>
-  <link rel="stylesheet" href="../assets/theme.css">
-  <link rel="stylesheet" href="css/dashboard.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2/dist/tesseract.min.js"></script>
+  <meta http-equiv="refresh" content="0;url=/admin/admin.html#dashboard" />
+  <title>Redirecting</title>
+  <script>location.replace('/admin/admin.html#dashboard');</script>
 </head>
 <body>
-  <div class="sidebar">
-     <h2>💊 Pharmacy</h2>
-    <a href="dashboard.html">Dashboard</a>
-    <a href="../cashier/cashier.html">POS</a>
-    <a href="upload_prescription.html">Upload Prescription</a>
-    <a href="index.html" class="logout">🚪 Logout</a>
-  </div>
-
-  <div class="main-content">
-    <header>
-      <h1>Dashboard Overview</h1>
-    </header>
-
-    <div class="cards">
-      <div class="card">
-        <h3>Total Revenue</h3>
-        <p class="value">₱45,231.89</p>
-        <p class="change up">▲ +20.1%</p>
-      </div>
-      <div class="card">
-        <h3>Total Orders</h3>
-        <p class="value">1,234</p>
-        <p class="change up">▲ +15.3%</p>
-      </div>
-      <div class="card">
-        <h3>Active Customers</h3>
-        <p class="value">892</p>
-        <p class="change up">▲ +8.2%</p>
-      </div>
-      <div class="card">
-        <h3>Conversion Rate</h3>
-        <p class="value">3.24%</p>
-        <p class="change down">▼ -2.1%</p>
-      </div>
-    </div>
-
-    <div class="charts">
-      <div class="chart-box">
-        <h3>Sales Overview</h3>
-        <canvas id="salesChart"></canvas>
-      </div>
-      <div class="chart-box">
-        <h3>Inventory Category Distribution</h3>
-        <canvas id="categoryChart"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <script src="js/dashboard.js"></script>
-
-  <!-- Active link script -->
-  <script>
-    const sidebarLinks = document.querySelectorAll('.sidebar a');
-    const currentPage = window.location.pathname.split("/").pop();
-
-    sidebarLinks.forEach(link => {
-      if(link.getAttribute('href') === currentPage) {
-        link.classList.add('active');
-      } else {
-        link.classList.remove('active');
-      }
-    });
-  </script>
-<script src="/assets/theme.js?v=no-push1"></script>
+  <p>Open the Admin portal: <a href="/admin/admin.html#dashboard">Dashboard</a></p>
 </body>
 </html>

@@ -6,7 +6,7 @@ from app.activity import log_event, write_activity_log
 from app.db import fetch_one, get_conn, next_id
 from app.mailer import GENERIC_FORGOT_MESSAGE, send_mail
 from app.security import hash_password, verify_password
-from app.validation import password_complexity_error, validate_profile_fields
+from app.validation import password_complexity_error, prepare_profile_fields
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -177,9 +177,13 @@ def register(body: RegisterBody):
 
     if not all([first_name, last_name, username, email, phone, password, confirm]):
         return {"success": False, "message": "All fields (except Middle Name) are required."}
-    profile_err = validate_profile_fields(first_name, last_name, email, phone, "Registered via signup", middle_name, require_address=False)
+    profile_err, packed = prepare_profile_fields(
+        first_name, last_name, email, phone, "Registered via signup", middle_name, require_address=False
+    )
     if profile_err:
         return {"success": False, "message": profile_err}
+    first_name, last_name, middle_name = packed["first_name"], packed["last_name"], packed["middle_name"]
+    email, phone = packed["email"], packed["phone_number"]
     if password != confirm:
         return {"success": False, "message": "Passwords do not match."}
     pw_err = password_complexity_error(password)

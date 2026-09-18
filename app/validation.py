@@ -2,7 +2,7 @@ import re
 
 NAME_RE = re.compile(r"^[A-Za-zÑñ][A-Za-zÑñ\s.'-]{0,48}$")
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
-PHONE_RE = re.compile(r"^(09\d{9}|\+639\d{9}|639\d{9})$")
+PHONE_RE = re.compile(r"^(09\d{9}|\+639\d{9}|639\d{9}|9\d{9})$")
 USERNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{2,29}$")
 CUSTOMER_TYPES = {"Regular", "Senior", "PWD", "Other"}
 DRUG_FORMS = (
@@ -50,6 +50,57 @@ def _clean_phone(value: str) -> str:
     return re.sub(r"[\s\-()]", "", value or "")
 
 
+def title_case_person_name(value: str) -> str:
+    value = re.sub(r"\s+", " ", (value or "").strip())
+    if not value:
+        return ""
+    return " ".join(part[:1].upper() + part[1:].lower() if part else "" for part in value.split(" "))
+
+
+def normalize_ph_mobile(value: str) -> str | None:
+    digits = re.sub(r"\D", "", value or "")
+    if digits.startswith("63") and len(digits) >= 12:
+        digits = digits[2:]
+    if digits.startswith("0") and len(digits) == 11:
+        digits = digits[1:]
+    if re.fullmatch(r"9\d{9}", digits):
+        return "+63" + digits
+    return None
+
+
+def prepare_profile_fields(
+    first_name: str,
+    last_name: str,
+    email: str,
+    phone_number: str = "",
+    address: str = "",
+    middle_name: str = "",
+    require_phone: bool = True,
+    require_address: bool = True,
+) -> tuple[str | None, dict]:
+    packed = {
+        "first_name": title_case_person_name(first_name),
+        "last_name": title_case_person_name(last_name),
+        "middle_name": title_case_person_name(middle_name),
+        "email": (email or "").strip(),
+        "phone_number": normalize_ph_mobile(phone_number) or _clean_phone(phone_number),
+        "address": re.sub(r"\s+", " ", (address or "").strip()),
+    }
+    err = validate_profile_fields(
+        packed["first_name"],
+        packed["last_name"],
+        packed["email"],
+        packed["phone_number"],
+        packed["address"],
+        packed["middle_name"],
+        require_phone=require_phone,
+        require_address=require_address,
+    )
+    if not err and packed["phone_number"]:
+        packed["phone_number"] = normalize_ph_mobile(packed["phone_number"]) or packed["phone_number"]
+    return err, packed
+
+
 def validate_profile_fields(
     first_name: str,
     last_name: str,
@@ -83,7 +134,7 @@ def validate_profile_fields(
         if not phone_number:
             return "Phone number is required."
         if not PHONE_RE.match(phone_number):
-            return "Enter a valid PH mobile number (09XXXXXXXXX or +639XXXXXXXXX)."
+            return "Enter a valid Philippine mobile number (+63 9XXXXXXXXX)."
     if require_address or address:
         if len(address) < 5:
             return "Address must be at least 5 characters."
