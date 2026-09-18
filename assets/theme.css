@@ -50,7 +50,11 @@
   --ph-info-dk:      #1E3A34;
 
   /* ---------- Surfaces & text ---------- */
+<<<<<<< HEAD
   --ph-bg:          #ffffff;
+=======
+  --ph-bg:          #FFF7E6;
+>>>>>>> e5eed029ffae0aa7115c2c2eeb7c51e95f32b8be
   --ph-surface:     #FFF7E6;
   --ph-surface-2:   #FFE3B3;
   --ph-border:      #FFC857;

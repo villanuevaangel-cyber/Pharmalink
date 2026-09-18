@@ -6,7 +6,11 @@
 /* Body */
 body {
   font-family: "Poppins", sans-serif;
+<<<<<<< HEAD
   background: #ffffff;
+=======
+  background: #FFF7E6;
+>>>>>>> e5eed029ffae0aa7115c2c2eeb7c51e95f32b8be
   margin: 0;
   min-height: 100vh;
 }
@@ -92,7 +96,11 @@ body {
   align-items: center;
   min-height: 100vh;
   padding: 20px;
+<<<<<<< HEAD
   background: #ffffff;
+=======
+  background: #FFF7E6;
+>>>>>>> e5eed029ffae0aa7115c2c2eeb7c51e95f32b8be
 }
 
 @media (max-width: 860px) {
