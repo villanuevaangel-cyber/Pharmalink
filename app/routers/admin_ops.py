@@ -582,7 +582,7 @@ def moving_items(request: Request):
         SELECT d.generic_name, d.brand_name, COALESCE(SUM(si.quantity), 0) AS qty_sold
         FROM sales_items si JOIN sales s ON si.sale_id = s.sale_id JOIN drugs_master d ON si.drug_id = d.drug_id
         WHERE s.date_created >= (CURRENT_DATE - (%s * INTERVAL '1 day')) AND s.status = 'completed'
-        GROUP BY d.drug_id, d.generic_name, d.brand_name ORDER BY qty_sold DESC LIMIT 5
+        GROUP BY d.drug_id, d.generic_name, d.brand_name ORDER BY qty_sold DESC LIMIT 8
         """,
         (days,),
     ):
@@ -606,12 +606,13 @@ def moving_items(request: Request):
         WHERE d.is_active = 1
         GROUP BY d.drug_id, d.generic_name, d.brand_name, d.stock_status, recent.sold
         HAVING COALESCE(SUM(il.current_stock), 0) > 0 AND COALESCE(recent.sold, 0) <= 2
-        ORDER BY on_hand DESC, recent_sold ASC LIMIT 5
+        ORDER BY on_hand DESC, recent_sold ASC LIMIT 8
         """
     ):
         slow.append({
             "name": f"{row['generic_name']}" + (f" ({row['brand_name']})" if row.get("brand_name") else ""),
             "on_hand": int(row["on_hand"] or 0),
+            "recent_sold": int(row["recent_sold"] or 0),
             "stock_status": row.get("stock_status") or "ok",
         })
     return {"fast_moving": fast, "slow_moving": slow}

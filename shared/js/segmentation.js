@@ -1,7 +1,7 @@
 (function () {
     const SEGMENT_COLORS = ['#3b5b92', '#3f8f7a', '#c08a3e', '#7a6aa8', '#b25c5c'];
     if (!window.CHART_PALETTE) {
-        window.CHART_PALETTE = ['#2563eb', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9'];
+        window.CHART_PALETTE = ['#4BAA8B', '#4BAA8B', '#FFC857', '#FFC857', '#FFC857', '#4BAA8B'];
     }
     if (!window.chartBarGradient) {
         window.chartBarGradient = function (ctx, color) {
@@ -190,7 +190,7 @@
         if (segmentEngine === 'kmeans') {
             const score = segmentSilhouette[n];
             const scoreText = (score !== undefined && score !== null) ? ` &middot; Silhouette Score: <strong>${score}</strong>` : '';
-            el.innerHTML = `<i class="fas fa-brain" style="color:#7c3aed;"></i> K-Means Clustering (scikit-learn)${scoreText}`;
+            el.innerHTML = `<i class="fas fa-brain" style="color:#4BAA8B;"></i> K-Means Clustering (scikit-learn)${scoreText}`;
         } else {
             el.innerHTML = `<i class="fas fa-info-circle"></i> Quantile-based grouping (fallback — K-Means unavailable on this server)`;
         }
@@ -345,7 +345,7 @@
                 confirmBtn.disabled = false;
                 if (data.success) {
                     const customerName = select.options[select.selectedIndex].textContent.split(' — ')[0];
-                    modalMsg.style.color = '#16a34a';
+                    modalMsg.style.color = '#4BAA8B';
                     modalMsg.textContent = `Added ${points} points for ${customerName}. New balance: ${Number(data.new_balance).toLocaleString('en-US', { maximumFractionDigits: 2 })}.`;
                     select.options[select.selectedIndex].dataset.points = data.new_balance;
                     select.options[select.selectedIndex].textContent = `${customerName} — ${Number(data.new_balance).toLocaleString('en-US', { maximumFractionDigits: 2 })} pts`;
@@ -395,11 +395,11 @@
                     animation: { duration: 600, easing: 'easeOutQuart' },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { backgroundColor: '#1e3a8a', padding: 10, cornerRadius: 8 }
+                        tooltip: { backgroundColor: '#1E3A34', padding: 10, cornerRadius: 8 }
                     },
                     scales: {
                         x: { beginAtZero: true, ticks: { precision: 0, color: '#64748b', font: { size: 11.5 } }, grid: { color: '#eef2f7' } },
-                        y: { grid: { display: false }, ticks: { color: '#334155', font: { size: 12 } } }
+                        y: { grid: { display: false }, ticks: { color: '#4BAA8B', font: { size: 12 } } }
                     }
                 }
             });
@@ -428,13 +428,13 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: '#1e3a8a', padding: 10, cornerRadius: 8,
+                            backgroundColor: '#1E3A34', padding: 10, cornerRadius: 8,
                             callbacks: { label: (c) => `₱${Number(c.raw).toLocaleString('en-US', { minimumFractionDigits: 2 })}` }
                         }
                     },
                     scales: {
                         x: { beginAtZero: true, ticks: { color: '#64748b', font: { size: 11.5 } }, grid: { color: '#eef2f7' } },
-                        y: { grid: { display: false }, ticks: { color: '#334155', font: { size: 12 } } }
+                        y: { grid: { display: false }, ticks: { color: '#4BAA8B', font: { size: 12 } } }
                     }
                 }
             });
@@ -461,7 +461,7 @@
                     cutout: '68%',
                     plugins: {
                         legend: { position: 'bottom', labels: { color: '#475569', font: { size: 12.5 }, boxWidth: 10, boxHeight: 10, padding: 14, usePointStyle: true, pointStyle: 'circle' } },
-                        tooltip: { backgroundColor: '#1e293b', padding: 10, cornerRadius: 8 }
+                        tooltip: { backgroundColor: '#1E3A34', padding: 10, cornerRadius: 8 }
                     }
                 }
             });
@@ -480,7 +480,7 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: '#1e293b', padding: 10, cornerRadius: 8,
+                            backgroundColor: '#1E3A34', padding: 10, cornerRadius: 8,
                             callbacks: {
                                 label: function (context) {
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0) || 1;

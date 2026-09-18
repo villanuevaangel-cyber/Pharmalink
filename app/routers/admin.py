@@ -1,11 +1,10 @@
 import random
-from calendar import monthrange
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 from psycopg2 import IntegrityError
 from psycopg2.extras import RealDictCursor
@@ -87,20 +86,46 @@ def _sync_all_stock(cur):
     )
 
 
+def _parse_day(value: str):
+    try:
+        return date.fromisoformat(str(value or "").strip()[:10])
+    except ValueError:
+        return None
+
+
 @router.get("/dashboard")
-def dashboard(request: Request, period: str = "month"):
+def dashboard(
+    request: Request,
+    period: str = "month",
+    start_date: str = Query(""),
+    end_date: str = Query(""),
+):
     if not require_admin(request):
         return _unauthorized()
     today = date.today()
-    if period == "today":
+    start = _parse_day(start_date)
+    end = _parse_day(end_date)
+    if start and end:
+        if start > end:
+            start, end = end, start
+        if end > today:
+            end = today
+        if start > today:
+            start = today
+        period = "custom"
+        if start == end == today:
+            period_label = "Today"
+        else:
+            period_label = f"{start.strftime('%b %d, %Y')} – {end.strftime('%b %d, %Y')}"
+    elif period == "today":
         start = end = today
         period_label = "Today"
     elif period == "year":
-        start, end = date(today.year, 1, 1), date(today.year, 12, 31)
+        start, end = date(today.year, 1, 1), min(date(today.year, 12, 31), today)
         period_label = "This Year"
     else:
         period = "month"
-        start, end = date(today.year, today.month, 1), date(today.year, today.month, monthrange(today.year, today.month)[1])
+        start, end = date(today.year, today.month, 1), today
         period_label = "This Month"
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -144,6 +169,8 @@ def dashboard(request: Request, period: str = "month"):
     return {
         "period": period,
         "period_label": period_label,
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
         "staff_count": staff_count,
         "customer_count": customer_count,
         "total_sales": total_sales,

@@ -207,7 +207,7 @@
                 .then((data) => {
                     if (msg) {
                         msg.textContent = data.message || (data.success ? 'Profile updated.' : 'Failed to update profile.');
-                        msg.style.color = data.success ? '#16a34a' : '#e74c3c';
+                        msg.style.color = data.success ? '#4BAA8B' : '#e74c3c';
                     }
                     if (!data.success) return;
                     const customer = data.customer || {};
@@ -264,7 +264,7 @@
                     .then((data) => {
                         if (pmsg) {
                             pmsg.textContent = data.message || (data.success ? 'Password updated.' : 'Failed.');
-                            pmsg.style.color = data.success ? '#16a34a' : '#e74c3c';
+                            pmsg.style.color = data.success ? '#4BAA8B' : '#e74c3c';
                         }
                         if (data.success) passwordForm.reset();
                     })

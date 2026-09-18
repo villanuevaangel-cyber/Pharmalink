@@ -207,7 +207,9 @@
   document.addEventListener("DOMContentLoaded", function () {
     bindAllButtons(document);
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(function () {});
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (reg) { reg.unregister(); });
+      }).catch(function () {});
     }
   });
 
@@ -466,7 +468,6 @@
         .then(function (res) { return res.json(); })
         .then(function (data) {
           render(data.notifications);
-          notifyNewAlerts(data.notifications);
           applyBadge(data.count || 0);
         })
         .catch(function (err) { console.error('Notification fetch error:', err); });
@@ -479,95 +480,6 @@
       dropdown.classList.toggle('open');
       if (dropdown.classList.contains('open')) refresh();
     });
-
-    /* ---- Desktop push notifications (Web Notification API) ----
-       Shows a real OS-level popup for NEW alerts (works even if this tab
-       is in the background or minimized — browser just needs to stay
-       open). Only fires for alerts that weren't already showing on the
-       previous check, so it doesn't spam the same ongoing low-stock item
-       every 30 seconds. Uses localStorage to remember what was last seen
-       so a page reload doesn't re-fire notifications for old alerts. */
-    var NOTIF_SEEN_KEY = 'pharmalink_notif_seen_' + (bell.id || 'staff');
-    var isFirstNotifCheck = true;
-
-    function getSeenMessages() {
-      try { return JSON.parse(localStorage.getItem(NOTIF_SEEN_KEY) || '[]'); }
-      catch (e) { return []; }
-    }
-    function setSeenMessages(arr) {
-      try { localStorage.setItem(NOTIF_SEEN_KEY, JSON.stringify(arr)); }
-      catch (e) { /* storage unavailable — degrade silently, bell still works */ }
-    }
-
-    function notifyNewAlerts(notifications) {
-      var currentMsgs = (notifications || []).map(function (n) { return n.message; });
-
-      if (!('Notification' in window)) return;
-      if (Notification.permission === 'granted' && !isFirstNotifCheck) {
-        var seen = getSeenMessages();
-        currentMsgs.forEach(function (msg) {
-          if (seen.indexOf(msg) === -1) {
-            try {
-              new Notification('PharmaLink Alert', {
-                body: msg,
-                icon: '/assets/logo.png',
-                tag: msg.slice(0, 60),
-              });
-              if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-                navigator.serviceWorker.controller.postMessage({
-                  type: 'PHARMALINK_ALERT',
-                  title: 'PharmaLink Alert',
-                  body: msg,
-                });
-              }
-            } catch (e) { /* some browsers restrict Notification off a background tab; ignore */ }
-          }
-        });
-      }
-      // First check after a page load just establishes the baseline
-      // silently, so refreshing the page doesn't re-notify the whole
-      // existing backlog of alerts.
-      isFirstNotifCheck = false;
-      setSeenMessages(currentMsgs);
-    }
-
-    /* "Enable Alerts" toggle button, inserted next to the bell. Kept in
-       JS (rather than added to admin.php/cashier.php markup) so this
-       feature lives in exactly one file. */
-    var notifToggle = document.createElement('button');
-    notifToggle.type = 'button';
-    notifToggle.id = 'enableDesktopAlertsBtn';
-    notifToggle.style.cssText = 'margin-left:8px;padding:4px 10px;border:none;border-radius:14px;font-size:12px;cursor:pointer;vertical-align:middle;white-space:nowrap;';
-
-    function updateNotifToggleLabel() {
-      if (!('Notification' in window)) { notifToggle.style.display = 'none'; return; }
-      if (Notification.permission === 'granted') {
-        notifToggle.innerHTML = '<i class="fas fa-bell"></i> Alerts On';
-        notifToggle.style.background = '#dcfce7';
-        notifToggle.style.color = '#16a34a';
-      } else if (Notification.permission === 'denied') {
-        notifToggle.innerHTML = '<i class="fas fa-bell-slash"></i> Alerts Blocked';
-        notifToggle.style.background = '#fee2e2';
-        notifToggle.style.color = '#dc2626';
-      } else {
-        notifToggle.innerHTML = '<i class="fas fa-bell"></i> Enable Alerts';
-        notifToggle.style.background = '#ede9fe';
-        notifToggle.style.color = '#7c3aed';
-      }
-    }
-
-    notifToggle.addEventListener('click', function (e) {
-      e.stopPropagation();
-      if (!('Notification' in window)) return;
-      if (Notification.permission === 'default') {
-        Notification.requestPermission().then(updateNotifToggleLabel);
-      } else if (Notification.permission === 'denied') {
-        alert('Desktop alerts are blocked in your browser settings for this site. Enable notifications for this site in your browser settings, then reload the page.');
-      }
-    });
-
-    updateNotifToggleLabel();
-    if (bell.parentNode) bell.parentNode.insertBefore(notifToggle, bell.nextSibling);
 
     document.addEventListener('click', function (e) {
       if (!bell.contains(e.target)) dropdown.classList.remove('open');
