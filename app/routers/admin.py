@@ -21,6 +21,7 @@ from app.validation import (
     password_complexity_error,
     validate_drug_fields,
     validate_profile_fields,
+    prepare_profile_fields,
     validate_username,
 )
 
@@ -212,17 +213,22 @@ async def update_profile(request: Request):
     if not user_id:
         return _unauthorized()
     data = await request.json()
-    first_name = str(data.get("first_name") or "").strip()
-    middle_name = str(data.get("middle_name") or "").strip()
-    last_name = str(data.get("last_name") or "").strip()
-    email = str(data.get("email") or "").strip()
-    phone_number = str(data.get("phone_number") or "").strip()
-    address = str(data.get("address") or "").strip()
-    if not first_name or not last_name:
-        return {"success": False, "message": "First and last name are required."}
-    err = validate_profile_fields(first_name, last_name, email, phone_number, address, middle_name)
+    err, packed = prepare_profile_fields(
+        str(data.get("first_name") or ""),
+        str(data.get("last_name") or ""),
+        str(data.get("email") or ""),
+        str(data.get("phone_number") or ""),
+        str(data.get("address") or ""),
+        str(data.get("middle_name") or ""),
+    )
     if err:
         return {"success": False, "message": err}
+    first_name = packed["first_name"]
+    middle_name = packed["middle_name"]
+    last_name = packed["last_name"]
+    email = packed["email"]
+    phone_number = packed["phone_number"]
+    address = packed["address"]
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             staff_id = next_id(cur, "staff_info", "staff_id")
@@ -869,9 +875,11 @@ async def update_staff(request: Request):
     role = str(data.get("role") or "").strip()
     if user_id <= 0:
         return {"success": False, "message": "Invalid request."}
-    profile_err = validate_profile_fields(first_name, last_name, email, phone, address, middle_name)
+    profile_err, packed = prepare_profile_fields(first_name, last_name, email, phone, address, middle_name)
     if profile_err:
         return {"success": False, "message": profile_err}
+    first_name, last_name, middle_name = packed["first_name"], packed["last_name"], packed["middle_name"]
+    email, phone, address = packed["email"], packed["phone_number"], packed["address"]
     if role not in ("Admin", "Cashier/Pharmacist"):
         return {"success": False, "message": "Select a valid role."}
     role_row = fetch_one("SELECT role_id FROM role WHERE role_name = %s", (role,))
@@ -917,9 +925,11 @@ async def update_customer(request: Request):
     customer_type = str(data.get("customer_type") or "Regular").strip()
     if customer_id is None or customer_id < 0:
         return {"success": False, "message": "Invalid request."}
-    profile_err = validate_profile_fields(first_name, last_name, email, phone, address, middle_name)
+    profile_err, packed = prepare_profile_fields(first_name, last_name, email, phone, address, middle_name)
     if profile_err:
         return {"success": False, "message": profile_err}
+    first_name, last_name, middle_name = packed["first_name"], packed["last_name"], packed["middle_name"]
+    email, phone, address = packed["email"], packed["phone_number"], packed["address"]
     if customer_type not in CUSTOMER_TYPES:
         return {"success": False, "message": "Select a valid customer type."}
     try:
@@ -1109,9 +1119,11 @@ async def user_actions(request: Request):
     user_err = validate_username(username)
     if user_err:
         return {"status": "error", "msg": user_err}
-    profile_err = validate_profile_fields(first_name, last_name, email, phone, address, middle)
+    profile_err, packed = prepare_profile_fields(first_name, last_name, email, phone, address, middle)
     if profile_err:
         return {"status": "error", "msg": profile_err}
+    first_name, last_name, middle = packed["first_name"], packed["last_name"], packed["middle_name"]
+    email, phone, address = packed["email"], packed["phone_number"], packed["address"]
     pw_err = password_complexity_error(password)
     if pw_err:
         return {"status": "error", "msg": pw_err}

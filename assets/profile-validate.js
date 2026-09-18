@@ -1,30 +1,53 @@
 (function (w) {
   var NAME_RE = /^[A-Za-zÑñ][A-Za-zÑñ\s.'-]{0,48}$/;
   var EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
-  var PHONE_RE = /^(09\d{9}|\+639\d{9}|639\d{9})$/;
+  var PHONE_RE = /^(09\d{9}|\+639\d{9}|639\d{9}|9\d{9})$/;
   var USERNAME_RE = /^[A-Za-z][A-Za-z0-9._-]{2,29}$/;
 
   function cleanPhone(v) {
     return String(v || "").replace(/[\s\-()]/g, "");
   }
 
+  function titleCaseName(v) {
+    return String(v || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .split(" ")
+      .map(function (part) {
+        if (!part) return "";
+        return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+      })
+      .join(" ");
+  }
+
+  function nationalPhone(v) {
+    var d = String(v || "").replace(/\D/g, "");
+    if (d.indexOf("63") === 0 && d.length >= 12) d = d.slice(2);
+    if (d.charAt(0) === "0" && d.length === 11) d = d.slice(1);
+    if (d.length > 10) d = d.slice(-10);
+    return d;
+  }
+
+  function e164Phone(v) {
+    var n = nationalPhone(v);
+    return /^9\d{9}$/.test(n) ? "+63" + n : "";
+  }
+
+  function displayPhone(v) {
+    return nationalPhone(v);
+  }
+
+  function fillPhone(el, stored) {
+    if (!el) return;
+    el.value = displayPhone(stored);
+  }
+
   function profileError(data) {
-    var first = String(data.first_name || "").trim();
-    var last = String(data.last_name || "").trim();
-    var middle = String(data.middle_name || "").trim();
-    var email = String(data.email || "").trim();
-    var phone = cleanPhone(data.phone_number);
-    var address = String(data.address || "").trim();
-    if (!first || !last) return "First name and last name are required.";
-    if (!NAME_RE.test(first)) return "First name can only contain letters, spaces, periods, apostrophes, or hyphens.";
-    if (!NAME_RE.test(last)) return "Last name can only contain letters, spaces, periods, apostrophes, or hyphens.";
-    if (middle && !NAME_RE.test(middle)) return "Middle name can only contain letters, spaces, periods, apostrophes, or hyphens.";
-    if (!email) return "Email is required.";
-    if (!EMAIL_RE.test(email)) return "Please enter a valid email address.";
-    if (!phone) return "Phone number is required.";
-    if (!PHONE_RE.test(phone)) return "Enter a valid PH mobile number (09XXXXXXXXX or +639XXXXXXXXX).";
-    if (address.length < 5) return "Address must be at least 5 characters.";
-    if (address.length > 200) return "Address must be 200 characters or less.";
+    var errors = fieldErrors(data);
+    var order = ["first_name", "middle_name", "last_name", "email", "phone_number", "address"];
+    for (var i = 0; i < order.length; i++) {
+      if (errors[order[i]]) return errors[order[i]];
+    }
     return "";
   }
 
@@ -99,11 +122,12 @@
 
   function fieldErrors(data, opts) {
     opts = opts || {};
-    var first = String(data.first_name || "").trim();
-    var last = String(data.last_name || "").trim();
-    var middle = String(data.middle_name || "").trim();
+    var first = titleCaseName(data.first_name);
+    var last = titleCaseName(data.last_name);
+    var middle = titleCaseName(data.middle_name);
     var email = String(data.email || "").trim();
     var phone = cleanPhone(data.phone_number);
+    var national = nationalPhone(phone);
     var address = String(data.address || "").trim();
     var errors = {};
     if (!first) errors.first_name = "First name is required.";
@@ -113,8 +137,10 @@
     else if (!NAME_RE.test(last)) errors.last_name = "Letters, spaces, periods, apostrophes, or hyphens only.";
     if (!email) errors.email = "Email is required.";
     else if (!EMAIL_RE.test(email)) errors.email = "Enter a valid email address.";
-    if (!phone) errors.phone_number = "Phone number is required.";
-    else if (!PHONE_RE.test(phone)) errors.phone_number = "Use 09XXXXXXXXX or +639XXXXXXXXX.";
+    if (!national) errors.phone_number = "Contact number is required.";
+    else if (!PHONE_RE.test(national) && !PHONE_RE.test(phone)) {
+      errors.phone_number = "Use a Philippine mobile: +63 9XXXXXXXXX.";
+    }
     if (address.length < 5) errors.address = "Address must be at least 5 characters.";
     else if (address.length > 200) errors.address = "Address must be 200 characters or less.";
     if (opts.requireUsername) {
@@ -136,14 +162,52 @@
     return errors;
   }
 
+  function paintFieldErrors(root, errors) {
+    if (!root) return;
+    errors = errors || {};
+    root.querySelectorAll("[data-err]").forEach(function (el) {
+      var key = el.getAttribute("data-err");
+      var msg = errors[key] || "";
+      el.textContent = msg;
+      var field = root.querySelector("#" + key + ", [name='" + key + "']");
+      if (field) field.classList.toggle("is-invalid", !!msg);
+    });
+  }
+
+  function bindNameCaps(root) {
+    if (!root) return;
+    ["first_name", "middle_name", "last_name"].forEach(function (name) {
+      var el = root.querySelector("#" + name + ", [name='" + name + "']");
+      if (!el) return;
+      el.addEventListener("blur", function () {
+        el.value = titleCaseName(el.value);
+      });
+    });
+  }
+
+  function bindPhoneDigits(el) {
+    if (!el) return;
+    el.addEventListener("input", function () {
+      el.value = nationalPhone(el.value);
+    });
+  }
+
   w.phProfileValidate = {
     profileError: profileError,
     fieldErrors: fieldErrors,
+    paintFieldErrors: paintFieldErrors,
     usernameError: usernameError,
     newPasswordError: newPasswordError,
     passwordError: passwordError,
     passwordChecks: passwordChecks,
     bindHints: bindHints,
-    cleanPhone: cleanPhone
+    bindNameCaps: bindNameCaps,
+    bindPhoneDigits: bindPhoneDigits,
+    cleanPhone: cleanPhone,
+    titleCaseName: titleCaseName,
+    nationalPhone: nationalPhone,
+    e164Phone: e164Phone,
+    displayPhone: displayPhone,
+    fillPhone: fillPhone
   };
 })(window);

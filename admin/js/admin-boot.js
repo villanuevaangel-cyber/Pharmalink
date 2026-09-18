@@ -63,7 +63,9 @@
         if (welcome) welcome.textContent = "Welcome, " + name;
         ["first_name", "middle_name", "last_name", "email", "phone_number", "address"].forEach((id) => {
             const el = document.getElementById(id);
-            if (el && staff[id] != null) el.value = staff[id];
+            if (!el || staff[id] == null) return;
+            if (id === "phone_number" && window.phProfileValidate) window.phProfileValidate.fillPhone(el, staff[id]);
+            else el.value = staff[id];
         });
         const cardName = document.getElementById("profileCardName");
         if (cardName) cardName.textContent = `${staff.first_name || ""} ${staff.last_name || ""}`.trim() || name;

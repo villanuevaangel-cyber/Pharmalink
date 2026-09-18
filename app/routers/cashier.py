@@ -14,7 +14,7 @@ from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin, require_staff
 from app.payments import CASHIER_PAYMENT_KEYS
 from app.stock import sync_stock_status_for_drug
-from app.validation import validate_profile_fields
+from app.validation import prepare_profile_fields
 
 router = APIRouter(prefix="/api/cashier", tags=["cashier"])
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -861,17 +861,22 @@ async def update_profile(request: Request):
     if not user_id:
         return _unauthorized()
     data = await request.json()
-    first_name = str(data.get("first_name") or "").strip()
-    middle_name = str(data.get("middle_name") or "").strip()
-    last_name = str(data.get("last_name") or "").strip()
-    email = str(data.get("email") or "").strip()
-    phone_number = str(data.get("phone_number") or "").strip()
-    address = str(data.get("address") or "").strip()
-    if not first_name or not last_name:
-        return {"success": False, "message": "First and last name are required."}
-    err = validate_profile_fields(first_name, last_name, email, phone_number, address, middle_name)
+    err, packed = prepare_profile_fields(
+        str(data.get("first_name") or ""),
+        str(data.get("last_name") or ""),
+        str(data.get("email") or ""),
+        str(data.get("phone_number") or ""),
+        str(data.get("address") or ""),
+        str(data.get("middle_name") or ""),
+    )
     if err:
         return {"success": False, "message": err}
+    first_name = packed["first_name"]
+    middle_name = packed["middle_name"]
+    last_name = packed["last_name"]
+    email = packed["email"]
+    phone_number = packed["phone_number"]
+    address = packed["address"]
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             staff_id = next_id(cur, "staff_info", "staff_id")

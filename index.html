@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pharmacy Login</title>
-    <link rel="stylesheet" href="assets/theme.css?v=palette-w1" />
-    <link rel="stylesheet" href="shared/css/login.css?v=palette-w1" />
+    <link rel="stylesheet" href="assets/theme.css?v=palette-w2" />
+    <link rel="stylesheet" href="shared/css/login.css?v=palette-w2" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 </head>
 <body>
@@ -119,9 +119,10 @@
                     <i class="fa-solid fa-envelope"></i>
                     <input type="email" name="email" placeholder="Email Address" required>
                 </div>
-                <div class="input-group">
+                <div class="input-group ph-signup-phone">
                     <i class="fa-solid fa-phone"></i>
-                    <input type="text" name="phone_number" placeholder="Phone Number" required>
+                    <span class="ph-signup-cc">+63</span>
+                    <input type="tel" name="phone_number" placeholder="9XXXXXXXXX" inputmode="numeric" maxlength="10" required>
                 </div>
                 <div class="input-group">
                     <i class="fa-solid fa-lock"></i>
@@ -152,6 +153,7 @@
     
     <script src="assets/theme.js?v=spa-hash1"></script>
     <script src="assets/activity-clicks.js?v=click1"></script>
+    <script src="assets/profile-validate.js?v=pv3"></script>
     <script src="shared/js/login.js?v=guest-shop3"></script>
     <script>
     (function () {
@@ -164,6 +166,10 @@
         const successOverlay = document.getElementById('registerSuccessOverlay');
         const successYes = document.getElementById('registerSuccessYes');
         const successNo = document.getElementById('registerSuccessNo');
+        if (window.phProfileValidate) {
+            window.phProfileValidate.bindNameCaps(signupForm);
+            window.phProfileValidate.bindPhoneDigits(signupForm.phone_number);
+        }
 
         function openModal() {
             overlay.classList.add('active');
@@ -183,6 +189,13 @@
             e.preventDefault();
             const formData = new FormData(signupForm);
             const payload = Object.fromEntries(formData.entries());
+            const pv = window.phProfileValidate;
+            if (pv) {
+                payload.first_name = pv.titleCaseName(payload.first_name);
+                payload.middle_name = pv.titleCaseName(payload.middle_name);
+                payload.last_name = pv.titleCaseName(payload.last_name);
+                payload.phone_number = pv.e164Phone(payload.phone_number) || payload.phone_number;
+            }
 
             const res = await fetch('/api/auth/register', {
                 method: 'POST',

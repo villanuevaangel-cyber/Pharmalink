@@ -15,7 +15,7 @@ from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import session_user_id
 from app.payments import normalize_payment_method
 from app.stock import match_prescription_to_stock, sync_stock_status_for_drug
-from app.validation import validate_profile_fields
+from app.validation import prepare_profile_fields
 
 router = APIRouter(prefix="/api/customer", tags=["customer"])
 
@@ -179,18 +179,22 @@ async def update_profile(request: Request):
         return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
 
     form = await request.form()
-    first_name = str(form.get("first_name") or "").strip()
-    middle_name = str(form.get("middle_name") or "").strip()
-    last_name = str(form.get("last_name") or "").strip()
-    email = str(form.get("email") or "").strip()
-    phone_number = str(form.get("phone_number") or "").strip()
-    address = str(form.get("address") or "").strip()
-
-    if not first_name or not last_name or not email:
-        return {"success": False, "message": "First name, last name, and email are required."}
-    err = validate_profile_fields(first_name, last_name, email, phone_number, address, middle_name)
+    err, packed = prepare_profile_fields(
+        str(form.get("first_name") or ""),
+        str(form.get("last_name") or ""),
+        str(form.get("email") or ""),
+        str(form.get("phone_number") or ""),
+        str(form.get("address") or ""),
+        str(form.get("middle_name") or ""),
+    )
     if err:
         return {"success": False, "message": err}
+    first_name = packed["first_name"]
+    middle_name = packed["middle_name"]
+    last_name = packed["last_name"]
+    email = packed["email"]
+    phone_number = packed["phone_number"]
+    address = packed["address"]
 
     profile_image_path = None
     upload = form.get("profile_image")

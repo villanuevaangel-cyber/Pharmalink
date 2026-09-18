@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
-    <link rel="stylesheet" href="/assets/theme.css?v=palette-w1">
+    <link rel="stylesheet" href="/assets/theme.css?v=palette-w2">
     <link rel="stylesheet" href="/cashier/css/cashier.css?v=palette1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -529,34 +529,29 @@
     <div class="customer-profile-header">
         <div>
             <h2>My Profile</h2>
-            <p>Manage your account information and login password.</p>
+            <p>Manage your information and login password in one place.</p>
         </div>
     </div>
 
     <div class="customer-profile-layout">
-        <aside class="profile-summary-card">
-            <div class="profile-avatar-wrap">
-                <img id="profile_avatar" src="https://cdn-icons-png.flaticon.com/512/2922/2922510.png" alt="Profile photo">
-                <label for="profile_avatar_input" class="profile-photo-btn" title="Change profile picture">
-                    <i class="fas fa-camera"></i>
-                </label>
-                <input type="file" id="profile_avatar_input" accept="image/png,image/jpeg,image/webp,image/gif">
-            </div>
-
-            <h3 id="profileCardName">Cashier</h3>
-            <p class="profile-username">@cashier</p>
-
-            <div class="profile-pill-row">
-                <span class="profile-pill profile-pill-blue"><i class="fas fa-cash-register"></i>Cashier/Pharmacist</span>
-            </div>
-        </aside>
-
         <div class="profile-main-col">
         <div class="profile-details-card">
             <div class="profile-card-head">
-                <div>
-                    <h3>Account Details</h3>
-                    <p>Click Edit Profile to update your contact information.</p>
+                <div class="profile-hero">
+                    <div class="profile-avatar-wrap">
+                        <img id="profile_avatar" src="https://cdn-icons-png.flaticon.com/512/2922/2922510.png" alt="Profile photo">
+                        <label for="profile_avatar_input" class="profile-photo-btn" title="Change profile picture">
+                            <i class="fas fa-camera"></i>
+                        </label>
+                        <input type="file" id="profile_avatar_input" accept="image/png,image/jpeg,image/webp,image/gif">
+                    </div>
+                    <div class="profile-hero-copy">
+                        <h3 id="profileCardName">Cashier</h3>
+                        <p class="profile-username" id="profileUsername">@cashier</p>
+                        <div class="profile-pill-row">
+                            <span class="profile-pill profile-pill-blue"><i class="fas fa-cash-register"></i>Cashier/Pharmacist</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="profile-action-row">
                     <button type="button" id="profile_editBtn" class="profile-btn profile-btn-primary"><i class="fas fa-pen"></i>Edit Profile</button>
@@ -568,27 +563,37 @@
             <div class="profile-form-grid">
                 <label>
                     <span>First Name</span>
-                    <input type="text" id="first_name" class="p-input" value="" disabled required>
+                    <input type="text" id="first_name" class="p-input" value="" maxlength="49" autocomplete="given-name" disabled required>
+                    <small class="field-error" data-err="first_name"></small>
                 </label>
                 <label>
                     <span>Middle Name</span>
-                    <input type="text" id="middle_name" class="p-input" value="" disabled>
+                    <input type="text" id="middle_name" class="p-input" value="" maxlength="49" autocomplete="additional-name" disabled>
+                    <small class="field-error" data-err="middle_name"></small>
                 </label>
                 <label>
                     <span>Last Name</span>
-                    <input type="text" id="last_name" class="p-input" value="" disabled required>
+                    <input type="text" id="last_name" class="p-input" value="" maxlength="49" autocomplete="family-name" disabled required>
+                    <small class="field-error" data-err="last_name"></small>
                 </label>
                 <label>
-                    <span>Email</span>
-                    <input type="email" id="email" class="p-input" value="" disabled required>
+                    <span>Email Address</span>
+                    <input type="email" id="email" class="p-input" value="" autocomplete="email" disabled required>
+                    <small class="field-error" data-err="email"></small>
                 </label>
                 <label class="profile-field-wide">
-                    <span>Phone</span>
-                    <input type="text" id="phone_number" class="p-input" value="" disabled>
+                    <span>Contact Number</span>
+                    <div class="ph-phone-row">
+                        <span class="ph-phone-prefix" title="Philippines">+63</span>
+                        <input type="tel" id="phone_number" class="p-input" inputmode="numeric" maxlength="10" placeholder="9XXXXXXXXX" autocomplete="tel-national" disabled>
+                    </div>
+                    <small class="ph-phone-hint">Philippine mobile. Type 9 and 9 more digits (example: 9171234567).</small>
+                    <small class="field-error" data-err="phone_number"></small>
                 </label>
                 <label class="profile-field-wide">
                     <span>Address</span>
-                    <textarea id="address" class="p-input" disabled></textarea>
+                    <textarea id="address" class="p-input" maxlength="200" autocomplete="street-address" disabled></textarea>
+                    <small class="field-error" data-err="address"></small>
                 </label>
             </div>
 
@@ -599,21 +604,21 @@
             <div class="profile-card-head">
                 <div>
                     <h3><i class="fas fa-lock"></i> Change Password</h3>
-                    <p>This only updates your login password. It does not change your name, email, or contact info.</p>
+                    <p>This only updates your login password.</p>
                 </div>
             </div>
             <form id="cashierPasswordForm">
                 <label>
-                    <span>Current password</span>
+                    <span>Current Password</span>
                     <input type="password" id="current_password" autocomplete="current-password">
                 </label>
                 <label>
-                    <span>New password</span>
-                    <input type="password" id="new_password" autocomplete="new-password" placeholder="8+ chars, upper, lower, number, symbol">
+                    <span>New Password</span>
+                    <input type="password" id="new_password" autocomplete="new-password" placeholder="8+ characters, upper, lower, number, symbol">
                 </label>
                 <div id="pwHints" class="pw-hints"></div>
                 <label>
-                    <span>Confirm new password</span>
+                    <span>Confirm New Password</span>
                     <input type="password" id="confirm_password" autocomplete="new-password">
                 </label>
                 <button type="submit" id="changePasswordBtn" class="profile-btn profile-btn-danger"><i class="fas fa-key"></i> Update Password</button>
@@ -671,10 +676,10 @@
 </div>
 
 
+<script src="/assets/profile-validate.js?v=pv3"></script>
 <script src="/cashier/js/cashier-boot.js?v=hdr-name1"></script>
 <script>window.SEGMENTATION_MANAGE = false;</script>
 <script src="/shared/js/segmentation.js?v=seg2"></script>
-<script src="/assets/profile-validate.js?v=pv1"></script>
 <script>
 // =======================================================
 // 1. GLOBAL VARIABLES & CONSTANTS (Available to ALL functions)
@@ -2803,21 +2808,26 @@ document.getElementById('searchInput').addEventListener('input', function() {
       profileOriginal[i.id] = i.value;
   });
 
+  const pv = window.phProfileValidate;
+  if (pv) {
+      pv.bindNameCaps(document.getElementById("profile-page"));
+      pv.bindPhoneDigits(document.getElementById("phone_number"));
+  }
+
   const cEditBtn = document.getElementById("profile_editBtn");
   const cSaveBtn = document.getElementById("saveBtn");
   const cCancelBtn = document.getElementById("profile_cancelBtn");
   const cMsg = document.getElementById("message");
 
-  // ENABLE EDIT MODE
   cEditBtn.onclick = () => {
       document.querySelectorAll("#profile-page .p-input").forEach(i => i.disabled = false);
       cSaveBtn.hidden = false;
       cCancelBtn.hidden = false;
       cEditBtn.hidden = true;
       cMsg.textContent = "";
+      if (pv) pv.paintFieldErrors(document.getElementById("profile-page"), {});
   };
 
-  // CANCEL EDIT (stay on the Profile page, just restore old values)
   cCancelBtn.onclick = () => {
       document.querySelectorAll("#profile-page .p-input").forEach(i => {
           i.value = profileOriginal[i.id];
@@ -2827,25 +2837,26 @@ document.getElementById('searchInput').addEventListener('input', function() {
       cCancelBtn.hidden = true;
       cEditBtn.hidden = false;
       cMsg.textContent = "";
+      if (pv) pv.paintFieldErrors(document.getElementById("profile-page"), {});
   };
 
-  // SAVE PROFILE (AJAX) - stays on the Profile page after saving
   cSaveBtn.onclick = () => {
-
       const data = {
-          first_name: document.getElementById("first_name").value.trim(),
-          middle_name: document.getElementById("middle_name").value.trim(),
-          last_name: document.getElementById("last_name").value.trim(),
+          first_name: pv ? pv.titleCaseName(document.getElementById("first_name").value) : document.getElementById("first_name").value.trim(),
+          middle_name: pv ? pv.titleCaseName(document.getElementById("middle_name").value) : document.getElementById("middle_name").value.trim(),
+          last_name: pv ? pv.titleCaseName(document.getElementById("last_name").value) : document.getElementById("last_name").value.trim(),
           email: document.getElementById("email").value.trim(),
-          phone_number: document.getElementById("phone_number").value.trim(),
+          phone_number: pv ? (pv.e164Phone(document.getElementById("phone_number").value) || document.getElementById("phone_number").value.trim()) : document.getElementById("phone_number").value.trim(),
           address: document.getElementById("address").value.trim()
       };
-      const vErr = window.phProfileValidate && window.phProfileValidate.profileError(data);
-      if (vErr) {
+      const errors = pv ? pv.fieldErrors(data) : {};
+      if (pv && Object.keys(errors).length) {
+          pv.paintFieldErrors(document.getElementById("profile-page"), errors);
           cMsg.style.color = "#e74c3c";
-          cMsg.textContent = vErr;
+          cMsg.textContent = "Please fix the highlighted fields.";
           return;
       }
+      if (pv) pv.paintFieldErrors(document.getElementById("profile-page"), {});
 
       cMsg.style.color = "#6b7280";
       cMsg.textContent = "Saving...";
@@ -2872,9 +2883,9 @@ document.getElementById('searchInput').addEventListener('input', function() {
                   address: response.address ?? data.address
               };
               Object.keys(saved).forEach(key => {
-                  profileOriginal[key] = saved[key];
+                  profileOriginal[key] = key === "phone_number" && pv ? pv.displayPhone(saved[key]) : saved[key];
                   const field = document.getElementById(key);
-                  if (field) field.value = saved[key];
+                  if (field) field.value = key === "phone_number" && pv ? pv.displayPhone(saved[key]) : saved[key];
               });
               document.querySelectorAll("#profile-page .p-input").forEach(i => i.disabled = true);
               cSaveBtn.hidden = true;

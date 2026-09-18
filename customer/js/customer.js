@@ -122,6 +122,7 @@ if (target === 'orders') {
 
             if (window.phSetPortalHash) window.phSetPortalHash(target);
         });
+    });
     if (window.phRestorePortalHash) window.phRestorePortalHash();
 
     // Real-time refresh for My Orders while that tab is active.
