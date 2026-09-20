@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=palette-w2">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=move1">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=dash-layout5">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -250,7 +250,7 @@
                 <div class="ad-dash-header">
                     <div class="dashboard-header">
                         <h2>Admin Dashboard</h2>
-                        <p class="subtitle">Sales, stock, and activity at a glance.</p>
+                        <p class="subtitle">Sales, stock alerts, then details in the tabs below.</p>
                     </div>
                     <div id="dashboard-datetime" class="ad-dash-clock">
                         <span>Today</span>
@@ -258,22 +258,73 @@
                     </div>
                 </div>
 
-                <div class="ad-dash-toolbar">
-                    <div class="ad-dash-dates">
-                        <label for="dash-start-date">From
-                            <input type="date" id="dash-start-date">
-                        </label>
-                        <label for="dash-end-date">To
-                            <input type="date" id="dash-end-date">
-                        </label>
-                        <button type="button" id="dash-apply-filter"><i class="fas fa-filter"></i> Apply</button>
+                <div class="ad-dash-block">
+                    <p class="ad-dash-kicker">1 · Sales snapshot</p>
+                    <p class="ad-dash-kicker-note">The dates and presets change <strong>Total Sales</strong> only. Click the sales card to open Analytics.</p>
+                    <div class="ad-dash-sales-row">
+                        <div class="ad-dash-toolbar">
+                            <div class="ad-dash-dates">
+                                <label for="dash-start-date">From
+                                    <input type="date" id="dash-start-date">
+                                </label>
+                                <label for="dash-end-date">To
+                                    <input type="date" id="dash-end-date">
+                                </label>
+                                <button type="button" id="dash-apply-filter"><i class="fas fa-filter"></i> Apply</button>
+                            </div>
+                            <div class="ad-dash-presets" role="group" aria-label="Quick sales range">
+                                <button type="button" class="ad-dash-preset" data-period="today">Today</button>
+                                <button type="button" class="ad-dash-preset is-active" data-period="month">This month</button>
+                                <button type="button" class="ad-dash-preset" data-period="year">This year</button>
+                            </div>
+                            <span id="sales-period-label">Showing sales for this month</span>
+                        </div>
+                        <div class="dash-card card ad-dash-sales-card" data-nav="sales-analytics" data-tooltip="Total peso sales from completed POS transactions for the selected date range. Click to jump to Sales Analytics." role="button" tabindex="0">
+                            <div class="ad-stat-icon ad-stat-green"><i class="fas fa-money-bill-wave"></i></div>
+                            <h3>Total Sales <span id="sales-card-period">(This Month)</span></h3>
+                            <p class="value">₱<span id="card-total-sales">0.00</span></p>
+                            <small>Completed POS only</small>
+                        </div>
                     </div>
-                    <div class="ad-dash-presets" role="group" aria-label="Quick sales range">
-                        <button type="button" class="ad-dash-preset" data-period="today">Today</button>
-                        <button type="button" class="ad-dash-preset is-active" data-period="month">This month</button>
-                        <button type="button" class="ad-dash-preset" data-period="year">This year</button>
+                </div>
+
+                <div class="ad-dash-split">
+                    <div class="ad-dash-block">
+                        <p class="ad-dash-kicker">2 · People &amp; partners</p>
+                        <p class="ad-dash-kicker-note">Not tied to the sales dates. Click a card to open that page.</p>
+                        <div class="dashboard-cards ad-dash-stats ad-dash-stats-2">
+                            <div class="dash-card card" data-nav="user-management" data-tooltip="Staff accounts (Admin &amp; Cashier). The number below includes registered customers. Click to open User Management." role="button" tabindex="0">
+                                <div class="ad-stat-icon ad-stat-blue"><i class="fas fa-user-tie"></i></div>
+                                <h3>Total Staff Users</h3>
+                                <p class="value" id="card-staff-count">0</p>
+                                <small>+ <span id="card-customer-count">0</span> customers</small>
+                            </div>
+                            <div class="dash-card card" data-nav="supplier-section" data-tooltip="Suppliers currently marked Active. Inactive suppliers were manually deactivated - open Suppliers to see the reason." role="button" tabindex="0">
+                                <div class="ad-stat-icon ad-stat-violet"><i class="fas fa-truck"></i></div>
+                                <h3>Active Suppliers</h3>
+                                <p class="value" id="card-supplier-count">0</p>
+                                <small><span id="card-inactive-suppliers">0</span> inactive</small>
+                            </div>
+                        </div>
                     </div>
-                    <span id="sales-period-label">Showing sales for this month</span>
+                    <div class="ad-dash-block">
+                        <p class="ad-dash-kicker">3 · Stock alerts</p>
+                        <p class="ad-dash-kicker-note">Click to open Inventory with that filter already on.</p>
+                        <div class="dashboard-cards ad-dash-stats ad-dash-stats-2">
+                            <div class="dash-card card" data-nav="inventory" data-inv-filter="low" data-tooltip="Active drugs with stock above zero but at or below the minimum level. Click to open Inventory filtered to low-stock items." role="button" tabindex="0">
+                                <div class="ad-stat-icon ad-stat-amber"><i class="fas fa-exclamation-triangle"></i></div>
+                                <h3>Low Stock Alert</h3>
+                                <p class="value" id="card-low-stock">0</p>
+                                <small>Needs restock</small>
+                            </div>
+                            <div class="dash-card card" data-nav="inventory" data-inv-filter="expiring30" data-tooltip="Active stock lots with quantity on hand that expire within the next 30 days. Click to open Inventory filtered to these lots." role="button" tabindex="0">
+                                <div class="ad-stat-icon ad-stat-red"><i class="fas fa-calendar-xmark"></i></div>
+                                <h3>Expiring Within 30 Days</h3>
+                                <p class="value" id="card-expiring-30">0</p>
+                                <small>Prioritize these lots</small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="automation-status-bar" class="ad-auto-strip">
@@ -300,54 +351,21 @@
                     </div>
                 </div>
 
- <div class="dashboard-cards ad-dash-stats">
-    <div class="dash-card card" data-nav="user-management" data-tooltip="Staff accounts (Admin &amp; Cashier). The number below includes registered customers. Click to open User Management." role="button" tabindex="0">
-        <div class="ad-stat-icon ad-stat-blue"><i class="fas fa-user-tie"></i></div>
-        <h3>Total Staff Users</h3>
-        <p class="value" id="card-staff-count">0</p>
-        <small>+ <span id="card-customer-count">0</span> customers</small>
+<div class="ad-dash-tabs-wrap">
+    <p class="ad-dash-kicker">4 · Details on this page</p>
+    <div class="ad-dash-tabs">
+        <button type="button" class="ad-dash-tab active" data-ad-panel="overview"><i class="fas fa-gauge-high"></i> Overview</button>
+        <button type="button" class="ad-dash-tab" data-ad-panel="expiring"><i class="fas fa-triangle-exclamation"></i> Expiring</button>
+        <button type="button" class="ad-dash-tab" data-ad-panel="analytics"><i class="fas fa-chart-column"></i> Analytics</button>
+        <button type="button" class="ad-dash-tab" data-ad-panel="activity"><i class="fas fa-clock-rotate-left"></i> Activity</button>
     </div>
-
-    <div class="dash-card card" data-nav="sales-analytics" data-tooltip="Total peso sales from completed POS transactions for the selected date range. Click to jump to Sales Analytics." role="button" tabindex="0">
-        <div class="ad-stat-icon ad-stat-green"><i class="fas fa-money-bill-wave"></i></div>
-        <h3>Total Sales <span id="sales-card-period">(This Month)</span></h3>
-        <p class="value">₱<span id="card-total-sales">0.00</span></p>
-        <small>Completed POS only</small>
-    </div>
-
-    <div class="dash-card card" data-nav="supplier-section" data-tooltip="Suppliers currently marked Active. Inactive suppliers were manually deactivated - open Suppliers to see the reason." role="button" tabindex="0">
-        <div class="ad-stat-icon ad-stat-violet"><i class="fas fa-truck"></i></div>
-        <h3>Active Suppliers</h3>
-        <p class="value" id="card-supplier-count">0</p>
-        <small><span id="card-inactive-suppliers">0</span> inactive</small>
-    </div>
-
-    <div class="dash-card card" data-nav="inventory" data-inv-filter="low" data-tooltip="Active drugs with stock above zero but at or below the minimum level. Click to open Inventory filtered to low-stock items." role="button" tabindex="0">
-        <div class="ad-stat-icon ad-stat-amber"><i class="fas fa-exclamation-triangle"></i></div>
-        <h3>Low Stock Alert</h3>
-        <p class="value" id="card-low-stock">0</p>
-        <small>Needs restock</small>
-    </div>
-
-    <div class="dash-card card" data-nav="inventory" data-inv-filter="expiring30" data-tooltip="Active stock lots with quantity on hand that expire within the next 30 days. Click to open Inventory filtered to these lots." role="button" tabindex="0">
-        <div class="ad-stat-icon ad-stat-red"><i class="fas fa-calendar-xmark"></i></div>
-        <h3>Expiring Within 30 Days</h3>
-        <p class="value" id="card-expiring-30">0</p>
-        <small>Prioritize these lots</small>
-    </div>
-</div>
-
-<div class="ad-dash-tabs">
-    <button type="button" class="ad-dash-tab active" data-ad-panel="overview"><i class="fas fa-gauge-high"></i> Overview</button>
-    <button type="button" class="ad-dash-tab" data-ad-panel="expiring"><i class="fas fa-triangle-exclamation"></i> Expiring</button>
-    <button type="button" class="ad-dash-tab" data-ad-panel="analytics"><i class="fas fa-chart-column"></i> Analytics</button>
-    <button type="button" class="ad-dash-tab" data-ad-panel="activity"><i class="fas fa-clock-rotate-left"></i> Activity</button>
+    <p class="ad-dash-kicker-note">Overview = fast/slow movers · Expiring = lots due in 30 days · Analytics = charts · Activity = logs</p>
 </div>
 
 <div class="ad-dash-panel active" data-ad-panel="overview">
 <div class="ad-dash-overview">
     <div class="ad-dash-qa">
-        <h3>Quick Actions</h3>
+        <h3>Jump to a page</h3>
         <div class="ad-dash-qa-list">
             <button type="button" class="quick-action-btn ad-qa-inv" title="Go to Inventory" onclick="document.querySelector('.nav-item[data-target=inventory]')?.click()"><i class="fas fa-boxes"></i> Inventory</button>
             <button type="button" class="quick-action-btn ad-qa-sup" title="Manage suppliers" onclick="document.querySelector('.nav-item[data-target=supplier-section]')?.click()"><i class="fas fa-truck"></i> Suppliers</button>
