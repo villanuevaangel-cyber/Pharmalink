@@ -20,7 +20,7 @@
             <div class="nav-item active" data-target="home"><i class="fas fa-house"></i><span>Home</span></div>
             <div class="nav-item" data-target="products"><i class="fas fa-capsules"></i><span>Shop Products</span></div>
             <div class="nav-item" data-target="prescription"><i class="fas fa-file-prescription"></i><span>Prescriptions</span></div>
-            <div class="nav-item" data-target="orders" data-order-type="online"><i class="fas fa-receipt"></i><span>My Orders</span></div>
+            <div class="nav-item" data-target="orders" data-order-type="all"><i class="fas fa-receipt"></i><span>My Orders</span></div>
             <div class="nav-item" data-target="profile"><i class="fas fa-user"></i><span>Profile</span></div>
         </div>
         <a href="/api/auth/logout" class="nav-item" id="customerAuthLink" style="margin-top:auto;border-top:1px solid rgba(255,255,255,0.08);">
@@ -287,7 +287,8 @@
         <button type="button" id="apply_order_filter_btn" class="mo-filter-btn"><i class="fas fa-filter"></i> Apply</button>
     </div>
     <div class="mo-tabs">
-        <button type="button" class="order-type-tab active" data-type="online"><i class="fas fa-globe"></i> Online Orders</button>
+        <button type="button" class="order-type-tab active" data-type="all"><i class="fas fa-layer-group"></i> All</button>
+        <button type="button" class="order-type-tab" data-type="online"><i class="fas fa-globe"></i> Online Orders</button>
         <button type="button" class="order-type-tab" data-type="walkin"><i class="fas fa-store"></i> Walk-in Sales</button>
     </div>
 </div>

@@ -108,7 +108,7 @@ onCustomerReady(function() {
 if (target === 'orders') {
     const type = document.querySelector('.order-type-tab.active')?.dataset.type
         || item.getAttribute('data-order-type')
-        || 'online';
+        || 'all';
     const start = document.getElementById('order_start_date')?.value || '';
     const end = document.getElementById('order_end_date')?.value || '';
     window.loadCustomerOrders(type, start, end);
@@ -131,7 +131,7 @@ if (target === 'orders') {
         if (ordersSection && ordersSection.classList.contains('active')) {
             const type = document.querySelector('.order-type-tab.active')?.dataset.type
                 || document.querySelector('.nav-item[data-target="orders"]')?.getAttribute('data-order-type')
-                || 'online';
+                || 'all';
             const start = document.getElementById('order_start_date')?.value || '';
             const end = document.getElementById('order_end_date')?.value || '';
             window.loadCustomerOrders(type, start, end);
@@ -284,7 +284,7 @@ if (target === 'orders') {
      * @param {string} [startDate=''] - Start date filter (YYYY-MM-DD).
      * @param {string} [endDate=''] - End date filter (YYYY-MM-DD).
      */
-window.loadCustomerOrders = function(type = 'online', startDate = '', endDate = '') {
+window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '') {
     if (window.CUSTOMER_GUEST) return;
     const tbody = document.getElementById('ordersTableBody');
     if (!tbody) return;
@@ -882,7 +882,7 @@ function displayOrderDetails(data) {
             const end = endDateInput?.value || '';
             const type = document.querySelector('.order-type-tab.active')?.dataset.type
                 || document.querySelector('.order-type-tab')?.dataset.type
-                || 'online';
+                || 'all';
             window.loadCustomerOrders(type, start, end);
         }
 

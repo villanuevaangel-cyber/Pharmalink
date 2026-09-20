@@ -327,7 +327,10 @@ def list_orders(request: Request, type: str = "online", start_date: str = "", en
         return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
 
     rows = []
-    if type == "walkin":
+    if type not in ("online", "walkin", "all"):
+        type = "all"
+
+    if type in ("walkin", "all"):
         sql = """
             SELECT sale_id AS order_id, date_created AS order_date, total_amount, status AS order_status, payment_method
             FROM sales WHERE customer_id = %s AND status = 'completed'
@@ -341,12 +344,13 @@ def list_orders(request: Request, type: str = "online", start_date: str = "", en
             rows.append({
                 "order_id": int(r["order_id"]),
                 "order_date": _fmt_dt(r["order_date"], "%b %d, %Y %I:%M %p"),
+                "order_sort": _fmt_dt(r["order_date"], "%Y-%m-%d %H:%M:%S"),
                 "total_amount": _fmt_money(r["total_amount"]),
                 "order_status": str(r["order_status"]).capitalize(),
                 "payment_method": r.get("payment_method") or "cash",
                 "kind": "walkin",
             })
-    else:
+    if type in ("online", "all"):
         sql = "SELECT order_id, order_date, total_amount, order_status, payment_method FROM customer_orders WHERE customer_id = %s"
         params = [customer_id]
         if start_date and end_date:
@@ -357,11 +361,14 @@ def list_orders(request: Request, type: str = "online", start_date: str = "", en
             rows.append({
                 "order_id": int(r["order_id"]),
                 "order_date": _fmt_dt(r["order_date"], "%b %d, %Y %I:%M %p"),
+                "order_sort": _fmt_dt(r["order_date"], "%Y-%m-%d %H:%M:%S"),
                 "total_amount": _fmt_money(r["total_amount"]),
                 "order_status": r["order_status"],
                 "payment_method": r.get("payment_method") or "cash",
                 "kind": "online",
             })
+    if type == "all":
+        rows.sort(key=lambda r: r.get("order_sort") or "", reverse=True)
     return {"success": True, "orders": rows}
 
 

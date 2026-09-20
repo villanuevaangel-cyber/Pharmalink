@@ -705,7 +705,7 @@ async def create_sale(request: Request):
         customer_id = int(customer_id) if customer_id not in (None, "") else None
     except (TypeError, ValueError):
         customer_id = None
-    if customer_id is not None and customer_id <= 0:
+    if customer_id is not None and customer_id < 0:
         customer_id = None
     subtotal = float(payload.get("subtotal") or 0)
     discount_total = float(payload.get("discount_total") or 0)
