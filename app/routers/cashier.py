@@ -13,6 +13,7 @@ from psycopg2.extras import RealDictCursor
 from app.activity import log_event, write_activity_log
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin, require_staff
+from app.loyalty import get_loyalty_settings, get_peso_per_point
 from app.payments import CASHIER_PAYMENT_KEYS
 from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
 from app.profile_photos import resolve_photo_url, staff_photo_url
@@ -21,7 +22,7 @@ from app.validation import prepare_profile_fields
 
 router = APIRouter(prefix="/api/cashier", tags=["cashier"])
 ROOT = Path(__file__).resolve().parent.parent.parent
-POINTS_TO_PESO_RATE = 0.30
+POINTS_TO_PESO_RATE = 0.30  # fallback if settings are missing; POS reads /loyalty-settings
 DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/2922/2922510.png"
 
 
@@ -161,6 +162,13 @@ def customers(request: Request):
         "phone_number": r["phone_number"] or "",
         "loyalty_points": float(r["loyalty_points"] or 0),
     } for r in rows]
+
+
+@router.get("/loyalty-settings")
+def cashier_loyalty_settings(request: Request):
+    if not require_staff(request):
+        return _unauthorized()
+    return {"success": True, **get_loyalty_settings()}
 
 
 @router.get("/promos")
@@ -719,7 +727,9 @@ async def create_sale(request: Request):
 
     if payment_method not in CASHIER_PAYMENT_KEYS:
         return JSONResponse({"status": "error", "message": "Invalid payment method."}, status_code=400)
-    if total_amount <= 0:
+    if total_amount < 0:
+        return JSONResponse({"status": "error", "message": "Invalid transaction total."}, status_code=400)
+    if total_amount == 0 and points_requested <= 0:
         return JSONResponse({"status": "error", "message": "Invalid transaction total."}, status_code=400)
     if payment_method == "cash":
         if cash_received < total_amount:
@@ -780,10 +790,11 @@ async def create_sale(request: Request):
                             points_requested = available
                         else:
                             raise ValueError(f"Not enough loyalty points - only {available:.2f} available.")
-                    points_discount_value = round(points_requested * POINTS_TO_PESO_RATE, 2)
+                    peso_per_point = get_peso_per_point() or POINTS_TO_PESO_RATE
+                    points_discount_value = round(points_requested * peso_per_point, 2)
                     if points_discount_value > subtotal:
                         points_discount_value = subtotal
-                        points_redeemed = round(points_discount_value / POINTS_TO_PESO_RATE, 2) if points_discount_value else 0
+                        points_redeemed = round(points_discount_value / peso_per_point, 2) if points_discount_value else 0
                     else:
                         points_redeemed = points_requested
 

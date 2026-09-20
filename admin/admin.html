@@ -1306,6 +1306,23 @@
     </div>
 
     <div id="maint-panel-promos" class="maint-panel">
+        <div class="um-card" style="margin-bottom:16px;">
+            <div class="um-card-head">
+                <div>
+                    <h3>Loyalty points discount</h3>
+                    <p>Ilagay kung magkano ang bawas sa bayad para sa <strong>1 loyalty point</strong>. Halimbawa: ₱0.30 = 10 points ay ₱3.00 off sa POS.</p>
+                </div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;padding:4px 0 8px;">
+                <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:#1E3A34;">
+                    1 point = ₱
+                    <input type="number" id="loyalty_peso_per_point" step="0.01" min="0.01" max="10" value="0.30" style="width:140px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;">
+                </label>
+                <button type="button" id="saveLoyaltySettingsBtn" style="background:#4BAA8B;color:#fff;border:none;border-radius:4px;padding:8px 14px;cursor:pointer;">Save</button>
+                <p id="loyaltyPointsPreview" style="margin:0;font-size:13px;color:#4BAA8B;">10 points = ₱3.00 off</p>
+            </div>
+            <p id="loyaltySettingsMsg" style="margin:0;font-size:13px;min-height:1.2em;"></p>
+        </div>
         <div class="um-card">
             <div class="um-card-head">
                 <div>
@@ -1877,6 +1894,7 @@
             el.classList.toggle('active', el.id === 'maint-panel-' + id);
         });
         if (id === 'promos' && typeof window.loadPromos === 'function') window.loadPromos();
+        if (id === 'promos' && typeof window.loadLoyaltySettings === 'function') window.loadLoyaltySettings();
         if (id === 'pricing' && typeof window.fetchCategoryMarkups === 'function') window.fetchCategoryMarkups();
     };
     document.querySelectorAll('#maintenance .maint-tab').forEach((tab) => {
@@ -2441,6 +2459,62 @@
     let promosDrugList = [];
     let promosLoaded = false;
 
+    function updateLoyaltyPreview() {
+        const input = document.getElementById('loyalty_peso_per_point');
+        const preview = document.getElementById('loyaltyPointsPreview');
+        if (!input || !preview) return;
+        const peso = parseFloat(input.value);
+        if (!isFinite(peso) || peso < 0.01) {
+            preview.textContent = 'Enter pesos off per point, e.g. 0.30';
+            return;
+        }
+        preview.textContent = `Customer with 10 points gets ₱${(peso * 10).toFixed(2)} off. 100 points = ₱${(peso * 100).toFixed(2)} off.`;
+    }
+
+    window.loadLoyaltySettings = function () {
+        fetch('/api/admin/loyalty-settings', { credentials: 'same-origin' })
+            .then((r) => r.json())
+            .then((d) => {
+                const input = document.getElementById('loyalty_peso_per_point');
+                if (d && d.success && input && d.peso_per_point != null) {
+                    input.value = Number(d.peso_per_point).toFixed(2);
+                }
+                updateLoyaltyPreview();
+            })
+            .catch(() => updateLoyaltyPreview());
+    };
+
+    document.getElementById('loyalty_peso_per_point')?.addEventListener('input', updateLoyaltyPreview);
+    document.getElementById('saveLoyaltySettingsBtn')?.addEventListener('click', () => {
+        const input = document.getElementById('loyalty_peso_per_point');
+        const msg = document.getElementById('loyaltySettingsMsg');
+        const peso = parseFloat(input?.value);
+        if (!isFinite(peso) || peso < 0.01 || peso > 10) {
+            if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Enter ₱0.01 to ₱10.00 off per point.'; }
+            return;
+        }
+        fetch('/api/admin/loyalty-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ peso_per_point: peso }),
+        })
+            .then((r) => r.json())
+            .then((d) => {
+                if (msg) {
+                    msg.style.color = d.success ? '#4BAA8B' : '#dc2626';
+                    msg.textContent = d.success
+                        ? `Saved. 1 point = ₱${Number(d.peso_per_point).toFixed(2)} off at POS.`
+                        : (d.message || 'Could not save.');
+                }
+                if (d.success && input) input.value = Number(d.peso_per_point).toFixed(2);
+                updateLoyaltyPreview();
+            })
+            .catch(() => {
+                if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Could not save.'; }
+            });
+    });
+
     function escapeHtmlPromo(str) {
         return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
@@ -2688,6 +2762,7 @@
                 promosLoaded = true;
                 loadPromos();
             }
+            if (typeof window.loadLoyaltySettings === 'function') window.loadLoyaltySettings();
             if (typeof window.fetchCategoryMarkups === 'function') window.fetchCategoryMarkups();
         });
     }

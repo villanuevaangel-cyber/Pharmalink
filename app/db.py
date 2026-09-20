@@ -130,6 +130,11 @@ def init_pool() -> None:
             ensure_automation_schema(conn)
         except Exception:
             conn.rollback()
+        try:
+            from app.loyalty import ensure_loyalty_settings
+            ensure_loyalty_settings(conn)
+        except Exception:
+            conn.rollback()
     finally:
         _pool.putconn(conn)
 
