@@ -388,7 +388,7 @@
         });
 
         window.addEventListener('click', e => {
-            ['addDrugModal', 'editDrugMasterModal', 'editLotModal', 'adjustStockModal', 'adjustHistoryModal', 'reorderModal'].forEach(id => {
+            ['addDrugModal', 'editDrugMasterModal', 'editLotModal', 'adjustStockModal', 'adjustHistoryModal', 'reorderModal', 'addCategoryModal'].forEach(id => {
                 const modal = document.getElementById(id);
                 if (modal && e.target === modal) modal.style.display = 'none';
             });
@@ -1292,6 +1292,7 @@
 
     window.computeSuggestedPrice = computeSuggestedPrice;
     window.fetchCategoryMarkups = fetchCategoryMarkups;
+    window.fetchMasterDrugs = fetchMasterDrugs;
     window.openDrugBarcodeScanner = openDrugBarcodeScanner;
 
     if (document.readyState === 'loading') {

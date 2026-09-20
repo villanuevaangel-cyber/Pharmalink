@@ -23,6 +23,7 @@ from app.automation import (
 )
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin
+from app.loyalty import get_loyalty_settings, save_loyalty_peso
 from app.report_files import pdf_bytes, workbook_bytes
 from app.routers.admin import _jsonable, _log, _row, _rows, _unauthorized
 from app.stock import sync_stock_status_for_drug
@@ -163,6 +164,36 @@ async def add_promo(request: Request):
             note = f" - {len(drug_ids)} selected products" if scope == "drugs" else ""
             _log(cur, request, "Create Promo", f"Created promo '{name}' ({discount_type} {discount_value}) from {start_date} to {end_date}{note}.")
     return {"success": True, "promo_id": promo_id}
+
+
+@router.get("/loyalty-settings")
+def get_loyalty_settings_admin(request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    return {"success": True, **get_loyalty_settings()}
+
+
+@router.post("/loyalty-settings")
+async def update_loyalty_settings(request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    data = await request.json()
+    try:
+        if data.get("peso_per_point") not in (None, ""):
+            settings = save_loyalty_peso(data.get("peso_per_point"))
+        else:
+            settings = save_loyalty_peso(float(data.get("points_percent") or 0) / 100.0)
+    except (TypeError, ValueError) as exc:
+        return {"success": False, "message": str(exc) if str(exc) else "Enter pesos off per loyalty point."}
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            _log(
+                cur,
+                request,
+                "Update Loyalty Points",
+                f"Set loyalty discount to ₱{settings['peso_per_point']:.2f} off per point.",
+            )
+    return {"success": True, **settings}
 
 
 @router.post("/promos/toggle")

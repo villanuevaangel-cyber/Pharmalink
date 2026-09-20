@@ -457,12 +457,11 @@
             <section id="inventory" style="display:none;">
                 <div class="dashboard-header">
                     <h2>Inventory Management</h2>
-                    <p class="subtitle">View lots, adjust stock, and manage the drug catalog. New stock is added when you receive a delivery.</p>
+                    <p class="subtitle">View lots and adjust stock. New stock is added when you receive a delivery. Drug definitions live under Maintenance.</p>
                 </div>
 
                 <div class="inv-subnav">
                     <button type="button" class="inv-tab-btn active" data-inv-panel="lots"><i class="fas fa-boxes"></i> Stock Lots</button>
-                    <button type="button" class="inv-tab-btn" data-inv-panel="drugs"><i class="fas fa-pills"></i> Drug Catalog</button>
                     <button type="button" id="openAdjustHistoryBtn"><i class="fas fa-clock-rotate-left"></i> Adjustment History</button>
                     <button type="button" id="openReorderModalBtn"><i class="fas fa-cart-plus"></i> Reorder Suggestions</button>
                     <button type="button" id="runConsignmentCheckBtn"><i class="fas fa-rotate"></i> Run consignment cross-check</button>
@@ -542,53 +541,6 @@
                             <button type="button" id="lots-prev-btn" class="um-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
                             <span id="lots-page-info">Page 1</span>
                             <button type="button" id="lots-next-btn" class="um-page-btn">Next <i class="fas fa-chevron-right"></i></button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="inv-panel" id="inv-panel-drugs">
-                    <div class="um-card">
-                        <div class="um-card-head">
-                            <div>
-                                <h3>Drug Catalog</h3>
-                                <p>Search definitions, then print a barcode, edit, or archive.</p>
-                            </div>
-                            <button type="button" class="um-add-btn staff add-btn secondary" id="addDrugMasterBtn"><i class="fa fa-flask"></i> Define New Drug</button>
-                        </div>
-                        <div class="um-toolbar">
-                            <div class="um-search">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="drugMasterSearch" placeholder="Search generic, brand, category..." autocomplete="off">
-                            </div>
-                            <label for="drugMasterFilter">Show</label>
-                            <select id="drugMasterFilter">
-                                <option value="active">Active (Default)</option>
-                                <option value="archived">Archived Only</option>
-                                <option value="all">All</option>
-                            </select>
-                        </div>
-                        <div class="table-wrap">
-                        <table id="drugMasterTable">
-                            <thead>
-                                <tr>
-                                    <th>Generic Name</th>
-                                    <th>Brand Name</th>
-                                    <th>Dosage</th>
-                                    <th>Form</th>
-                                    <th>Category</th>
-                                    <th>Min Stock</th>
-                                    <th>Barcode</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="drugMasterBody"></tbody>
-                        </table>
-                        </div>
-                        <div class="um-pagination ph-pagination" id="drugs-pagination">
-                            <button type="button" id="drugs-prev-btn" class="um-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
-                            <span id="drugs-page-info">Page 1</span>
-                            <button type="button" id="drugs-next-btn" class="um-page-btn">Next <i class="fas fa-chevron-right"></i></button>
                         </div>
                     </div>
                 </div>
@@ -1280,15 +1232,40 @@
 <section id="maintenance" style="display:none;">
     <div class="dashboard-header">
         <h2>Maintenance</h2>
-        <p class="subtitle">Category markup for selling prices, plus promos and discounts. Selling price = unit cost × (1 + markup%). Save markup to reprice all lots in that category that have a unit cost. The same formula is used on receive.</p>
+        <p class="subtitle">Categories, drug catalog, markup, promos, and loyalty point value. Selling price = unit cost × (1 + markup%).</p>
     </div>
 
     <div class="um-subnav" id="maintenanceSubnav">
-        <button type="button" class="um-tab maint-tab active" data-maint-panel="pricing"><i class="fas fa-percent"></i> Pricing</button>
+        <button type="button" class="um-tab maint-tab active" data-maint-panel="categories"><i class="fas fa-folder-tree"></i> Category</button>
+        <button type="button" class="um-tab maint-tab" data-maint-panel="catalog"><i class="fas fa-pills"></i> Drug Catalog</button>
+        <button type="button" class="um-tab maint-tab" data-maint-panel="pricing"><i class="fas fa-percent"></i> Pricing</button>
         <button type="button" class="um-tab maint-tab" data-maint-panel="promos"><i class="fas fa-tags"></i> Promos</button>
     </div>
 
-    <div id="maint-panel-pricing" class="maint-panel active">
+    <div id="maint-panel-categories" class="maint-panel active">
+        <div class="um-card">
+            <div class="um-card-head">
+                <div>
+                    <h3>Categories</h3>
+                    <p>Add a category here, then pick it when you define a drug. Markup % is still set on Pricing.</p>
+                </div>
+                <button type="button" class="add-btn" id="addCategoryBtn" style="background:#4BAA8B;"><i class="fas fa-plus"></i> Add Category</button>
+            </div>
+            <div class="table-wrap">
+                <table id="categoriesTable">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Active drugs</th>
+                        </tr>
+                    </thead>
+                    <tbody id="categoriesBody"><tr><td colspan="2" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="maint-panel-pricing" class="maint-panel">
         <div class="um-card">
             <div class="um-card-head">
                 <div>
@@ -1305,7 +1282,71 @@
         </div>
     </div>
 
+    <div id="maint-panel-catalog" class="maint-panel">
+        <div class="um-card">
+            <div class="um-card-head">
+                <div>
+                    <h3>Drug Catalog</h3>
+                    <p>Search definitions, then print a barcode, edit, or archive. Stock lots stay on Inventory.</p>
+                </div>
+                <button type="button" class="um-add-btn staff add-btn secondary" id="addDrugMasterBtn"><i class="fa fa-flask"></i> Define New Drug</button>
+            </div>
+            <div class="um-toolbar">
+                <div class="um-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="drugMasterSearch" placeholder="Search generic, brand, category..." autocomplete="off">
+                </div>
+                <label for="drugMasterFilter">Show</label>
+                <select id="drugMasterFilter">
+                    <option value="active">Active (Default)</option>
+                    <option value="archived">Archived Only</option>
+                    <option value="all">All</option>
+                </select>
+            </div>
+            <div class="table-wrap">
+            <table id="drugMasterTable">
+                <thead>
+                    <tr>
+                        <th>Generic Name</th>
+                        <th>Brand Name</th>
+                        <th>Dosage</th>
+                        <th>Form</th>
+                        <th>Category</th>
+                        <th>Min Stock</th>
+                        <th>Barcode</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="drugMasterBody"></tbody>
+            </table>
+            </div>
+            <div class="um-pagination ph-pagination" id="drugs-pagination">
+                <button type="button" id="drugs-prev-btn" class="um-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
+                <span id="drugs-page-info">Page 1</span>
+                <button type="button" id="drugs-next-btn" class="um-page-btn">Next <i class="fas fa-chevron-right"></i></button>
+            </div>
+        </div>
+    </div>
+
     <div id="maint-panel-promos" class="maint-panel">
+        <div class="um-card" style="margin-bottom:16px;">
+            <div class="um-card-head">
+                <div>
+                    <h3>Loyalty points discount</h3>
+                    <p>Ilagay kung magkano ang bawas sa bayad para sa <strong>1 loyalty point</strong>. Halimbawa: ₱0.30 = 10 points ay ₱3.00 off sa POS.</p>
+                </div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;padding:4px 0 8px;">
+                <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:#1E3A34;">
+                    1 point = ₱
+                    <input type="number" id="loyalty_peso_per_point" step="0.01" min="0.01" max="10" value="0.30" style="width:140px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;">
+                </label>
+                <button type="button" id="saveLoyaltySettingsBtn" style="background:#4BAA8B;color:#fff;border:none;border-radius:4px;padding:8px 14px;cursor:pointer;">Save</button>
+                <p id="loyaltyPointsPreview" style="margin:0;font-size:13px;color:#4BAA8B;">10 points = ₱3.00 off</p>
+            </div>
+            <p id="loyaltySettingsMsg" style="margin:0;font-size:13px;min-height:1.2em;"></p>
+        </div>
         <div class="um-card">
             <div class="um-card-head">
                 <div>
@@ -1869,7 +1910,8 @@
     window.showForecastSection = showForecastSection;
 
     window.switchMaintTab = function (panel) {
-        const id = panel === 'promos' ? 'promos' : 'pricing';
+        const allowed = { categories: 1, pricing: 1, promos: 1, catalog: 1 };
+        const id = allowed[panel] ? panel : 'categories';
         document.querySelectorAll('#maintenance .maint-tab').forEach((tab) => {
             tab.classList.toggle('active', tab.getAttribute('data-maint-panel') === id);
         });
@@ -1877,11 +1919,83 @@
             el.classList.toggle('active', el.id === 'maint-panel-' + id);
         });
         if (id === 'promos' && typeof window.loadPromos === 'function') window.loadPromos();
+        if (id === 'promos' && typeof window.loadLoyaltySettings === 'function') window.loadLoyaltySettings();
+        if (id === 'categories' && typeof window.loadCategories === 'function') window.loadCategories();
         if (id === 'pricing' && typeof window.fetchCategoryMarkups === 'function') window.fetchCategoryMarkups();
+        if (id === 'catalog' && typeof window.fetchMasterDrugs === 'function') window.fetchMasterDrugs();
     };
     document.querySelectorAll('#maintenance .maint-tab').forEach((tab) => {
         tab.addEventListener('click', () => window.switchMaintTab(tab.getAttribute('data-maint-panel')));
     });
+
+    function escapeCategoryHtml(str) {
+        return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    window.loadCategories = function () {
+        const body = document.getElementById('categoriesBody');
+        fetch('/api/admin/categories', { credentials: 'same-origin' })
+            .then((r) => r.json())
+            .then((rows) => {
+                if (!body) return;
+                const list = Array.isArray(rows) ? rows : [];
+                if (!list.length) {
+                    body.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#6b7280;padding:15px;">No categories yet. Click Add Category.</td></tr>';
+                    return;
+                }
+                body.innerHTML = list.map((c) => `
+                    <tr>
+                        <td>${escapeCategoryHtml(c.category)}</td>
+                        <td>${Number(c.drug_count || 0)}</td>
+                    </tr>`).join('');
+            })
+            .catch(() => {
+                if (body) body.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#dc2626;padding:15px;">Failed to load categories.</td></tr>';
+            });
+    };
+
+    function wireAddCategoryModal() {
+        const modal = document.getElementById('addCategoryModal');
+        document.getElementById('addCategoryBtn')?.addEventListener('click', () => {
+            const input = document.getElementById('new_category_name');
+            const msg = document.getElementById('addCategoryMsg');
+            if (input) input.value = '';
+            if (msg) msg.textContent = '';
+            if (modal) modal.style.display = 'flex';
+            input?.focus();
+        });
+        document.getElementById('closeAddCategoryModal')?.addEventListener('click', () => {
+            if (modal) modal.style.display = 'none';
+        });
+        document.getElementById('addCategoryForm')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = document.getElementById('new_category_name');
+            const msg = document.getElementById('addCategoryMsg');
+            const name = (input?.value || '').trim();
+            if (msg) { msg.style.color = '#6b7280'; msg.textContent = 'Saving...'; }
+            fetch('/api/admin/categories', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ category: name }),
+            })
+                .then((r) => r.json())
+                .then((d) => {
+                    if (!d.success) {
+                        if (msg) { msg.style.color = '#dc2626'; msg.textContent = d.message || 'Could not add category.'; }
+                        return;
+                    }
+                    if (modal) modal.style.display = 'none';
+                    window.loadCategories();
+                    if (typeof window.fetchCategoryMarkups === 'function') window.fetchCategoryMarkups();
+                })
+                .catch(() => {
+                    if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Could not add category.'; }
+                });
+        });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireAddCategoryModal);
+    else wireAddCategoryModal();
 
     // Reorder Suggestions now lives on the Inventory tab, but its data-loading
     // JS is defined here - load it immediately on page load (same as the
@@ -2441,6 +2555,62 @@
     let promosDrugList = [];
     let promosLoaded = false;
 
+    function updateLoyaltyPreview() {
+        const input = document.getElementById('loyalty_peso_per_point');
+        const preview = document.getElementById('loyaltyPointsPreview');
+        if (!input || !preview) return;
+        const peso = parseFloat(input.value);
+        if (!isFinite(peso) || peso < 0.01) {
+            preview.textContent = 'Enter pesos off per point, e.g. 0.30';
+            return;
+        }
+        preview.textContent = `Customer with 10 points gets ₱${(peso * 10).toFixed(2)} off. 100 points = ₱${(peso * 100).toFixed(2)} off.`;
+    }
+
+    window.loadLoyaltySettings = function () {
+        fetch('/api/admin/loyalty-settings', { credentials: 'same-origin' })
+            .then((r) => r.json())
+            .then((d) => {
+                const input = document.getElementById('loyalty_peso_per_point');
+                if (d && d.success && input && d.peso_per_point != null) {
+                    input.value = Number(d.peso_per_point).toFixed(2);
+                }
+                updateLoyaltyPreview();
+            })
+            .catch(() => updateLoyaltyPreview());
+    };
+
+    document.getElementById('loyalty_peso_per_point')?.addEventListener('input', updateLoyaltyPreview);
+    document.getElementById('saveLoyaltySettingsBtn')?.addEventListener('click', () => {
+        const input = document.getElementById('loyalty_peso_per_point');
+        const msg = document.getElementById('loyaltySettingsMsg');
+        const peso = parseFloat(input?.value);
+        if (!isFinite(peso) || peso < 0.01 || peso > 10) {
+            if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Enter ₱0.01 to ₱10.00 off per point.'; }
+            return;
+        }
+        fetch('/api/admin/loyalty-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ peso_per_point: peso }),
+        })
+            .then((r) => r.json())
+            .then((d) => {
+                if (msg) {
+                    msg.style.color = d.success ? '#4BAA8B' : '#dc2626';
+                    msg.textContent = d.success
+                        ? `Saved. 1 point = ₱${Number(d.peso_per_point).toFixed(2)} off at POS.`
+                        : (d.message || 'Could not save.');
+                }
+                if (d.success && input) input.value = Number(d.peso_per_point).toFixed(2);
+                updateLoyaltyPreview();
+            })
+            .catch(() => {
+                if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Could not save.'; }
+            });
+    });
+
     function escapeHtmlPromo(str) {
         return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
@@ -2688,6 +2858,7 @@
                 promosLoaded = true;
                 loadPromos();
             }
+            if (typeof window.loadLoyaltySettings === 'function') window.loadLoyaltySettings();
             if (typeof window.fetchCategoryMarkups === 'function') window.fetchCategoryMarkups();
         });
     }
@@ -3536,9 +3707,24 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </div>
 
+    <div id="addCategoryModal" class="modal">
+        <div class="modal-content" style="width:min(420px,92vw);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <strong>Add Category</strong>
+                <button type="button" id="closeAddCategoryModal" style="width:auto !important;margin:0 !important;padding:4px 10px !important;background:#6b7280;">Close</button>
+            </div>
+            <form id="addCategoryForm">
+                <label for="new_category_name">Category name</label>
+                <input type="text" id="new_category_name" maxlength="60" required placeholder="e.g. Antibiotic" autocomplete="off" style="width:100%;margin:6px 0 8px;padding:8px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;">
+                <p id="addCategoryMsg" style="min-height:1.2em;font-size:13px;margin:0 0 8px;"></p>
+                <button type="submit" style="background:#4BAA8B;width:100%;"><i class="fas fa-plus"></i> Add Category</button>
+            </form>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="/admin/js/inventory.js?v=inv-ui14"></script>
+    <script src="/admin/js/inventory.js?v=inv-catalog-maint1"></script>
     <script src="/admin/js/supplier.js?v=sup-ui3"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -3592,7 +3778,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 requestAnimationFrame(() => {
                     if (window.switchMaintTab) {
                         const on = document.querySelector('#maintenance .maint-panel.active');
-                        window.switchMaintTab(on && on.id === 'maint-panel-promos' ? 'promos' : 'pricing');
+                        const panel = (on && on.id || '').replace('maint-panel-', '') || 'categories';
+                        window.switchMaintTab(panel);
                     }
                     if (typeof window.fetchCategoryMarkups === 'function') window.fetchCategoryMarkups();
                 });
