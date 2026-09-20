@@ -40,7 +40,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=spa-hash2';
+        script.src = '/customer/js/customer.js?v=orders-all1';
         document.body.appendChild(script);
     });
 
@@ -599,10 +599,10 @@
                     b.classList.toggle('active', b === btn);
                 });
                 const ordersNav = document.querySelector('.nav-item[data-target="orders"]');
-                if (ordersNav) ordersNav.setAttribute('data-order-type', btn.dataset.type || 'online');
+                if (ordersNav) ordersNav.setAttribute('data-order-type', btn.dataset.type || 'all');
                 const start = document.getElementById('order_start_date')?.value || '';
                 const end = document.getElementById('order_end_date')?.value || '';
-                if (window.loadCustomerOrders) window.loadCustomerOrders(btn.dataset.type || 'online', start, end, document.getElementById('order_search')?.value || '');
+                if (window.loadCustomerOrders) window.loadCustomerOrders(btn.dataset.type || 'all', start, end, document.getElementById('order_search')?.value || '');
             });
         });
     }

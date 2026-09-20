@@ -29,6 +29,55 @@ def _allow_explicit_ids(conn) -> None:
     conn.commit()
 
 
+def _fix_sales_customer_fk(conn) -> None:
+    """POS sales must point at customers, not users. customer_id 0 is a valid customer."""
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT ccu.table_name AS foreign_table
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.constraint_column_usage ccu
+              ON ccu.constraint_name = tc.constraint_name
+             AND ccu.table_schema = tc.table_schema
+            WHERE tc.table_schema = 'public'
+              AND tc.table_name = 'sales'
+              AND tc.constraint_type = 'FOREIGN KEY'
+              AND tc.constraint_name = 'sales_ibfk_2'
+            """
+        )
+        row = cur.fetchone()
+        if row and str(row.get("foreign_table") or "").lower() == "users":
+            cur.execute("ALTER TABLE sales DROP CONSTRAINT sales_ibfk_2")
+        cur.execute(
+            """
+            UPDATE sales s
+            SET customer_id = NULL
+            WHERE s.customer_id IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM customers c WHERE c.customer_id = s.customer_id
+              )
+            """
+        )
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.table_constraints
+            WHERE table_schema = 'public'
+              AND table_name = 'sales'
+              AND constraint_name = 'sales_customer_id_fkey'
+            """
+        )
+        if cur.fetchone() is None:
+            cur.execute(
+                """
+                ALTER TABLE sales
+                ADD CONSTRAINT sales_customer_id_fkey
+                FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+                """
+            )
+    conn.commit()
+
+
 def init_pool() -> None:
     global _pool
     if _pool is not None:
@@ -46,6 +95,10 @@ def init_pool() -> None:
     conn = _pool.getconn()
     try:
         _allow_explicit_ids(conn)
+        try:
+            _fix_sales_customer_fk(conn)
+        except Exception:
+            conn.rollback()
         with conn.cursor() as cur:
             cur.execute(
                 """

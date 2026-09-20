@@ -20,7 +20,7 @@
             <div class="nav-item active" data-target="home"><i class="fas fa-house"></i><span>Home</span></div>
             <div class="nav-item" data-target="products"><i class="fas fa-capsules"></i><span>Shop Products</span></div>
             <div class="nav-item" data-target="prescription"><i class="fas fa-file-prescription"></i><span>Prescriptions</span></div>
-            <div class="nav-item" data-target="orders" data-order-type="online"><i class="fas fa-receipt"></i><span>My Orders</span></div>
+            <div class="nav-item" data-target="orders" data-order-type="all"><i class="fas fa-receipt"></i><span>My Orders</span></div>
             <div class="nav-item" data-target="profile"><i class="fas fa-user"></i><span>Profile</span></div>
         </div>
         <a href="/api/auth/logout" class="nav-item" id="customerAuthLink" style="margin-top:auto;border-top:1px solid rgba(255,255,255,0.08);">
@@ -182,16 +182,16 @@
             <p>Subtotal <strong>₱<span id="subtotalDisplay">0.00</span></strong></p>
             <p>Total <strong>₱<span id="total-price">0.00</span></strong></p>
         </div>
-        <label for="checkoutPaymentMethod">Pay in-store with</label>
+        <label for="checkoutPaymentMethod">Payment</label>
         <select id="checkoutPaymentMethod">
-            <option value="cash">Cash</option>
-            <option value="gcash">GCash</option>
-            <option value="maya">Maya</option>
-            <option value="card">Card (Debit/Credit)</option>
-            <option value="bank">Bank Transfer</option>
+            <option value="cash">Cash (pay at pickup)</option>
+            <option value="gcash">GCash (PayMongo live)</option>
+            <option value="maya">Maya (PayMongo live)</option>
+            <option value="card">Card (pay at pickup)</option>
+            <option value="bank">Bank Transfer (pay at pickup)</option>
         </select>
         <button type="button" id="checkout-btn" disabled>Submit Order for Pickup</button>
-        <p class="shop-pay-hint">Choose how you will pay when you pick up. The cashier will collect this at the counter.</p>
+        <p class="shop-pay-hint" id="shopPayHint">Cash, card, and bank are collected at pickup. GCash and Maya are paid now through PayMongo.</p>
     </aside>
 </div>
 </section>
@@ -287,7 +287,8 @@
         <button type="button" id="apply_order_filter_btn" class="mo-filter-btn"><i class="fas fa-filter"></i> Apply</button>
     </div>
     <div class="mo-tabs">
-        <button type="button" class="order-type-tab active" data-type="online"><i class="fas fa-globe"></i> Online Orders</button>
+        <button type="button" class="order-type-tab active" data-type="all"><i class="fas fa-layer-group"></i> All</button>
+        <button type="button" class="order-type-tab" data-type="online"><i class="fas fa-globe"></i> Online Orders</button>
         <button type="button" class="order-type-tab" data-type="walkin"><i class="fas fa-store"></i> Walk-in Sales</button>
     </div>
 </div>

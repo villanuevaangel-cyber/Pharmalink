@@ -108,7 +108,7 @@ onCustomerReady(function() {
 if (target === 'orders') {
     const type = document.querySelector('.order-type-tab.active')?.dataset.type
         || item.getAttribute('data-order-type')
-        || 'online';
+        || 'all';
     const start = document.getElementById('order_start_date')?.value || '';
     const end = document.getElementById('order_end_date')?.value || '';
     window.loadCustomerOrders(type, start, end);
@@ -131,7 +131,7 @@ if (target === 'orders') {
         if (ordersSection && ordersSection.classList.contains('active')) {
             const type = document.querySelector('.order-type-tab.active')?.dataset.type
                 || document.querySelector('.nav-item[data-target="orders"]')?.getAttribute('data-order-type')
-                || 'online';
+                || 'all';
             const start = document.getElementById('order_start_date')?.value || '';
             const end = document.getElementById('order_end_date')?.value || '';
             window.loadCustomerOrders(type, start, end);
@@ -284,7 +284,7 @@ if (target === 'orders') {
      * @param {string} [startDate=''] - Start date filter (YYYY-MM-DD).
      * @param {string} [endDate=''] - End date filter (YYYY-MM-DD).
      */
-window.loadCustomerOrders = function(type = 'online', startDate = '', endDate = '') {
+window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '') {
     if (window.CUSTOMER_GUEST) return;
     const tbody = document.getElementById('ordersTableBody');
     if (!tbody) return;
@@ -671,13 +671,13 @@ function displayOrderDetails(data) {
             return;
         }
 
+        const payMethod = document.getElementById('checkoutPaymentMethod')?.value || 'cash';
         const orderData = {
             customer_id: selectedCustomer,
             total_amount: finalTotal,
             sc_pwd_applied: false,
-            // Ginagamit ang GLOBAL_UNIQUE_TOKEN_FROM_PHP_SESSION
             order_token: typeof GLOBAL_UNIQUE_TOKEN_FROM_PHP_SESSION !== 'undefined' ? GLOBAL_UNIQUE_TOKEN_FROM_PHP_SESSION : 'no_token',
-            payment_method: document.getElementById('checkoutPaymentMethod')?.value || 'cash',
+            payment_method: payMethod,
             items: Object.values(cart).map(item => ({
                 lot_id: item.lot_id,
                 drug_id: item.drug_id,
@@ -689,7 +689,32 @@ function displayOrderDetails(data) {
 
         if (checkoutBtn) {
             checkoutBtn.disabled = true;
-            checkoutBtn.innerText = 'Processing...';
+            checkoutBtn.innerText = (payMethod === 'gcash' || payMethod === 'maya') ? 'Opening PayMongo...' : 'Processing...';
+        }
+
+        if (payMethod === 'gcash' || payMethod === 'maya') {
+            fetch('/api/customer/ewallet/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(orderData),
+            })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success && data.checkout_url) {
+                    window.location.href = data.checkout_url;
+                    return;
+                }
+                throw new Error(data.message || 'Could not start GCash/Maya checkout.');
+            })
+            .catch((err) => {
+                alert(err.message || 'Could not start e-wallet payment.');
+                if (checkoutBtn) {
+                    checkoutBtn.disabled = false;
+                    checkoutBtn.innerText = 'Submit Order for Pickup';
+                }
+            });
+            return;
         }
 
         fetch('/api/customer/orders', {
@@ -857,7 +882,7 @@ function displayOrderDetails(data) {
             const end = endDateInput?.value || '';
             const type = document.querySelector('.order-type-tab.active')?.dataset.type
                 || document.querySelector('.order-type-tab')?.dataset.type
-                || 'online';
+                || 'all';
             window.loadCustomerOrders(type, start, end);
         }
 

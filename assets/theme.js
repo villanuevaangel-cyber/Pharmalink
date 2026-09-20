@@ -611,7 +611,7 @@
   });
 
   document.addEventListener('DOMContentLoaded', function () {
-    if (document.getElementById('productGrid') && !window.CUSTOMER_ID && window.CUSTOMER_GUEST === undefined) {
+    if (document.getElementById('productGrid') && (window.CUSTOMER_ID == null || window.CUSTOMER_ID === '') && window.CUSTOMER_GUEST === undefined) {
       return;
     }
     window.phRestorePortalHash();

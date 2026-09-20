@@ -5,7 +5,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -65,6 +65,21 @@ def index():
 @app.get("/reset-password.html")
 def reset_password_page():
     return FileResponse(ROOT / "reset-password.html")
+
+
+@app.get("/pay/done")
+@app.get("/pay/cancel")
+def paymongo_return():
+    return HTMLResponse(
+        """<!doctype html>
+<html><head><meta charset="utf-8"><title>PharmaLink Payment</title>
+<style>body{font-family:Segoe UI,sans-serif;background:#FFF7E6;color:#1E3A34;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.card{background:#fff;border-radius:16px;padding:28px 32px;max-width:420px;box-shadow:0 8px 30px rgba(30,58,52,.08);text-align:center}
+h1{font-size:1.2rem;margin:0 0 8px}p{margin:0;color:#4b5563;line-height:1.45}</style></head>
+<body><div class="card"><h1>You can return to PharmaLink</h1>
+<p>If you paid with GCash or Maya, the cashier or this browser will confirm the payment. You may close this tab.</p>
+</div></body></html>"""
+    )
 
 
 @app.get("/logout.php")
