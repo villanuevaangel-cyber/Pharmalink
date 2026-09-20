@@ -1,4 +1,5 @@
 import random
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -28,6 +29,7 @@ from app.validation import (
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 ROOT = Path(__file__).resolve().parent.parent.parent
+CATEGORY_NAME_RE = re.compile(r"^[A-Za-z0-9Ññ][A-Za-z0-9Ññ\s.&'/\-]{1,59}$")
 DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/2922/2922510.png"
 MANILA = ZoneInfo("Asia/Manila")
 
@@ -638,6 +640,85 @@ def get_markups(request: Request):
         item["markup_percent"] = float(item.get("markup_percent") or 0)
         out.append(item)
     return out
+
+
+def _sync_category_markup_from_drugs(cur) -> None:
+    cur.execute(
+        """
+        INSERT INTO category_markup (category, markup_percent)
+        SELECT DISTINCT category, 30.00 FROM drugs_master
+        WHERE category IS NOT NULL AND TRIM(category) <> ''
+          AND category NOT IN (SELECT category FROM category_markup)
+        """
+    )
+
+
+@router.get("/categories")
+def list_categories(request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            _sync_category_markup_from_drugs(cur)
+            cur.execute(
+                """
+                SELECT cm.category, cm.markup_percent,
+                       COUNT(d.drug_id) AS drug_count
+                FROM category_markup cm
+                LEFT JOIN drugs_master d
+                  ON d.category = cm.category AND COALESCE(d.is_active, 1) = 1
+                GROUP BY cm.category, cm.markup_percent
+                ORDER BY cm.category ASC
+                """
+            )
+            rows = cur.fetchall()
+    out = []
+    for row in rows:
+        item = _row(row)
+        item["markup_percent"] = float(item.get("markup_percent") or 0)
+        item["drug_count"] = int(item.get("drug_count") or 0)
+        out.append(item)
+    return out
+
+
+@router.post("/categories")
+async def add_category(request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    data = await request.json()
+    name = " ".join(str(data.get("category") or data.get("name") or "").split()).strip()
+    if len(name) < 2 or len(name) > 60:
+        return {"success": False, "message": "Category name must be 2 to 60 characters."}
+    if not CATEGORY_NAME_RE.match(name):
+        return {"success": False, "message": "Use letters, numbers, spaces, and . & ' / - only."}
+    exists = fetch_one(
+        "SELECT category FROM category_markup WHERE LOWER(category) = LOWER(%s)",
+        (name,),
+    )
+    if exists:
+        return {"success": False, "message": f"'{exists['category']}' is already in the list."}
+    admin_name = actor_display_name(request, fallback="Admin")
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                _sync_category_markup_from_drugs(cur)
+                cur.execute(
+                    "SELECT category FROM category_markup WHERE LOWER(category) = LOWER(%s)",
+                    (name,),
+                )
+                if cur.fetchone():
+                    return {"success": False, "message": "That category already exists."}
+                cur.execute(
+                    """
+                    INSERT INTO category_markup (category, markup_percent, updated_by, updated_at)
+                    VALUES (%s, 30.00, %s, CURRENT_TIMESTAMP)
+                    """,
+                    (name, admin_name),
+                )
+                _log(cur, request, "Add Category", f"Added category '{name}' (default markup 30%).")
+    except IntegrityError:
+        return {"success": False, "message": "That category already exists."}
+    return {"success": True, "category": name}
 
 
 @router.post("/category-markups")
