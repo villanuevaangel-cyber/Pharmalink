@@ -7,13 +7,14 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, File, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from psycopg2.extras import RealDictCursor
 
 from app.activity import write_activity_log
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import session_user_id
 from app.payments import normalize_payment_method
+from app.paymongo import PayMongoError, create_checkout_session, require_paid_checkout
 from app.stock import match_prescription_to_stock, sync_stock_status_for_drug
 from app.profile_photos import (
     ALLOWED_EXT,
@@ -448,18 +449,113 @@ def order_details(order_id: int, request: Request, kind: str = "online"):
     }
 
 
+def _paymongo_base_url() -> str:
+    return (os.getenv("PAYMONGO_BASE_URL") or "http://127.0.0.1:8080").rstrip("/")
+
+
+def _quote_online_total(items) -> float:
+    server_total = 0.0
+    for item in items:
+        lot_id = int(item.get("lot_id") or 0)
+        qty = int(item.get("quantity") or 0)
+        if lot_id <= 0 or qty <= 0:
+            raise ValueError("Invalid item in cart.")
+        lot = fetch_one(
+            "SELECT current_stock, price FROM inventory_lots WHERE lot_inventory_id = %s AND is_active = 1",
+            (lot_id,),
+        )
+        if not lot:
+            raise ValueError("One of the items in your cart is no longer available.")
+        if int(lot["current_stock"]) < qty:
+            raise ValueError(
+                f"Not enough stock left for one of your items (only {lot['current_stock']} available). Please update your cart."
+            )
+        server_total += float(lot["price"] or item.get("price_per_unit") or 0) * qty
+    return round(server_total, 2)
+
+
+@router.post("/ewallet/checkout")
+async def customer_ewallet_checkout(request: Request):
+    customer_id = require_customer(request)
+    if customer_id is None:
+        return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
+    payload = await request.json()
+    items = payload.get("items") or []
+    if not items:
+        return JSONResponse({"success": False, "message": "Your cart is empty."}, status_code=400)
+    method = str(payload.get("payment_method") or "").strip().lower()
+    if method not in ("gcash", "maya"):
+        return JSONResponse({"success": False, "message": "Choose GCash or Maya."}, status_code=400)
+    order_token = str(payload.get("order_token") or "").strip()
+    if not order_token or order_token == "no_token":
+        return JSONResponse({"success": False, "message": "Missing order token. Please refresh the page and try again."}, status_code=400)
+    try:
+        amount = _quote_online_total(items)
+        session = create_checkout_session(
+            amount=amount,
+            channel=method,
+            description=f"PharmaLink order {method.upper()}",
+            success_url=f"{_paymongo_base_url()}/api/customer/ewallet/complete",
+            cancel_url=f"{_paymongo_base_url()}/customer/customer.html#products",
+            metadata={"kind": "online", "customer_id": str(customer_id), "method": method},
+        )
+    except PayMongoError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=exc.status_code)
+    except ValueError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
+    request.session["ewallet_items"] = items
+    request.session["ewallet_token"] = order_token
+    request.session["ewallet_method"] = method
+    request.session["ewallet_checkout_id"] = session["id"]
+    request.session["ewallet_amount"] = amount
+    return {"success": True, "checkout_url": session["checkout_url"], "id": session["id"], "amount": amount}
+
+
+@router.get("/ewallet/complete")
+async def customer_ewallet_complete(request: Request):
+    customer_id = require_customer(request)
+    if customer_id is None:
+        return RedirectResponse(url="/", status_code=302)
+    checkout_id = str(request.session.get("ewallet_checkout_id") or "").strip()
+    items = request.session.get("ewallet_items") or []
+    order_token = str(request.session.get("ewallet_token") or "").strip()
+    method = str(request.session.get("ewallet_method") or "").strip().lower()
+    if not checkout_id or not items or method not in ("gcash", "maya"):
+        return RedirectResponse(url="/customer/customer.html#products", status_code=302)
+    placed = await place_order_with_payload(request, customer_id, {
+        "items": items,
+        "order_token": order_token,
+        "payment_method": method,
+        "paymongo_checkout_id": checkout_id,
+    })
+    for key in ("ewallet_items", "ewallet_token", "ewallet_method", "ewallet_checkout_id", "ewallet_amount"):
+        request.session.pop(key, None)
+    if isinstance(placed, dict) and placed.get("success"):
+        return RedirectResponse(url="/customer/customer.html#orders", status_code=302)
+    if isinstance(placed, JSONResponse) and placed.status_code in (200, 409):
+        return RedirectResponse(url="/customer/customer.html#orders", status_code=302)
+    return RedirectResponse(url="/customer/customer.html#products", status_code=302)
+
+
 @router.post("/orders")
 async def place_order(request: Request):
     customer_id = require_customer(request)
     if customer_id is None:
         return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
+    payload = await request.json()
+    result = await place_order_with_payload(request, customer_id, payload)
+    if isinstance(result, JSONResponse):
+        return result
+    return result
+
+
+async def place_order_with_payload(request: Request, customer_id: int, payload: dict):
 
     exists = fetch_one("SELECT customer_id FROM customers WHERE customer_id = %s", (customer_id,))
     if not exists:
         request.session.clear()
         return JSONResponse({"success": False, "message": "Your session is out of date. Please log in again."}, status_code=401)
 
-    payload = await request.json()
     items = payload.get("items") or []
     if not items:
         return JSONResponse({"success": False, "message": "Your cart is empty."}, status_code=400)
@@ -499,6 +595,13 @@ async def place_order(request: Request):
                     server_total += unit_price * qty
 
                 payment_method = normalize_payment_method(payload.get("payment_method"), "cash") or "cash"
+                if payment_method in ("gcash", "maya"):
+                    checkout_id = str(payload.get("paymongo_checkout_id") or request.session.get("ewallet_checkout_id") or "").strip()
+                    paid = require_paid_checkout(checkout_id, server_total, payment_method)
+                    payment_reference = paid.get("reference") or checkout_id
+                else:
+                    payment_reference = None
+
                 order_id = next_id(cur, "customer_orders", "order_id")
                 cur.execute("SAVEPOINT order_header")
                 try:
@@ -546,6 +649,8 @@ async def place_order(request: Request):
                     sync_stock_status_for_drug(cur, drug_id)
 
                 details = f"Online order #{order_id} placed - total ₱{server_total:.2f}."
+                if payment_reference:
+                    details += f" Paid via {payment_method} ({payment_reference})."
                 write_activity_log(cur, "Online Order", details, request=request)
 
         import secrets
@@ -557,6 +662,8 @@ async def place_order(request: Request):
             "message": "Order placed successfully.",
             "order_token": request.session["order_token"],
         }
+    except PayMongoError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=exc.status_code)
     except ValueError as exc:
         return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
     except Exception as exc:

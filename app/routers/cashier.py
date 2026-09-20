@@ -1,5 +1,6 @@
 import json
 import hashlib
+import os
 import random
 import subprocess
 from datetime import datetime, timedelta
@@ -13,6 +14,7 @@ from app.activity import log_event, write_activity_log
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin, require_staff
 from app.payments import CASHIER_PAYMENT_KEYS
+from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
 from app.profile_photos import resolve_photo_url, staff_photo_url
 from app.stock import sync_stock_status_for_drug
 from app.validation import prepare_profile_fields
@@ -645,6 +647,49 @@ def charts(request: Request):
     }
 
 
+def _paymongo_base_url() -> str:
+    return (os.getenv("PAYMONGO_BASE_URL") or "http://127.0.0.1:8080").rstrip("/")
+
+
+@router.post("/ewallet/checkout")
+async def ewallet_checkout(request: Request):
+    user_id = require_staff(request)
+    if not user_id:
+        return JSONResponse({"success": False, "message": "Not authorized."}, status_code=401)
+    payload = await request.json()
+    method = str(payload.get("method") or "").strip().lower()
+    if method not in ("gcash", "maya"):
+        return JSONResponse({"success": False, "message": "Choose GCash or Maya."}, status_code=400)
+    try:
+        amount = float(payload.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    if amount <= 0:
+        return JSONResponse({"success": False, "message": "Cart total is empty."}, status_code=400)
+    try:
+        session = create_qrph_payment(
+            amount=amount,
+            description=f"PharmaLink POS {method.upper()}",
+            metadata={"kind": "pos", "user_id": str(user_id), "method": method},
+        )
+        session["channel"] = method
+    except PayMongoError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=exc.status_code)
+    return {"success": True, **session}
+
+
+@router.get("/ewallet/checkout/{checkout_id}")
+def ewallet_checkout_status(request: Request, checkout_id: str):
+    user_id = require_staff(request)
+    if not user_id:
+        return JSONResponse({"success": False, "message": "Not authorized."}, status_code=401)
+    try:
+        session = retrieve_payment(checkout_id)
+    except PayMongoError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=exc.status_code)
+    return {"success": True, **session}
+
+
 @router.post("/sales")
 async def create_sale(request: Request):
     user_id = require_staff(request)
@@ -676,8 +721,24 @@ async def create_sale(request: Request):
         return JSONResponse({"status": "error", "message": "Invalid payment method."}, status_code=400)
     if total_amount <= 0:
         return JSONResponse({"status": "error", "message": "Invalid transaction total."}, status_code=400)
-    if cash_received < total_amount:
-        return JSONResponse({"status": "error", "message": "Insufficient cash received."}, status_code=400)
+    if payment_method == "cash":
+        if cash_received < total_amount:
+            return JSONResponse({"status": "error", "message": "Insufficient cash received."}, status_code=400)
+    else:
+        checkout_id = str(payload.get("paymongo_checkout_id") or "").strip()
+        try:
+            paid = require_paid_checkout(checkout_id, total_amount, payment_method)
+        except PayMongoError as exc:
+            return JSONResponse({"status": "error", "message": str(exc)}, status_code=exc.status_code)
+        payment_reference = paid.get("reference") or checkout_id
+        cash_received = total_amount
+        change_amount = 0.0
+        used = fetch_one(
+            "SELECT sale_id FROM sales WHERE payment_reference = %s LIMIT 1",
+            (payment_reference,),
+        )
+        if used:
+            return JSONResponse({"status": "error", "message": "This e-wallet payment was already used on another sale."}, status_code=409)
 
     try:
         with get_conn() as conn:

@@ -182,16 +182,16 @@
             <p>Subtotal <strong>₱<span id="subtotalDisplay">0.00</span></strong></p>
             <p>Total <strong>₱<span id="total-price">0.00</span></strong></p>
         </div>
-        <label for="checkoutPaymentMethod">Pay in-store with</label>
+        <label for="checkoutPaymentMethod">Payment</label>
         <select id="checkoutPaymentMethod">
-            <option value="cash">Cash</option>
-            <option value="gcash">GCash</option>
-            <option value="maya">Maya</option>
-            <option value="card">Card (Debit/Credit)</option>
-            <option value="bank">Bank Transfer</option>
+            <option value="cash">Cash (pay at pickup)</option>
+            <option value="gcash">GCash (PayMongo live)</option>
+            <option value="maya">Maya (PayMongo live)</option>
+            <option value="card">Card (pay at pickup)</option>
+            <option value="bank">Bank Transfer (pay at pickup)</option>
         </select>
         <button type="button" id="checkout-btn" disabled>Submit Order for Pickup</button>
-        <p class="shop-pay-hint">Choose how you will pay when you pick up. The cashier will collect this at the counter.</p>
+        <p class="shop-pay-hint" id="shopPayHint">Cash, card, and bank are collected at pickup. GCash and Maya are paid now through PayMongo.</p>
     </aside>
 </div>
 </section>

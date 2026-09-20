@@ -40,7 +40,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=spa-hash2';
+        script.src = '/customer/js/customer.js?v=paymongo1';
         document.body.appendChild(script);
     });
 

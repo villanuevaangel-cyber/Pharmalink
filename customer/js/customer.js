@@ -671,13 +671,13 @@ function displayOrderDetails(data) {
             return;
         }
 
+        const payMethod = document.getElementById('checkoutPaymentMethod')?.value || 'cash';
         const orderData = {
             customer_id: selectedCustomer,
             total_amount: finalTotal,
             sc_pwd_applied: false,
-            // Ginagamit ang GLOBAL_UNIQUE_TOKEN_FROM_PHP_SESSION
             order_token: typeof GLOBAL_UNIQUE_TOKEN_FROM_PHP_SESSION !== 'undefined' ? GLOBAL_UNIQUE_TOKEN_FROM_PHP_SESSION : 'no_token',
-            payment_method: document.getElementById('checkoutPaymentMethod')?.value || 'cash',
+            payment_method: payMethod,
             items: Object.values(cart).map(item => ({
                 lot_id: item.lot_id,
                 drug_id: item.drug_id,
@@ -689,7 +689,32 @@ function displayOrderDetails(data) {
 
         if (checkoutBtn) {
             checkoutBtn.disabled = true;
-            checkoutBtn.innerText = 'Processing...';
+            checkoutBtn.innerText = (payMethod === 'gcash' || payMethod === 'maya') ? 'Opening PayMongo...' : 'Processing...';
+        }
+
+        if (payMethod === 'gcash' || payMethod === 'maya') {
+            fetch('/api/customer/ewallet/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(orderData),
+            })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success && data.checkout_url) {
+                    window.location.href = data.checkout_url;
+                    return;
+                }
+                throw new Error(data.message || 'Could not start GCash/Maya checkout.');
+            })
+            .catch((err) => {
+                alert(err.message || 'Could not start e-wallet payment.');
+                if (checkoutBtn) {
+                    checkoutBtn.disabled = false;
+                    checkoutBtn.innerText = 'Submit Order for Pickup';
+                }
+            });
+            return;
         }
 
         fetch('/api/customer/orders', {
