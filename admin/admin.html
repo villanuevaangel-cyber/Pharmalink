@@ -457,12 +457,11 @@
             <section id="inventory" style="display:none;">
                 <div class="dashboard-header">
                     <h2>Inventory Management</h2>
-                    <p class="subtitle">View lots, adjust stock, and manage the drug catalog. New stock is added when you receive a delivery.</p>
+                    <p class="subtitle">View lots and adjust stock. New stock is added when you receive a delivery. Drug definitions live under Maintenance.</p>
                 </div>
 
                 <div class="inv-subnav">
                     <button type="button" class="inv-tab-btn active" data-inv-panel="lots"><i class="fas fa-boxes"></i> Stock Lots</button>
-                    <button type="button" class="inv-tab-btn" data-inv-panel="drugs"><i class="fas fa-pills"></i> Drug Catalog</button>
                     <button type="button" id="openAdjustHistoryBtn"><i class="fas fa-clock-rotate-left"></i> Adjustment History</button>
                     <button type="button" id="openReorderModalBtn"><i class="fas fa-cart-plus"></i> Reorder Suggestions</button>
                     <button type="button" id="runConsignmentCheckBtn"><i class="fas fa-rotate"></i> Run consignment cross-check</button>
@@ -542,53 +541,6 @@
                             <button type="button" id="lots-prev-btn" class="um-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
                             <span id="lots-page-info">Page 1</span>
                             <button type="button" id="lots-next-btn" class="um-page-btn">Next <i class="fas fa-chevron-right"></i></button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="inv-panel" id="inv-panel-drugs">
-                    <div class="um-card">
-                        <div class="um-card-head">
-                            <div>
-                                <h3>Drug Catalog</h3>
-                                <p>Search definitions, then print a barcode, edit, or archive.</p>
-                            </div>
-                            <button type="button" class="um-add-btn staff add-btn secondary" id="addDrugMasterBtn"><i class="fa fa-flask"></i> Define New Drug</button>
-                        </div>
-                        <div class="um-toolbar">
-                            <div class="um-search">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="drugMasterSearch" placeholder="Search generic, brand, category..." autocomplete="off">
-                            </div>
-                            <label for="drugMasterFilter">Show</label>
-                            <select id="drugMasterFilter">
-                                <option value="active">Active (Default)</option>
-                                <option value="archived">Archived Only</option>
-                                <option value="all">All</option>
-                            </select>
-                        </div>
-                        <div class="table-wrap">
-                        <table id="drugMasterTable">
-                            <thead>
-                                <tr>
-                                    <th>Generic Name</th>
-                                    <th>Brand Name</th>
-                                    <th>Dosage</th>
-                                    <th>Form</th>
-                                    <th>Category</th>
-                                    <th>Min Stock</th>
-                                    <th>Barcode</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="drugMasterBody"></tbody>
-                        </table>
-                        </div>
-                        <div class="um-pagination ph-pagination" id="drugs-pagination">
-                            <button type="button" id="drugs-prev-btn" class="um-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
-                            <span id="drugs-page-info">Page 1</span>
-                            <button type="button" id="drugs-next-btn" class="um-page-btn">Next <i class="fas fa-chevron-right"></i></button>
                         </div>
                     </div>
                 </div>
@@ -1280,11 +1232,12 @@
 <section id="maintenance" style="display:none;">
     <div class="dashboard-header">
         <h2>Maintenance</h2>
-        <p class="subtitle">Category markup for selling prices, plus promos and discounts. Selling price = unit cost × (1 + markup%). Save markup to reprice all lots in that category that have a unit cost. The same formula is used on receive.</p>
+        <p class="subtitle">Category markup, drug catalog, promos, and loyalty point value. Selling price = unit cost × (1 + markup%).</p>
     </div>
 
     <div class="um-subnav" id="maintenanceSubnav">
         <button type="button" class="um-tab maint-tab active" data-maint-panel="pricing"><i class="fas fa-percent"></i> Pricing</button>
+        <button type="button" class="um-tab maint-tab" data-maint-panel="catalog"><i class="fas fa-pills"></i> Drug Catalog</button>
         <button type="button" class="um-tab maint-tab" data-maint-panel="promos"><i class="fas fa-tags"></i> Promos</button>
     </div>
 
@@ -1301,6 +1254,53 @@
                     <thead><tr><th>Category</th><th>Markup %</th><th></th></tr></thead>
                     <tbody id="markupSettingsBody"><tr><td colspan="3" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="maint-panel-catalog" class="maint-panel">
+        <div class="um-card">
+            <div class="um-card-head">
+                <div>
+                    <h3>Drug Catalog</h3>
+                    <p>Search definitions, then print a barcode, edit, or archive. Stock lots stay on Inventory.</p>
+                </div>
+                <button type="button" class="um-add-btn staff add-btn secondary" id="addDrugMasterBtn"><i class="fa fa-flask"></i> Define New Drug</button>
+            </div>
+            <div class="um-toolbar">
+                <div class="um-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="drugMasterSearch" placeholder="Search generic, brand, category..." autocomplete="off">
+                </div>
+                <label for="drugMasterFilter">Show</label>
+                <select id="drugMasterFilter">
+                    <option value="active">Active (Default)</option>
+                    <option value="archived">Archived Only</option>
+                    <option value="all">All</option>
+                </select>
+            </div>
+            <div class="table-wrap">
+            <table id="drugMasterTable">
+                <thead>
+                    <tr>
+                        <th>Generic Name</th>
+                        <th>Brand Name</th>
+                        <th>Dosage</th>
+                        <th>Form</th>
+                        <th>Category</th>
+                        <th>Min Stock</th>
+                        <th>Barcode</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="drugMasterBody"></tbody>
+            </table>
+            </div>
+            <div class="um-pagination ph-pagination" id="drugs-pagination">
+                <button type="button" id="drugs-prev-btn" class="um-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
+                <span id="drugs-page-info">Page 1</span>
+                <button type="button" id="drugs-next-btn" class="um-page-btn">Next <i class="fas fa-chevron-right"></i></button>
             </div>
         </div>
     </div>
@@ -1886,7 +1886,8 @@
     window.showForecastSection = showForecastSection;
 
     window.switchMaintTab = function (panel) {
-        const id = panel === 'promos' ? 'promos' : 'pricing';
+        const allowed = { pricing: 1, promos: 1, catalog: 1 };
+        const id = allowed[panel] ? panel : 'pricing';
         document.querySelectorAll('#maintenance .maint-tab').forEach((tab) => {
             tab.classList.toggle('active', tab.getAttribute('data-maint-panel') === id);
         });
@@ -1896,6 +1897,7 @@
         if (id === 'promos' && typeof window.loadPromos === 'function') window.loadPromos();
         if (id === 'promos' && typeof window.loadLoyaltySettings === 'function') window.loadLoyaltySettings();
         if (id === 'pricing' && typeof window.fetchCategoryMarkups === 'function') window.fetchCategoryMarkups();
+        if (id === 'catalog' && typeof window.fetchMasterDrugs === 'function') window.fetchMasterDrugs();
     };
     document.querySelectorAll('#maintenance .maint-tab').forEach((tab) => {
         tab.addEventListener('click', () => window.switchMaintTab(tab.getAttribute('data-maint-panel')));
@@ -3613,7 +3615,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="/admin/js/inventory.js?v=inv-ui14"></script>
+    <script src="/admin/js/inventory.js?v=inv-catalog-maint1"></script>
     <script src="/admin/js/supplier.js?v=sup-ui3"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -3667,7 +3669,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 requestAnimationFrame(() => {
                     if (window.switchMaintTab) {
                         const on = document.querySelector('#maintenance .maint-panel.active');
-                        window.switchMaintTab(on && on.id === 'maint-panel-promos' ? 'promos' : 'pricing');
+                        const panel = (on && on.id || '').replace('maint-panel-', '') || 'pricing';
+                        window.switchMaintTab(panel);
                     }
                     if (typeof window.fetchCategoryMarkups === 'function') window.fetchCategoryMarkups();
                 });

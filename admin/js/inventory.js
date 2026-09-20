@@ -1292,6 +1292,7 @@
 
     window.computeSuggestedPrice = computeSuggestedPrice;
     window.fetchCategoryMarkups = fetchCategoryMarkups;
+    window.fetchMasterDrugs = fetchMasterDrugs;
     window.openDrugBarcodeScanner = openDrugBarcodeScanner;
 
     if (document.readyState === 'loading') {
