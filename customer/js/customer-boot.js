@@ -182,6 +182,7 @@
         if (pv) {
             pv.bindNameCaps(form);
             pv.bindPhoneDigits(form.phone_number);
+            pv.bindLiveFields(form);
         }
         inputs.forEach((input) => { original[input.name] = input.value; });
 
@@ -191,6 +192,7 @@
             saveBtn.hidden = !isEditing;
             cancelBtn.hidden = !isEditing;
             if (msg) msg.textContent = '';
+            if (pv) pv.paintFieldErrors(form, {});
         }
         editBtn.addEventListener('click', () => setEditing(true));
         cancelBtn.addEventListener('click', () => {
@@ -203,6 +205,12 @@
             fileInput.addEventListener('change', function () {
                 const file = this.files && this.files[0];
                 if (!file) return;
+                const pErr = pv && pv.photoError(file);
+                if (pErr) {
+                    if (msg) { msg.textContent = pErr; msg.style.color = '#e74c3c'; }
+                    this.value = '';
+                    return;
+                }
                 const formData = new FormData();
                 formData.append('profile_image', file);
                 if (msg) { msg.textContent = 'Uploading photo...'; msg.style.color = '#6b7280'; }

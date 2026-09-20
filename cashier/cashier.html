@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
-    <link rel="stylesheet" href="/assets/theme.css?v=palette-w2">
+    <link rel="stylesheet" href="/assets/theme.css?v=profile-land3">
     <link rel="stylesheet" href="/cashier/css/cashier.css?v=palette1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -530,7 +530,7 @@
     <div class="customer-profile-header">
         <div>
             <h2>My Profile</h2>
-            <p>Manage your information and login password in one place.</p>
+            <p>Personal details on the left. Password stays on its own card.</p>
         </div>
     </div>
 
@@ -611,16 +611,16 @@
             <form id="cashierPasswordForm">
                 <label>
                     <span>Current Password</span>
-                    <input type="password" id="current_password" autocomplete="current-password">
+                    <input type="password" id="current_password" autocomplete="current-password" required>
                 </label>
                 <label>
                     <span>New Password</span>
-                    <input type="password" id="new_password" autocomplete="new-password" placeholder="8+ characters, upper, lower, number, symbol">
+                    <input type="password" id="new_password" autocomplete="new-password" placeholder="8+ characters, upper, lower, number, symbol" required>
                 </label>
                 <div id="pwHints" class="pw-hints"></div>
                 <label>
                     <span>Confirm New Password</span>
-                    <input type="password" id="confirm_password" autocomplete="new-password">
+                    <input type="password" id="confirm_password" autocomplete="new-password" required>
                 </label>
                 <button type="submit" id="changePasswordBtn" class="profile-btn profile-btn-danger"><i class="fas fa-key"></i> Update Password</button>
                 <p id="password-message" class="profile-form-msg" aria-live="polite"></p>
@@ -677,7 +677,7 @@
 </div>
 
 
-<script src="/assets/profile-validate.js?v=pv3"></script>
+<script src="/assets/profile-validate.js?v=pv4"></script>
 <script src="/cashier/js/cashier-boot.js?v=photo-db1"></script>
 <script>window.SEGMENTATION_MANAGE = false;</script>
 <script src="/shared/js/segmentation.js?v=seg2"></script>
@@ -2909,6 +2909,7 @@ document.getElementById('searchInput').addEventListener('input', function() {
   if (pv) {
       pv.bindNameCaps(document.getElementById("profile-page"));
       pv.bindPhoneDigits(document.getElementById("phone_number"));
+      pv.bindLiveFields(document.getElementById("profile-page"));
   }
 
   const cEditBtn = document.getElementById("profile_editBtn");
@@ -3045,6 +3046,13 @@ document.getElementById('searchInput').addEventListener('input', function() {
   document.getElementById("profile_avatar_input").addEventListener("change", function () {
       const file = this.files[0];
       if (!file) return;
+      const pErr = pv && pv.photoError(file);
+      if (pErr) {
+          const msg = document.getElementById("message");
+          if (msg) { msg.style.color = "#e74c3c"; msg.textContent = pErr; }
+          this.value = "";
+          return;
+      }
 
       const formData = new FormData();
       formData.append("profile_image", file);
