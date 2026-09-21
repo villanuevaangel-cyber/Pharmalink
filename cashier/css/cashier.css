@@ -52,7 +52,7 @@
 }
 #dashboard-page .cs-dash-toolbar input[type="date"]{
     width:100% !important; min-width:148px; height:40px; padding:0 10px;
-    border:1px solid #d1d5db; border-radius:8px; box-sizing:border-box;
+    border:1px solid #FFE3B3; border-radius:8px; box-sizing:border-box;
 }
 #dashboard-page #applyFilterBtn{
     width:auto !important; margin:0 !important; height:40px;
@@ -93,7 +93,7 @@
 #dashboard-page .table-card table{ width:100%; border-collapse:collapse; }
 #dashboard-page .table-card th{
     text-align:left; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
-    color:#6b7280; padding:8px 6px; border-bottom:1px solid #FFE3B3;
+    color:#4BAA8B; padding:8px 6px; border-bottom:1px solid #FFE3B3;
 }
 #dashboard-page .table-card td{
     padding:10px 6px; border-bottom:1px solid #f3f4f6; font-size:.88rem;
@@ -106,7 +106,7 @@
     box-shadow:none !important;
 }
 #dashboard-page .cs-empty{
-    text-align:center; color:#6b7280; padding:22px 8px;
+    text-align:center; color:#4BAA8B; padding:22px 8px;
 }
 @media (max-width: 900px){
     #dashboard-page .cs-dash-stats{ grid-template-columns:1fr 1fr; }
@@ -151,13 +151,13 @@
     margin:0 0 12px; color:#1E3A34; font-size:1.05rem;
 }
 #pos-page .filter-row{
-    background:#f8fafc; border:1px solid #FFE3B3; border-radius:12px;
+    background:#ffffff; border:1px solid #FFE3B3; border-radius:12px;
     padding:10px; margin-bottom:14px;
 }
 #pos-page .filter-row input[type="text"],
 #pos-page .filter-row select{
     height:40px; min-width:140px; flex:1;
-    border:1px solid #d1d5db; border-radius:8px; padding:0 10px;
+    border:1px solid #FFE3B3; border-radius:8px; padding:0 10px;
 }
 #pos-page #scanBarcodeBtn{
     width:auto !important; margin:0 !important; height:40px;
@@ -167,7 +167,7 @@
 #pos-page .pos-inventory-table{ width:100%; border-collapse:collapse; }
 #pos-page .pos-inventory-table th{
     text-align:left; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
-    color:#6b7280; padding:8px 6px; border-bottom:1px solid #FFE3B3; background:#f8fafc;
+    color:#4BAA8B; padding:8px 6px; border-bottom:1px solid #FFE3B3; background:#ffffff;
     position:sticky; top:0;
 }
 #pos-page .pos-inventory-table td{
@@ -191,14 +191,14 @@
 #pos-page #customer-inline{
     display:flex; align-items:center; justify-content:space-between;
     padding:8px 10px; margin-bottom:10px;
-    background:#f8fafc; border:1px solid #FFE3B3; border-radius:12px;
+    background:#ffffff; border:1px solid #FFE3B3; border-radius:12px;
     color:#4b5563; font-size:.92rem;
 }
 #pos-page #selectedCustomer{ color:#1E3A34; }
 #pos-page #selectCustomerBtn{
     width:34px !important; height:34px; margin:0 !important; padding:0 !important;
-    border-radius:50% !important; background:#fff !important; color:#374151 !important;
-    border:1px solid #d1d5db !important; box-shadow:none !important;
+    border-radius:50% !important; background:#fff !important; color:#1E3A34 !important;
+    border:1px solid #FFE3B3 !important; box-shadow:none !important;
     justify-content:center;
 }
 #pos-page #loyaltyPointsBox{
@@ -220,7 +220,7 @@
 #pos-page .pos-modal-card h4{ margin:0 0 10px; color:#1E3A34; }
 #pos-page #customerSearch{
     width:100%; height:40px; padding:0 10px; margin-bottom:10px;
-    border:1px solid #d1d5db; border-radius:8px;
+    border:1px solid #FFE3B3; border-radius:8px;
 }
 #pos-page #customerList{ list-style:none; padding:0; margin:0; max-height:250px; overflow:auto; }
 #pos-page #customerList li{
@@ -229,13 +229,13 @@
 #pos-page #customerList li:hover{ background:#FFE3B3; }
 #pos-page #closeModal{
     width:100% !important; margin-top:12px !important;
-    background:#6b7280 !important; box-shadow:none !important;
+    background:#4BAA8B !important; box-shadow:none !important;
 }
 #pos-page .pos-cart-table{ width:100%; border-collapse:collapse; margin-bottom:12px; }
 #pos-page .pos-cart-table td{ padding:8px 4px; border-bottom:1px solid #f3f4f6; font-size:.82rem; vertical-align:middle; }
 #pos-page .pos-qty{
     width:64px; height:32px; text-align:center;
-    border:1px solid #d1d5db; border-radius:8px;
+    border:1px solid #FFE3B3; border-radius:8px;
 }
 #pos-page .pos-remove{
     width:auto !important; margin:0 !important;
@@ -247,7 +247,7 @@
 #pos-page .summary input[type="text"],
 #pos-page .summary select{
     width:100%; height:40px; padding:0 10px; margin-bottom:6px;
-    border:1px solid #d1d5db; border-radius:8px; box-sizing:border-box;
+    border:1px solid #FFE3B3; border-radius:8px; box-sizing:border-box;
 }
 #pos-page .pos-total-row{
     display:flex; justify-content:space-between; align-items:center;
@@ -268,14 +268,14 @@
 #pos-page .pos-discount-line{ color:#dc2626; font-size:.88rem; margin:4px 0; }
 #pos-page #pointsDiscountRow{ color:#1E3A34; font-size:.88rem; margin:4px 0; }
 #pos-page .pos-pay-qr-box{
-    text-align:center; background:#f8fafc; border:1px solid #e5e7eb;
+    text-align:center; background:#ffffff; border:1px solid #FFE3B3;
     border-radius:12px; padding:12px 10px 10px; margin:0 0 10px;
 }
 #pos-page #posPayQr{
     display:flex; justify-content:center; min-height:160px; margin:0 auto 8px;
 }
 #pos-page #posPayQr img, #pos-page #posPayQr canvas{ width:160px; height:160px; }
-#pos-page .pos-pay-qr-title{ margin:0; font-size:.85rem; color:#374151; font-weight:600; }
+#pos-page .pos-pay-qr-title{ margin:0; font-size:.85rem; color:#1E3A34; font-weight:600; }
 #pos-page .pos-pay-qr-amt{ margin:4px 0 0; font-size:1.15rem; font-weight:800; color:#1E3A34; }
 #pos-page #regenPaymentRefBtn{
     width:40px !important; margin:0 !important; height:40px; padding:0 !important;
@@ -286,8 +286,8 @@
     width:40px !important; margin:0 !important; height:40px; padding:0 !important;
     background:#4BAA8B !important; box-shadow:none !important; justify-content:center;
 }
-#pos-page .pos-ewallet-hint{ font-size:.8rem; color:#6b7280; margin:8px 0; }
-#pos-page .pos-ewallet-hint span{ font-weight:400; color:#6b7280; }
+#pos-page .pos-ewallet-hint{ font-size:.8rem; color:#4BAA8B; margin:8px 0; }
+#pos-page .pos-ewallet-hint span{ font-weight:400; color:#4BAA8B; }
 #pos-page #confirmSale{
     width:100% !important; margin-top:10px !important; height:44px;
     background:#4BAA8B !important; box-shadow:none !important; justify-content:center;
@@ -301,12 +301,12 @@
 }
 #pos-page .pos-scan-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
 #pos-page .pos-scan-head h3{ margin:0; color:#1E3A34; }
-#pos-page #closeBarcodeScannerModal{ cursor:pointer; font-size:22px; line-height:1; color:#6b7280; }
+#pos-page #closeBarcodeScannerModal{ cursor:pointer; font-size:22px; line-height:1; color:#4BAA8B; }
 #pos-page #barcodeScannerVideo{ width:100%; border-radius:8px; background:#000; }
-#pos-page #barcodeScannerStatus{ color:#6b7280; font-size:14px; margin-top:10px; }
+#pos-page #barcodeScannerStatus{ color:#4BAA8B; font-size:14px; margin-top:10px; }
 #pos-page #barcodeModalManualInput{
     width:100%; margin-top:8px; height:40px; padding:0 10px;
-    border:1px solid #d1d5db; border-radius:8px; box-sizing:border-box;
+    border:1px solid #FFE3B3; border-radius:8px; box-sizing:border-box;
 }
 #pos-page .btn-review, #pos-page .btn-complete{
     width:auto !important; margin:0 !important;
@@ -333,7 +333,7 @@
     display:block; font-size:1.25rem; color:#1E3A34; line-height:1.15;
 }
 #customer-segmentation-page .cs-seg-stat span{
-    color:#6b7280; font-size:.78rem; font-weight:600;
+    color:#4BAA8B; font-size:.78rem; font-weight:600;
 }
 #customer-segmentation-page .cs-seg-icon{
     width:46px; height:46px; border-radius:14px; flex-shrink:0;
@@ -359,11 +359,11 @@
     color:#9ca3af; font-weight:500; font-size:.82rem;
 }
 #customer-segmentation-page #segmentEngineBadge{
-    margin-top:6px; font-size:12.5px; color:#64748b;
+    margin-top:6px; font-size:12.5px; color:#4BAA8B;
 }
 #customer-segmentation-page .ph-select-wrap{
     display:flex; gap:10px; align-items:center;
-    background:#f8fafc; padding:6px 6px 6px 14px; border-radius:12px;
+    background:#ffffff; padding:6px 6px 6px 14px; border-radius:12px;
     border:1px solid #FFE3B3;
 }
 #customer-segmentation-page .ph-select-wrap label{
@@ -371,7 +371,7 @@
 }
 #customer-segmentation-page #segmentCountTop{
     height:36px; padding:0 10px; border-radius:8px;
-    border:1px solid #d1d5db; background:#fff; font-weight:700; color:#1E3A34;
+    border:1px solid #FFE3B3; background:#fff; font-weight:700; color:#1E3A34;
 }
 #customer-segmentation-page .cs-seg-split{
     display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);
@@ -397,7 +397,7 @@
 #customer-segmentation-page .table-wrap{ overflow-x:auto; }
 #customer-segmentation-page .cs-seg-table{ width:100%; border-collapse:collapse; font-size:14px; }
 #customer-segmentation-page .cs-seg-table th{
-    text-align:left; padding:10px 12px; color:#6b7280; font-size:11px;
+    text-align:left; padding:10px 12px; color:#4BAA8B; font-size:11px;
     font-weight:700; text-transform:uppercase; letter-spacing:.04em;
     border-bottom:1px solid #FFE3B3;
 }
@@ -433,14 +433,14 @@
     background:#f1f5f9 !important; color:#475569 !important; box-shadow:none !important;
     border-radius:8px !important; justify-content:center;
 }
-#addPointsModalBackdrop .cs-seg-modal-sub{ color:#64748b; margin:0 0 16px; font-size:13px; }
+#addPointsModalBackdrop .cs-seg-modal-sub{ color:#4BAA8B; margin:0 0 16px; font-size:13px; }
 #addPointsModalBackdrop label{
     display:block; font-size:12px; font-weight:700; color:#4b5563; margin:0 0 6px;
 }
 #addPointsModalBackdrop select,
 #addPointsModalBackdrop input[type="number"]{
     width:100%; height:40px; padding:0 12px; margin-bottom:14px;
-    border:1px solid #d1d5db; border-radius:8px; box-sizing:border-box; background:#fff;
+    border:1px solid #FFE3B3; border-radius:8px; box-sizing:border-box; background:#fff;
 }
 #addPointsModalBackdrop #addPointsModalMessage{
     min-height:18px; margin:0 0 12px; font-weight:600; font-size:13px;
@@ -471,11 +471,11 @@
 }
 #sales-report-page .sr-toolbar label{
     display:flex; flex-direction:column; gap:6px;
-    font-size:12px; font-weight:700; color:#6b7280;
+    font-size:12px; font-weight:700; color:#4BAA8B;
 }
 #sales-report-page .sr-toolbar input,
 #sales-report-page .sr-toolbar select{
-    height:40px; padding:0 10px; border:1px solid #d1d5db; border-radius:8px; background:#fff;
+    height:40px; padding:0 10px; border:1px solid #FFE3B3; border-radius:8px; background:#fff;
 }
 #sales-report-page .sr-toolbar button{
     height:40px; padding:0 14px; margin:0 !important; width:auto !important;
@@ -492,7 +492,7 @@
 #sales-report-page table{ width:100%; border-collapse:collapse; }
 #sales-report-page th{
     text-align:left; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
-    color:#6b7280; padding:8px 6px; border-bottom:1px solid #FFE3B3;
+    color:#4BAA8B; padding:8px 6px; border-bottom:1px solid #FFE3B3;
 }
 #sales-report-page td{
     padding:10px 6px; border-bottom:1px solid #f3f4f6; font-size:.88rem; vertical-align:middle;
@@ -518,8 +518,8 @@
 }
 .sr-modal-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
 .sr-modal-head h3{ margin:0; color:#1E3A34; }
-.sr-modal-head button{ background:none; border:none; font-size:22px; cursor:pointer; color:#6b7280; }
-.sr-modal-body p{ margin:4px 0; color:#374151; font-size:.9rem; }
+.sr-modal-head button{ background:none; border:none; font-size:22px; cursor:pointer; color:#4BAA8B; }
+.sr-modal-body p{ margin:4px 0; color:#1E3A34; font-size:.9rem; }
 .sr-modal-body table{ width:100%; border-collapse:collapse; margin-top:10px; }
 .sr-modal-body th, .sr-modal-body td{ padding:8px 6px; border-bottom:1px solid #f3f4f6; text-align:left; font-size:.85rem; }
 @media (max-width: 980px){

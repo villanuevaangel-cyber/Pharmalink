@@ -15,7 +15,7 @@
     display:block; font-size:1.25rem; color:#1E3A34; line-height:1.15;
 }
 #customer-segmentation-page .cs-seg-stat span{
-    color:#6b7280; font-size:.78rem; font-weight:600;
+    color:#4BAA8B; font-size:.78rem; font-weight:600;
 }
 #customer-segmentation-page .cs-seg-icon{
     width:46px; height:46px; border-radius:14px; flex-shrink:0;
@@ -41,11 +41,11 @@
     color:#9ca3af; font-weight:500; font-size:.82rem;
 }
 #customer-segmentation-page #segmentEngineBadge{
-    margin-top:6px; font-size:12.5px; color:#64748b;
+    margin-top:6px; font-size:12.5px; color:#4BAA8B;
 }
 #customer-segmentation-page .ph-select-wrap{
     display:flex; gap:10px; align-items:center;
-    background:#f8fafc; padding:6px 6px 6px 14px; border-radius:12px;
+    background:#ffffff; padding:6px 6px 6px 14px; border-radius:12px;
     border:1px solid #FFE3B3;
 }
 #customer-segmentation-page .ph-select-wrap label{
@@ -53,7 +53,7 @@
 }
 #customer-segmentation-page #segmentCountTop{
     height:36px; padding:0 10px; border-radius:8px;
-    border:1px solid #d1d5db; background:#fff; font-weight:700; color:#1E3A34;
+    border:1px solid #FFE3B3; background:#fff; font-weight:700; color:#1E3A34;
 }
 #customer-segmentation-page .cs-seg-split{
     display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);
@@ -79,7 +79,7 @@
 #customer-segmentation-page .table-wrap{ overflow-x:auto; }
 #customer-segmentation-page .cs-seg-table{ width:100%; border-collapse:collapse; font-size:14px; }
 #customer-segmentation-page .cs-seg-table th{
-    text-align:left; padding:10px 12px; color:#6b7280; font-size:11px;
+    text-align:left; padding:10px 12px; color:#4BAA8B; font-size:11px;
     font-weight:700; text-transform:uppercase; letter-spacing:.04em;
     border-bottom:1px solid #FFE3B3;
 }
@@ -101,7 +101,7 @@
     background:#FFE3B3; color:#3730a3; font-size:11px; font-weight:700; vertical-align:middle;
 }
 #customer-segmentation-page .cs-seg-locked{
-    background:#f8fafc; border:1px solid #FFE3B3; border-radius:12px;
+    background:#ffffff; border:1px solid #FFE3B3; border-radius:12px;
     padding:8px 14px; font-size:13px; font-weight:700; color:#1E3A34;
 }
 #addPointsModalBackdrop.cs-seg-modal,
@@ -133,14 +133,14 @@
     border-radius:8px !important; justify-content:center;
 }
 #addPointsModalBackdrop .cs-seg-modal-sub,
-#segMembersModalBackdrop .cs-seg-modal-sub{ color:#64748b; margin:0 0 16px; font-size:13px; }
+#segMembersModalBackdrop .cs-seg-modal-sub{ color:#4BAA8B; margin:0 0 16px; font-size:13px; }
 #addPointsModalBackdrop label{
     display:block; font-size:12px; font-weight:700; color:#4b5563; margin:0 0 6px;
 }
 #addPointsModalBackdrop select,
 #addPointsModalBackdrop input[type="number"]{
     width:100%; height:40px; padding:0 12px; margin-bottom:14px;
-    border:1px solid #d1d5db; border-radius:8px; box-sizing:border-box; background:#fff;
+    border:1px solid #FFE3B3; border-radius:8px; box-sizing:border-box; background:#fff;
 }
 #addPointsModalBackdrop #addPointsModalMessage{
     min-height:18px; margin:0 0 12px; font-weight:600; font-size:13px;
@@ -156,7 +156,7 @@
 #segMembersModalBackdrop .cs-seg-members-wrap{ max-height:360px; overflow:auto; margin-bottom:12px; }
 #segMembersModalBackdrop .cs-seg-members-table{ width:100%; border-collapse:collapse; font-size:13px; }
 #segMembersModalBackdrop .cs-seg-members-table th{
-    text-align:left; padding:8px 10px; color:#6b7280; font-size:11px; text-transform:uppercase;
+    text-align:left; padding:8px 10px; color:#4BAA8B; font-size:11px; text-transform:uppercase;
     border-bottom:1px solid #FFE3B3;
 }
 #segMembersModalBackdrop .cs-seg-members-table td{
