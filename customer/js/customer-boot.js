@@ -40,7 +40,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=orders-all1';
+        script.src = '/customer/js/customer.js?v=home-ui1';
         document.body.appendChild(script);
     });
 

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink - Customer Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=palette-w4">
-    <link rel="stylesheet" href="/customer/css/customer.css?v=palette-w4">
+    <link rel="stylesheet" href="/customer/css/customer.css?v=home-ui1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -47,46 +47,38 @@
 <section id="home" class="active">
 <div class="dash-header">
     <div>
-        <h2>Welcome back, <span id="homeFirstName">Customer</span>!</h2>
-        <p class="subtitle">A snapshot of your orders, items, and recent transactions.</p>
+        <h2>Home</h2>
+        <p class="subtitle">Hi, <span id="homeFirstName">Customer</span> · <span id="live-clock">-</span></p>
     </div>
+    <div id="dashboard-datetime" class="dash-stat dash-stat-time" hidden></div>
 </div>
 <div class="dash-stats">
     <div class="dash-stat">
-        <div class="dash-stat-icon dash-stat-blue"><i class="fas fa-receipt"></i></div>
-        <div>
-            <span>Completed orders</span>
-            <strong id="homeStatOrders">0</strong>
-        </div>
+        <span>Orders</span>
+        <strong id="homeStatOrders">0</strong>
     </div>
     <div class="dash-stat">
-        <div class="dash-stat-icon dash-stat-green"><i class="fas fa-money-bill-wave"></i></div>
-        <div>
-            <span>Total spent</span>
-            <strong id="homeStatSpent">₱0.00</strong>
-        </div>
+        <span>Spent</span>
+        <strong id="homeStatSpent">₱0.00</strong>
     </div>
-    <div class="dash-stat">
-        <div class="dash-stat-icon dash-stat-amber"><i class="fas fa-star"></i></div>
-        <div>
-            <span>Loyalty points</span>
-            <strong id="homeStatPoints">0</strong>
-        </div>
+    <div class="dash-stat dash-stat-points">
+        <span>Points</span>
+        <strong id="homeStatPoints">0</strong>
     </div>
-    <div id="dashboard-datetime" class="dash-stat dash-stat-time">
-        <div class="dash-stat-icon dash-stat-slate"><i class="fas fa-clock"></i></div>
-        <div>
-            <span>Today</span>
-            <strong id="live-clock">-</strong>
-        </div>
+</div>
+<div class="quick-actions">
+    <div class="dash-qa-list">
+        <button type="button" class="quick-action-btn dash-qa-shop" onclick="document.querySelector('.nav-item[data-target=products]').click()"><i class="fas fa-capsules"></i><span>Shop Now</span></button>
+        <button type="button" class="quick-action-btn dash-qa-orders" onclick="document.querySelector('.nav-item[data-target=orders]').click()"><i class="fas fa-receipt"></i><span>View Orders</span></button>
+        <button type="button" class="quick-action-btn dash-qa-rx" onclick="document.querySelector('.nav-item[data-target=prescription]').click()"><i class="fas fa-file-prescription"></i><span>Prescription</span></button>
+        <button type="button" class="quick-action-btn dash-qa-profile" onclick="document.querySelector('.nav-item[data-target=profile]').click()"><i class="fas fa-user"></i><span>My Profile</span></button>
     </div>
 </div>
 <div class="dash-body">
     <div class="dash-recent">
         <div class="dash-recent-head">
             <div>
-                <h3>Items you've ordered</h3>
-                <p>Most purchased medicines from your account</p>
+                <h3>Your items</h3>
             </div>
         </div>
         <div class="dash-table-wrap">
@@ -105,26 +97,10 @@
             </table>
         </div>
     </div>
-    <div class="quick-actions">
-        <div class="dash-recent-head">
-            <div>
-                <h3>Quick actions</h3>
-                <p>Go to a page</p>
-            </div>
-        </div>
-        <div class="dash-qa-list">
-            <button type="button" class="quick-action-btn dash-qa-shop" onclick="document.querySelector('.nav-item[data-target=products]').click()"><i class="fas fa-capsules"></i><span>Shop Now</span></button>
-            <button type="button" class="quick-action-btn dash-qa-orders" onclick="document.querySelector('.nav-item[data-target=orders]').click()"><i class="fas fa-receipt"></i><span>View Orders</span></button>
-            <button type="button" class="quick-action-btn dash-qa-rx" onclick="document.querySelector('.nav-item[data-target=prescription]').click()"><i class="fas fa-file-prescription"></i><span>Prescription</span></button>
-            <button type="button" class="quick-action-btn dash-qa-profile" onclick="document.querySelector('.nav-item[data-target=profile]').click()"><i class="fas fa-user"></i><span>My Profile</span></button>
-        </div>
-    </div>
-</div>
-<div class="dash-logs">
+    <div class="dash-logs">
     <div class="dash-recent-head">
         <div>
-            <h3>Transaction logs</h3>
-            <p>Online orders and walk-in sales</p>
+            <h3>Transactions</h3>
         </div>
         <a href="javascript:void(0)" onclick="document.querySelector('.nav-item[data-target=orders]').click()">View all</a>
     </div>
@@ -145,6 +121,7 @@
                 <tr><td colspan="7" class="dash-empty-cell">Loading...</td></tr>
             </tbody>
         </table>
+    </div>
     </div>
 </div>
 </section>
@@ -412,7 +389,7 @@
     </script>
     <script src="/assets/theme.js?v=spa-hash1"></script>
     <script src="/assets/profile-validate.js?v=pv4"></script>
-    <script src="/customer/js/customer-boot.js?v=photo-db3"></script>
+    <script src="/customer/js/customer-boot.js?v=home-ui1"></script>
     <script src="/assets/activity-clicks.js?v=click1"></script>
 </body>
 </html>
