@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=palette-w4">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=dash-org2">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=catalog-btn1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -1262,7 +1262,7 @@
                     <h3>Drug Catalog</h3>
                     <p>Search definitions, then print a barcode, edit, or archive. Stock lots stay on Inventory.</p>
                 </div>
-                <button type="button" class="um-add-btn staff add-btn secondary" id="addDrugMasterBtn"><i class="fa fa-flask"></i> Define New Drug</button>
+                <button type="button" class="um-add-btn" id="addDrugMasterBtn"><i class="fas fa-plus"></i> Define New Drug</button>
             </div>
             <div class="um-toolbar">
                 <div class="um-search">
@@ -2411,11 +2411,11 @@
             const daysText = r.days_of_stock === null ? '-' : r.days_of_stock + ' days';
             let actionBadge;
             if (r.action === 'increase') {
-                actionBadge = `<span style="background:#fee2e2;color:#dc2626;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">↑ Order +${r.suggested_qty}</span>`;
+                actionBadge = `<span class="reorder-action-badge is-up">Order +${r.suggested_qty}</span>`;
             } else if (r.action === 'decrease') {
-                actionBadge = `<span style="background:#fef3c7;color:#1E3A34;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">↓ Reduce${r.suggested_reduce_qty ? ' ~' + r.suggested_reduce_qty : ''} / pause</span>`;
+                actionBadge = `<span class="reorder-action-badge is-down">Reduce${r.suggested_reduce_qty ? ' ~' + r.suggested_reduce_qty : ''} / pause</span>`;
             } else {
-                actionBadge = `<span style="background:#FFE3B3;color:#4BAA8B;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">✓ Sufficient</span>`;
+                actionBadge = `<span class="reorder-action-badge is-ok">Sufficient</span>`;
             }
             // Only "needs reorder" rows are selectable for a draft PO -
             // overstocked/sufficient rows have nothing to order.
@@ -2435,7 +2435,7 @@
                 <td>${r.minimum_stock}</td>
                 <td>${r.avg_daily_sales}</td>
                 <td>${daysText}</td>
-                <td>${actionBadge}</td>
+                <td class="reorder-action-cell">${actionBadge}</td>
                 <td style="font-size:13px;">${supplierText}</td>
                 <td style="color:#6b7280;font-size:13px;">${r.reasoning}</td>
             </tr>`;

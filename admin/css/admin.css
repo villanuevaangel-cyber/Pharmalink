@@ -563,3 +563,25 @@
 @media (max-width: 700px){
   #dashboard .ad-dash-stats{ grid-template-columns:1fr 1fr; }
 }
+
+#reorderSuggestionsTable{ min-width:1080px; }
+#reorderSuggestionsTable .reorder-action-cell{
+  white-space:nowrap; vertical-align:middle;
+}
+#reorderSuggestionsTable .reorder-action-badge{
+  display:inline-block; white-space:nowrap; padding:4px 10px; border-radius:12px;
+  font-size:12px; font-weight:700; line-height:1.2;
+}
+#reorderSuggestionsTable .reorder-action-badge.is-up{ background:#fee2e2; color:#dc2626; }
+#reorderSuggestionsTable .reorder-action-badge.is-down{ background:#FFF7E6; color:#1E3A34; }
+#reorderSuggestionsTable .reorder-action-badge.is-ok{ background:#FFE3B3; color:#1E3A34; }
+
+/* Drug Catalog header CTA — teal + white so the label stays readable */
+#addDrugMasterBtn{
+  background:#4BAA8B !important;
+  color:#fff !important;
+  box-shadow:none !important;
+  width:auto !important;
+  flex-shrink:0;
+  white-space:nowrap;
+}
