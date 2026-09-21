@@ -192,6 +192,44 @@
     });
   }
 
+  function readProfile(root) {
+    function pick(name) {
+      var el = root.querySelector("#" + name + ", [name='" + name + "']");
+      return el ? el.value : "";
+    }
+    return {
+      first_name: titleCaseName(pick("first_name")),
+      middle_name: titleCaseName(pick("middle_name")),
+      last_name: titleCaseName(pick("last_name")),
+      email: String(pick("email") || "").trim(),
+      phone_number: e164Phone(pick("phone_number")) || pick("phone_number"),
+      address: String(pick("address") || "").trim()
+    };
+  }
+
+  function bindLiveFields(root) {
+    if (!root) return;
+    root.querySelectorAll(".p-input").forEach(function (el) {
+      function check() {
+        if (el.disabled) return;
+        paintFieldErrors(root, fieldErrors(readProfile(root)));
+      }
+      el.addEventListener("blur", check);
+      el.addEventListener("input", function () {
+        if (el.classList.contains("is-invalid")) check();
+      });
+    });
+  }
+
+  function photoError(file) {
+    if (!file) return "Choose an image.";
+    var typeOk = /image\/(png|jpeg|jpg|webp|gif)/i.test(file.type || "");
+    var nameOk = /\.(png|jpe?g|webp|gif)$/i.test(file.name || "");
+    if (!typeOk && !nameOk) return "Only JPG, PNG, WEBP, or GIF images are allowed.";
+    if (file.size > 3 * 1024 * 1024) return "Image must be under 3MB.";
+    return "";
+  }
+
   w.phProfileValidate = {
     profileError: profileError,
     fieldErrors: fieldErrors,
@@ -203,6 +241,8 @@
     bindHints: bindHints,
     bindNameCaps: bindNameCaps,
     bindPhoneDigits: bindPhoneDigits,
+    bindLiveFields: bindLiveFields,
+    photoError: photoError,
     cleanPhone: cleanPhone,
     titleCaseName: titleCaseName,
     nationalPhone: nationalPhone,
