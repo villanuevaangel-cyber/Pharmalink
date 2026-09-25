@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink - Customer Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=palette-w4">
-    <link rel="stylesheet" href="/customer/css/customer.css?v=home-ui1">
+    <link rel="stylesheet" href="/customer/css/customer.css?v=rx-icon1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -197,10 +197,50 @@
 <div class="rx-history">
     <div class="rx-history-head">
         <h3>Scan History</h3>
-        <p>Extracted text, matched items, and prices. Add to cart if the medicine is in stock.</p>
+        <p>Filter by date, view the uploaded Rx, and add in-stock matches to your cart.</p>
     </div>
-    <div id="prescriptionHistoryBody" class="rx-history-list">
-        <div class="rx-empty">Loading...</div>
+    <div class="rx-filters">
+        <label>From
+            <input type="date" id="rxFromDate">
+        </label>
+        <label>To
+            <input type="date" id="rxToDate">
+        </label>
+        <button type="button" id="rxApplyFilter" class="rx-filter-btn"><i class="fas fa-filter"></i> Apply</button>
+    </div>
+    <div class="rx-table-wrap">
+        <table class="rx-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>File</th>
+                    <th>Availability</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="prescriptionHistoryBody">
+                <tr><td colspan="4" class="rx-empty-cell">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<div id="rxViewOverlay" class="rx-modal" style="display:none;">
+    <div class="rx-modal-card rx-view-card" role="dialog" aria-modal="true" aria-labelledby="rxViewTitle">
+        <div class="rx-modal-head">
+            <h3 id="rxViewTitle">Prescription</h3>
+            <button id="rxViewClose" type="button" class="rx-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <p id="rxViewMeta" class="rx-modal-file"></p>
+        <div id="rxViewMedia" class="rx-view-media"></div>
+    </div>
+</div>
+<div id="rxItemsOverlay" class="rx-modal" style="display:none;">
+    <div class="rx-modal-card" role="dialog" aria-modal="true" aria-labelledby="rxItemsTitle">
+        <div class="rx-modal-head">
+            <h3 id="rxItemsTitle">Matched medicines</h3>
+            <button id="rxItemsClose" type="button" class="rx-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div id="rxItemsBody"></div>
     </div>
 </div>
 <div id="rxCameraOverlay" class="rx-modal" style="display:none;">
@@ -387,7 +427,7 @@
     </script>
     <script src="/assets/theme.js?v=spa-hash1"></script>
     <script src="/assets/profile-validate.js?v=pv4"></script>
-    <script src="/customer/js/customer-boot.js?v=cash-ewallet1"></script>
+    <script src="/customer/js/customer-boot.js?v=rx-icon1"></script>
     <script src="/assets/activity-clicks.js?v=click1"></script>
 </body>
 </html>

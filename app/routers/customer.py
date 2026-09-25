@@ -715,6 +715,10 @@ def prescriptions(request: Request):
                 filepath = ROOT / "uploads" / "prescriptions" / filename
                 ext = filepath.suffix.lower().lstrip(".")
                 size = filepath.stat().st_size if filepath.is_file() else None
+                created = item.get("created_at")
+                item["created_at_label"] = _fmt_dt(created, "%b %d, %Y %I:%M %p")
+                item["created_at_day"] = _fmt_dt(created, "%Y-%m-%d")
+                item["created_at"] = _fmt_dt(created, "%Y-%m-%d %H:%M:%S")
                 item["file_type"] = ext.upper() if ext else ""
                 item["file_size"] = size
                 item["file_available"] = bool(filepath.is_file())
@@ -748,7 +752,12 @@ def prescription_file(request: Request, prescription_id: int):
     if not filepath.is_file():
         return JSONResponse({"success": False, "message": "File is no longer available."}, status_code=404)
     media = _RX_MEDIA.get(filepath.suffix.lower(), "application/octet-stream")
-    return FileResponse(filepath, media_type=media, filename=filename)
+    return FileResponse(
+        filepath,
+        media_type=media,
+        filename=filename,
+        content_disposition_type="inline",
+    )
 
 
 def _ocr_image_for_engine(image_path: Path) -> Path:
