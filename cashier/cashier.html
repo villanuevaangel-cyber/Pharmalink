@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
     <link rel="stylesheet" href="/assets/theme.css?v=palette-w4">
-    <link rel="stylesheet" href="/cashier/css/cashier.css?v=palette-w4">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=ewallet-qr-modal">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -307,24 +307,30 @@
                     <p class="pos-sum-line">Change: <span id="change">₱0.00</span></p>
                 </div>
                 <div id="ewalletPaymentFields" style="display:none;">
-                    <div class="pos-pay-qr-box">
-                        <div id="posPayQr" aria-label="Customer payment QR code"></div>
-                        <p class="pos-pay-qr-title">I-scan sa GCash o Maya app ang <span id="ewalletMethodLabel">GCash</span> QR Ph</p>
-                        <p class="pos-pay-qr-amt">₱<span id="ewalletTotalDisplay">0.00</span></p>
-                        <p id="ewalletPayStatus" class="pos-ewallet-hint">Creating a live PayMongo QR...</p>
-                    </div>
-                    <label for="paymentReferenceInput">PayMongo reference</label>
-                    <div class="pos-ref-row">
-                        <input type="text" id="paymentReferenceInput" placeholder="Filled when the customer pays" readonly>
-                        <button type="button" id="regenPaymentRefBtn" title="Create a new PayMongo QR"><i class="fas fa-rotate"></i></button>
-                    </div>
-                    <p class="pos-ewallet-hint">I-scan ito sa GCash o Maya app (QR Ph). Hindi website link ito, kaya valid siya sa GCash scanner.</p>
+                    <p class="pos-ewallet-hint">Click Confirm Sale. A QR appears with this total already inside it. When the customer scans it in GCash or Maya, the amount is filled in.</p>
+                    <p class="pos-pay-qr-amt">₱<span id="ewalletTotalDisplay">0.00</span></p>
                 </div>
 
                 <button type="button" id="confirmSale"><i class="fas fa-check"></i> Confirm Sale</button>
             </div>
         </div>
         </div>
+
+<div id="ewalletQrModal" class="modal">
+    <div class="pos-scan-card">
+        <div class="pos-scan-head">
+            <h3>Pay with <span id="ewalletMethodLabel">GCash</span></h3>
+            <span id="closeEwalletQrModal">&times;</span>
+        </div>
+        <div class="pos-pay-qr-box">
+            <div id="posPayQr" aria-label="Customer payment QR code"></div>
+            <p class="pos-pay-qr-title">Scan this in the GCash or Maya app. The amount is already included.</p>
+            <p class="pos-pay-qr-amt">₱<span id="ewalletModalTotal">0.00</span></p>
+            <p id="ewalletPayStatus" class="pos-ewallet-hint">Creating the payment QR...</p>
+        </div>
+        <button type="button" id="regenPaymentRefBtn">New QR</button>
+    </div>
+</div>
 
 <div id="barcodeScannerModal" class="modal">
     <div class="pos-scan-card">
@@ -1128,12 +1134,14 @@ function calculateChange() {
     // Only display change if cash is sufficient
     changeDisplay.textContent = '₱' + (change >= 0 ? change.toFixed(2) : '0.00'); 
 
+    const amountText = total.toFixed(2);
     const ewalletTotalDisplay = document.getElementById('ewalletTotalDisplay');
-    if (ewalletTotalDisplay) ewalletTotalDisplay.textContent = total.toFixed(2);
-    if (typeof startPaymongoCheckout === 'function') startPaymongoCheckout(false);
+    if (ewalletTotalDisplay) ewalletTotalDisplay.textContent = amountText;
+    const ewalletModalTotal = document.getElementById('ewalletModalTotal');
+    if (ewalletModalTotal) ewalletModalTotal.textContent = amountText;
 }
 
-let posEwallet = { checkoutId: null, amount: null, method: null, paid: false, pollTimer: null, checkoutUrl: null };
+let posEwallet = { checkoutId: null, amount: null, method: null, paid: false, pollTimer: null, checkoutUrl: null, reference: '', pending: null, submitting: false };
 
 function setEwalletStatus(text, paid) {
     const el = document.getElementById('ewalletPayStatus');
@@ -1160,10 +1168,10 @@ function pollPaymongoCheckout() {
             }
             if (data.paid) {
                 posEwallet.paid = true;
+                posEwallet.reference = data.reference || data.id || '';
                 stopEwalletPoll();
-                const refInput = document.getElementById('paymentReferenceInput');
-                if (refInput) refInput.value = data.reference || data.id;
-                setEwalletStatus('Paid. You can Confirm Sale.', true);
+                setEwalletStatus('Payment received. Saving the sale...', true);
+                finishEwalletSale();
             } else {
                 setEwalletStatus('Waiting for the customer to pay in GCash or Maya...');
             }
@@ -1179,7 +1187,7 @@ function startPaymongoCheckout(forceNew) {
     const method = select.value;
     if (method === 'cash') {
         stopEwalletPoll();
-        posEwallet = { checkoutId: null, amount: null, method: null, paid: false, pollTimer: null, checkoutUrl: null };
+        posEwallet = { checkoutId: null, amount: null, method: null, paid: false, pollTimer: null, checkoutUrl: null, reference: '', pending: null, submitting: false };
         holder.innerHTML = '';
         return;
     }
@@ -1190,10 +1198,15 @@ function startPaymongoCheckout(forceNew) {
         return;
     }
     if (!forceNew && posEwallet.checkoutId && posEwallet.method === method && Math.abs((posEwallet.amount || 0) - amount) < 0.009 && !posEwallet.paid) {
+        if (!posEwallet.pollTimer) {
+            posEwallet.pollTimer = setInterval(pollPaymongoCheckout, 2500);
+            pollPaymongoCheckout();
+        }
         return;
     }
+    const pending = posEwallet.pending;
     stopEwalletPoll();
-    posEwallet = { checkoutId: null, amount, method, paid: false, pollTimer: null, checkoutUrl: null };
+    posEwallet = { checkoutId: null, amount, method, paid: false, pollTimer: null, checkoutUrl: null, reference: '', pending, submitting: false };
     if (refInput) refInput.value = '';
     holder.innerHTML = '';
     setEwalletStatus('Creating a live PayMongo QR...');
@@ -1231,7 +1244,7 @@ function startPaymongoCheckout(forceNew) {
             } else if (data.checkout_url) {
                 holder.innerHTML = '<p class="pos-ewallet-hint"><a href="' + data.checkout_url + '" target="_blank" rel="noopener">Open PayMongo checkout</a></p>';
             }
-            setEwalletStatus('I-scan sa GCash o Maya app. Waiting for payment...');
+            setEwalletStatus('Waiting for the customer to scan and pay...');
             posEwallet.pollTimer = setInterval(pollPaymongoCheckout, 2500);
             pollPaymongoCheckout();
         })
@@ -1267,7 +1280,6 @@ function togglePaymentMethodFields() {
         const labels = { gcash: 'GCash', maya: 'Maya' };
         methodLabel.textContent = labels[method] || 'e-wallet';
     }
-    if (!isCash) startPaymongoCheckout(true);
     calculateChange();
 }
 
@@ -2105,6 +2117,105 @@ document.getElementById('barcodeModalManualInput')?.addEventListener('keydown', 
     e.target.value = '';
 });
 document.getElementById('regenPaymentRefBtn')?.addEventListener('click', () => startPaymongoCheckout(true));
+document.getElementById('closeEwalletQrModal')?.addEventListener('click', () => closeEwalletQrModal(true));
+document.getElementById('ewalletQrModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'ewalletQrModal') closeEwalletQrModal(true);
+});
+
+function openReceiptWindow(message, allowMissing) {
+    const receiptW = 300, receiptH = 500;
+    const receiptLeft = Math.max(0, Math.round((window.screen.width - receiptW) / 2));
+    const receiptTop = Math.max(0, Math.round((window.screen.height - receiptH) / 2));
+    const printWindow = window.open('', '_blank', `width=${receiptW},height=${receiptH},left=${receiptLeft},top=${receiptTop}`);
+    if (!printWindow) {
+        if (!allowMissing) alert("Please allow pop-ups to print the receipt. Transaction aborted.");
+        return null;
+    }
+    printWindow.document.write("<html><body><p>" + message + "</p></body></html>");
+    printWindow.document.close();
+    return printWindow;
+}
+
+function closeEwalletQrModal(cancelled) {
+    const modal = document.getElementById('ewalletQrModal');
+    if (modal) modal.style.display = 'none';
+    if (!cancelled || posEwallet.paid || posEwallet.submitting) return;
+    stopEwalletPoll();
+    if (posEwallet.pending && posEwallet.pending.printWindow) {
+        try { posEwallet.pending.printWindow.close(); } catch (e) { /* ignore */ }
+    }
+    posEwallet.pending = null;
+}
+
+function snapshotCartItems() {
+    return cart.map(item => ({
+        drug_id: item.drug_id,
+        lot_id: item.lot_id,
+        qty: item.qty,
+        price: item.price,
+        subtotal: item.price * item.qty,
+        discount_amount: (item.promo_discount_per_unit || 0) * item.qty,
+        promo_name: item.promo_name || null,
+        vat_exempt: item.vat_exempt ? 1 : 0
+    }));
+}
+
+function beginEwalletPayment(ctx) {
+    const samePaid = posEwallet.paid && posEwallet.checkoutId && Math.abs((posEwallet.amount || 0) - ctx.total) < 0.009;
+    const printWindow = openReceiptWindow(samePaid
+        ? "Payment received. Saving the sale..."
+        : "Waiting for the customer to scan the QR and pay...", true);
+    const modalTotal = document.getElementById('ewalletModalTotal');
+    if (modalTotal) modalTotal.textContent = ctx.total.toFixed(2);
+    const methodLabel = document.getElementById('ewalletMethodLabel');
+    if (methodLabel) methodLabel.textContent = ctx.paymentMethod === 'maya' ? 'Maya' : 'GCash';
+    posEwallet.pending = {
+        ...ctx,
+        printWindow,
+        subtotal: parseFloat(subtotalDisplay.textContent.replace('₱', '')) || 0,
+        pointsDiscountValue: pointsDiscountValue,
+        items: snapshotCartItems()
+    };
+    posEwallet.submitting = false;
+    const modal = document.getElementById('ewalletQrModal');
+    if (modal) modal.style.display = 'flex';
+    if (samePaid) {
+        finishEwalletSale();
+        return;
+    }
+    startPaymongoCheckout(false);
+}
+
+function finishEwalletSale() {
+    const pending = posEwallet.pending;
+    if (!pending || posEwallet.submitting) return;
+    posEwallet.submitting = true;
+    const paymentReference = posEwallet.reference || posEwallet.checkoutId;
+    const saleData = {
+        customer_id: pending.customerId,
+        customer_name: pending.customerName,
+        user_id: 1,
+        subtotal: pending.subtotal,
+        discount_total: pending.appliedDiscount,
+        tax_total: pending.tax,
+        total_amount: pending.total,
+        cash_received: pending.cash,
+        change_amount: pending.change,
+        payment_method: pending.paymentMethod,
+        payment_reference: paymentReference,
+        paymongo_checkout_id: posEwallet.checkoutId,
+        points_redeemed: pending.pointsRedeemed,
+        points_discount_value: pending.pointsDiscountValue,
+        items: pending.items
+    };
+    const printWindow = pending.printWindow;
+    if (printWindow && !printWindow.closed) {
+        printWindow.document.open();
+        printWindow.document.write("<html><body><p>Payment received. Saving the sale...</p></body></html>");
+        printWindow.document.close();
+    }
+    postCashierSale(saleData, printWindow, false, 0, pending.paymentMethod, paymentReference);
+}
 document.getElementById('closeBarcodeScannerModal')?.addEventListener('click', closeBarcodeScanner);
 document.getElementById('barcodeScannerModal')?.addEventListener('click', (e) => {
     if (e.target.id === 'barcodeScannerModal') closeBarcodeScanner(); // click outside the card closes it
@@ -2161,13 +2272,13 @@ confirmSale.addEventListener("click", () => {
         cash = 0;
         change = 0;
     } else {
-        if (!posEwallet.paid || !posEwallet.checkoutId) {
-            alert("Wait until PayMongo shows Paid. The customer must finish GCash or Maya first.");
-            return;
-        }
         cash = total;
         change = 0;
-        paymentReference = (document.getElementById('paymentReferenceInput')?.value || '').trim() || posEwallet.checkoutId;
+        beginEwalletPayment({
+            customerId, customerName, appliedDiscount, tax, total, cash, change,
+            paymentMethod, pointsRedeemed
+        });
+        return;
     }
 
     // 1. PRE-OPEN THE RECEIPT WINDOW HERE (CRITICAL FOR POP-UP BLOCKERS)
@@ -2214,7 +2325,10 @@ confirmSale.addEventListener("click", () => {
         }))
     };
 
-    // Send to backend
+    postCashierSale(saleData, printWindow, isCashPayment, change, paymentMethod, paymentReference);
+});
+
+function postCashierSale(saleData, printWindow, isCashPayment, change, paymentMethod, paymentReference) {
     fetch("/api/cashier/sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2255,9 +2369,17 @@ confirmSale.addEventListener("click", () => {
                               "\nRemaining Points: " + Number(data.new_loyalty_balance).toFixed(2);
             }
             alert(successMsg);
+            const qrModal = document.getElementById('ewalletQrModal');
+            if (qrModal) qrModal.style.display = 'none';
+            posEwallet.pending = null;
+            posEwallet.submitting = false;
 
             // TAWAGIN ANG PRINT FUNCTION
-            printReceipt(data, saleData, printWindow); 
+            if (!printWindow || printWindow.closed) {
+                printWindow = openReceiptWindow("Transaction saved.", true);
+            }
+            if (printWindow) printReceipt(data, saleData, printWindow);
+            else alert("Sale saved. Allow pop-ups to print the receipt."); 
             
             // I-clear ang cart at i-reset ang POS state
             clearCart(); 
@@ -2308,15 +2430,17 @@ confirmSale.addEventListener("click", () => {
                 errorMsg += "\nDB Error: " + data.db_error.substring(0, 100) + "...";
             }
             alert(errorMsg);
-            printWindow.close(); 
+            posEwallet.submitting = false;
+            if (printWindow) printWindow.close();
         }
     })
     .catch(err => {
         console.error("Fetch error:", err);
-        alert("CRITICAL ERROR: " + err.message); 
-        if(printWindow) printWindow.close(); 
+        alert("CRITICAL ERROR: " + err.message);
+        posEwallet.submitting = false;
+        if (printWindow) printWindow.close();
     });
-});
+}
 
 
 
