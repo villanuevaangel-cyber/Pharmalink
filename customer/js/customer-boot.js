@@ -40,7 +40,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=cash-ewallet1';
+        script.src = '/customer/js/customer.js?v=rx-table2';
         document.body.appendChild(script);
     });
 
@@ -396,38 +396,176 @@
             }
         }
         function renderAvailability(p) {
-            if (p.ocr_status === 'unavailable') return '<span class="rx-pill rx-pill-muted">OCR not installed on server</span>';
-            if (p.ocr_status === 'skipped_pdf') return '<span class="rx-pill rx-pill-muted">OCR skipped (PDF)</span>';
-            if (p.ocr_status === 'failed') return '<span class="rx-pill rx-pill-bad">Could not read text</span>';
-            if (p.ocr_status === 'pending' || !p.ocr_status) return '<span class="rx-pill rx-pill-muted">Processing…</span>';
+            if (p.ocr_status === 'unavailable') return '<span class="rx-pill rx-pill-muted">OCR not installed</span>';
+            if (p.ocr_status === 'skipped_pdf') return '<span class="rx-pill rx-pill-muted">PDF stored</span>';
+            if (p.ocr_status === 'failed') return '<span class="rx-pill rx-pill-bad">Could not read</span>';
+            if (p.ocr_status === 'pending' || !p.ocr_status) return '<span class="rx-pill rx-pill-muted">Processing</span>';
             const matches = Array.isArray(p.availability_summary) ? p.availability_summary : [];
-            if (!matches.length) return '<span class="rx-pill rx-pill-muted">No matching medicine found</span>';
-            return `<div class="rx-stock-list">${matches.map(matchRowHtml).join('')}</div>`;
+            if (!matches.length) return '<span class="rx-pill rx-pill-muted">No match</span>';
+            const inStock = matches.filter(canAddMatch).length;
+            if (inStock === matches.length) return `<span class="rx-pill rx-pill-ok">Available (${inStock})</span>`;
+            if (inStock > 0) return `<span class="rx-pill rx-pill-ok">Partial (${inStock}/${matches.length})</span>`;
+            return '<span class="rx-pill rx-pill-bad">Out of stock</span>';
+        }
+        let rxRows = [];
+        function rxDay(p) {
+            if (p.created_at_day) return String(p.created_at_day).slice(0, 10);
+            return String(p.created_at || '').slice(0, 10);
+        }
+        function rxDateLabel(p) {
+            if (p.created_at_label && !String(p.created_at_label).includes('T')) return p.created_at_label;
+            const d = new Date(p.created_at);
+            if (Number.isNaN(d.getTime())) return String(p.created_at || '-');
+            return d.toLocaleString('en-PH', {
+                month: 'short', day: 'numeric', year: 'numeric',
+                hour: 'numeric', minute: '2-digit', hour12: true
+            });
+        }
+        function inDateRange(p) {
+            const day = rxDay(p);
+            const from = document.getElementById('rxFromDate')?.value || '';
+            const to = document.getElementById('rxToDate')?.value || '';
+            if (from && day && day < from) return false;
+            if (to && day && day > to) return false;
+            return true;
+        }
+        function renderHistoryTable() {
+            const rows = rxRows.filter(inDateRange);
+            if (!rxRows.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="rx-empty-cell"><div class="rx-empty"><i class="fas fa-file-medical"></i><h4>No uploads yet</h4><p>Your prescription files will show up here.</p></div></td></tr>';
+                return;
+            }
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="rx-empty-cell">No prescriptions in this date range.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map((p) => {
+                const canView = p.file_available && p.view_url;
+                const matches = Array.isArray(p.availability_summary) ? p.availability_summary : [];
+                const canAdd = matches.some(canAddMatch);
+                const fileLabel = 'Rx #' + p.id + (p.file_type ? ' · ' + p.file_type : '');
+                return `<tr>
+                    <td>${escapeHtml(rxDateLabel(p))}</td>
+                    <td>${escapeHtml(fileLabel)}</td>
+                    <td>${renderAvailability(p)}</td>
+                    <td class="rx-actions-cell">
+                        <button type="button" class="rx-view-btn" data-rx-id="${attr(p.id)}" ${canView ? '' : 'disabled'}><i class="fas fa-eye"></i> View</button>
+                        <button type="button" class="rx-cart-btn" data-rx-id="${attr(p.id)}" ${canAdd ? '' : 'disabled'}><i class="fas fa-cart-plus"></i> Add to cart</button>
+                    </td>
+                </tr>`;
+            }).join('');
         }
         function loadHistory() {
             fetch('/api/customer/prescriptions', { credentials: 'same-origin' })
                 .then((r) => r.json())
                 .then((data) => {
-                    if (!data.success || !data.prescriptions.length) {
-                        tbody.innerHTML = '<div class="rx-empty"><i class="fas fa-file-medical"></i><h4>No uploads yet</h4><p>Your prescription files will show up here.</p></div>';
-                        return;
-                    }
-                    tbody.innerHTML = data.prescriptions.map((p) => {
-                        const text = (p.extracted_text || '').trim();
-                        return `
-                        <article class="rx-card">
-                            <p class="rx-section-label">Extracted text</p>
-                            <pre class="rx-excerpt">${text ? escapeHtml(text) : 'No readable text was saved for this file.'}</pre>
-                            <p class="rx-section-label">Items</p>
-                            <div class="rx-avail">${renderAvailability(p)}</div>
-                        </article>`;
-                    }).join('');
+                    rxRows = (data.success && Array.isArray(data.prescriptions)) ? data.prescriptions : [];
+                    renderHistoryTable();
                 })
                 .catch(() => {
-                    tbody.innerHTML = '<div class="rx-empty rx-empty-error">Failed to load history.</div>';
+                    tbody.innerHTML = '<tr><td colspan="4" class="rx-empty-cell rx-empty-error">Failed to load history.</td></tr>';
                 });
         }
-        tbody.addEventListener('click', handleRxAddCart);
+        function findRx(id) {
+            return rxRows.find((p) => String(p.id) === String(id));
+        }
+        function closeRxView() {
+            const overlay = document.getElementById('rxViewOverlay');
+            const media = document.getElementById('rxViewMedia');
+            if (overlay) overlay.style.display = 'none';
+            if (media) media.innerHTML = '';
+        }
+        function closeRxItems() {
+            const overlay = document.getElementById('rxItemsOverlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+        function openRxView(p) {
+            if (!p || !p.file_available || !p.view_url) {
+                const msg = 'That prescription file is no longer available.';
+                if (typeof window.phAlert === 'function') window.phAlert(msg);
+                else window.alert(msg);
+                return;
+            }
+            const title = document.getElementById('rxViewTitle');
+            const meta = document.getElementById('rxViewMeta');
+            const media = document.getElementById('rxViewMedia');
+            const overlay = document.getElementById('rxViewOverlay');
+            if (title) title.textContent = 'Prescription';
+            if (meta) meta.textContent = (rxDateLabel(p) || '') + (p.file_type ? ' · ' + p.file_type : '');
+            const type = String(p.file_type || '').toLowerCase();
+            if (media) {
+                if (type === 'pdf') {
+                    media.innerHTML = `<iframe title="Prescription PDF" src="${attr(p.view_url)}"></iframe>`;
+                } else {
+                    media.innerHTML = `<img src="${attr(p.view_url)}" alt="Uploaded prescription">`;
+                }
+            }
+            if (overlay) overlay.style.display = 'flex';
+        }
+        function openRxItems(p) {
+            const matches = Array.isArray(p.availability_summary) ? p.availability_summary : [];
+            const addable = matches.filter(canAddMatch);
+            if (addable.length === 1) {
+                handleAddMatch(addable[0]);
+                return;
+            }
+            const body = document.getElementById('rxItemsBody');
+            const overlay = document.getElementById('rxItemsOverlay');
+            if (body) {
+                if (!matches.length) {
+                    body.innerHTML = '<p class="rx-result-note">No matching medicines were found.</p>';
+                } else {
+                    body.innerHTML = `<div class="rx-stock-list">${matches.map(matchRowHtml).join('')}</div>`;
+                }
+            }
+            if (overlay) overlay.style.display = 'flex';
+        }
+        function handleAddMatch(m) {
+            if (typeof window.addRxMatchToCart !== 'function') {
+                const wait = 'Shop is still loading. Try again in a moment.';
+                if (typeof window.phAlert === 'function') window.phAlert(wait);
+                else window.alert(wait);
+                return;
+            }
+            const ok = window.addRxMatchToCart({
+                lot_id: m.lot_id,
+                name: matchLabel(m),
+                price: m.price,
+                drug_id: m.drug_id,
+                stock: m.stock
+            });
+            if (ok) {
+                const added = (matchLabel(m) || 'Item') + ' added to cart.';
+                if (typeof window.phAlert === 'function') window.phAlert(added);
+            }
+        }
+        function handleRxTableClick(e) {
+            const viewBtn = e.target.closest('.rx-view-btn');
+            if (viewBtn) {
+                e.preventDefault();
+                openRxView(findRx(viewBtn.getAttribute('data-rx-id')));
+                return;
+            }
+            const cartBtn = e.target.closest('.rx-cart-btn');
+            if (cartBtn) {
+                e.preventDefault();
+                const p = findRx(cartBtn.getAttribute('data-rx-id'));
+                if (p) openRxItems(p);
+                return;
+            }
+            handleRxAddCart(e);
+        }
+        tbody.addEventListener('click', handleRxTableClick);
+        document.getElementById('rxApplyFilter')?.addEventListener('click', renderHistoryTable);
+        document.getElementById('rxViewClose')?.addEventListener('click', closeRxView);
+        document.getElementById('rxViewOverlay')?.addEventListener('click', (e) => {
+            if (e.target && e.target.id === 'rxViewOverlay') closeRxView();
+        });
+        document.getElementById('rxItemsClose')?.addEventListener('click', closeRxItems);
+        document.getElementById('rxItemsOverlay')?.addEventListener('click', (e) => {
+            if (e.target && e.target.id === 'rxItemsOverlay') closeRxItems();
+        });
+        document.getElementById('rxItemsBody')?.addEventListener('click', handleRxAddCart);
         const fileNameEl = document.getElementById('rxFileName');
         const dropzone = document.getElementById('rxDropzone');
         const allowedExt = { jpg: 1, jpeg: 1, png: 1, webp: 1, pdf: 1 };

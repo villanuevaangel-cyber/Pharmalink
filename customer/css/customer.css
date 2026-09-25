@@ -346,7 +346,58 @@ html, body {
 }
 #prescription .rx-history-head h3{ margin:0; color:#1E3A34; }
 #prescription .rx-history-head p{ margin:4px 0 14px; color:#4BAA8B; font-size:.85rem; }
-#prescription .rx-history-list{ display:flex; flex-direction:column; gap:12px; }
+#prescription .rx-filters{
+    display:grid;
+    grid-template-columns:minmax(140px, 1fr) minmax(140px, 1fr) auto;
+    gap:10px;
+    align-items:end;
+    margin-bottom:14px;
+}
+#prescription .rx-filters label{
+    display:flex; flex-direction:column; gap:6px;
+    font-size:12px; font-weight:700; color:#4b5563;
+    min-width:0;
+}
+#prescription .rx-filters input{
+    width:100% !important; height:40px; padding:0 10px;
+    box-sizing:border-box;
+}
+#prescription .rx-filter-btn{
+    width:auto !important; margin:0 !important; height:40px;
+    padding:0 14px !important; background:#1E3A34 !important;
+    box-shadow:none !important; white-space:nowrap;
+}
+#prescription .rx-table-wrap{ overflow-x:auto; }
+#prescription .rx-table{ width:100%; border-collapse:collapse; }
+#prescription .rx-table th{
+    text-align:left; font-size:12px; letter-spacing:.04em; text-transform:uppercase;
+    color:#4BAA8B; padding:12px 8px; border-bottom:1px solid #FFE3B3; white-space:nowrap;
+}
+#prescription .rx-table td{
+    padding:12px 8px; border-bottom:1px solid #FFF7E6; font-size:.9rem; color:#1e2333;
+    vertical-align:middle;
+}
+#prescription .rx-table tbody tr:hover{ background:#FFF7E6; }
+#prescription .rx-table tbody tr:last-child td{ border-bottom:none; }
+#prescription .rx-empty-cell{ text-align:center; color:#4BAA8B; }
+#prescription .rx-actions-cell{
+    white-space:nowrap; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;
+}
+#prescription .rx-view-btn,
+#prescription .rx-cart-btn{
+    width:auto !important; margin:0 !important;
+    padding:6px 12px !important; font-size:12px !important;
+    box-shadow:none !important; height:34px;
+    display:inline-flex !important; align-items:center; gap:6px;
+}
+#prescription .rx-view-btn{
+    background:#fff !important; color:#1E3A34 !important; border:1px solid #1E3A34 !important;
+}
+#prescription .rx-cart-btn{ background:#047857 !important; color:#fff !important; }
+#prescription .rx-view-btn:disabled,
+#prescription .rx-cart-btn:disabled{
+    opacity:.45; cursor:not-allowed;
+}
 #prescription .rx-card{
     border:1px solid #FFE3B3;
     border-radius:14px;
@@ -436,6 +487,8 @@ html, body {
 }
 @media (max-width: 800px){
     #prescription .rx-layout{ grid-template-columns:1fr; }
+    #prescription .rx-filters{ grid-template-columns:1fr 1fr; }
+    #prescription .rx-filter-btn{ grid-column:1 / -1; }
     .rx-stock-row{ grid-template-columns:minmax(0, 1fr) auto; }
     .rx-stock-row .rx-add-cart, .rx-stock-row .rx-pill{ grid-column:2; }
 }
