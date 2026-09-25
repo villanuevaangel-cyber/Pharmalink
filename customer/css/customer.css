@@ -381,22 +381,27 @@ html, body {
 #prescription .rx-table tbody tr:last-child td{ border-bottom:none; }
 #prescription .rx-empty-cell{ text-align:center; color:#4BAA8B; }
 #prescription .rx-actions-cell{
-    white-space:nowrap; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;
+    white-space:nowrap; display:flex; gap:8px; justify-content:flex-end; align-items:center;
 }
+#prescription .rx-table th:last-child,
+#prescription .rx-table td:last-child{ text-align:right; }
 #prescription .rx-view-btn,
 #prescription .rx-cart-btn{
-    width:auto !important; margin:0 !important;
-    padding:6px 12px !important; font-size:12px !important;
-    box-shadow:none !important; height:34px;
-    display:inline-flex !important; align-items:center; gap:6px;
+    width:36px !important; min-width:36px !important; height:36px !important;
+    margin:0 !important; padding:0 !important;
+    box-shadow:none !important; border-radius:10px !important;
+    display:inline-flex !important; align-items:center; justify-content:center;
+    font-size:14px !important;
 }
 #prescription .rx-view-btn{
     background:#fff !important; color:#1E3A34 !important; border:1px solid #1E3A34 !important;
 }
-#prescription .rx-cart-btn{ background:#047857 !important; color:#fff !important; }
+#prescription .rx-cart-btn{
+    background:#4BAA8B !important; color:#fff !important; border:1px solid #4BAA8B !important;
+}
 #prescription .rx-view-btn:disabled,
 #prescription .rx-cart-btn:disabled{
-    opacity:.45; cursor:not-allowed;
+    opacity:.4; cursor:not-allowed;
 }
 #prescription .rx-card{
     border:1px solid #FFE3B3;

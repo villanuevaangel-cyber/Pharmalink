@@ -449,8 +449,8 @@
                     <td>${escapeHtml(fileLabel)}</td>
                     <td>${renderAvailability(p)}</td>
                     <td class="rx-actions-cell">
-                        <button type="button" class="rx-view-btn" data-rx-id="${attr(p.id)}" ${canView ? '' : 'disabled'}><i class="fas fa-eye"></i> View</button>
-                        <button type="button" class="rx-cart-btn" data-rx-id="${attr(p.id)}" ${canAdd ? '' : 'disabled'}><i class="fas fa-cart-plus"></i> Add to cart</button>
+                        <button type="button" class="rx-view-btn" data-rx-id="${attr(p.id)}" ${canView ? '' : 'disabled'} title="View prescription" aria-label="View prescription"><i class="fas fa-eye"></i></button>
+                        <button type="button" class="rx-cart-btn" data-rx-id="${attr(p.id)}" ${canAdd ? '' : 'disabled'} title="${canAdd ? 'Add to cart' : 'Nothing in stock to add'}" aria-label="Add to cart"><i class="fas fa-cart-plus"></i></button>
                     </td>
                 </tr>`;
             }).join('');
