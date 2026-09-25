@@ -161,14 +161,12 @@
         </div>
         <label for="checkoutPaymentMethod">Payment</label>
         <select id="checkoutPaymentMethod">
-            <option value="cash">Cash (pay at pickup)</option>
-            <option value="gcash">GCash (PayMongo live)</option>
-            <option value="maya">Maya (PayMongo live)</option>
-            <option value="card">Card (pay at pickup)</option>
-            <option value="bank">Bank Transfer (pay at pickup)</option>
+            <option value="cash" selected>Cash (pay at pickup)</option>
+            <option value="gcash">GCash</option>
+            <option value="maya">Maya</option>
         </select>
         <button type="button" id="checkout-btn" disabled>Submit Order for Pickup</button>
-        <p class="shop-pay-hint" id="shopPayHint">Cash, card, and bank are collected at pickup. GCash and Maya are paid now through PayMongo.</p>
+        <p class="shop-pay-hint" id="shopPayHint">Cash is collected at pickup. GCash and Maya are paid now through PayMongo.</p>
     </aside>
 </div>
 </section>
@@ -389,7 +387,7 @@
     </script>
     <script src="/assets/theme.js?v=spa-hash1"></script>
     <script src="/assets/profile-validate.js?v=pv4"></script>
-    <script src="/customer/js/customer-boot.js?v=home-ui1"></script>
+    <script src="/customer/js/customer-boot.js?v=cash-ewallet1"></script>
     <script src="/assets/activity-clicks.js?v=click1"></script>
 </body>
 </html>

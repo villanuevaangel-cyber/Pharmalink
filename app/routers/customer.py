@@ -13,7 +13,7 @@ from psycopg2.extras import RealDictCursor
 from app.activity import write_activity_log
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import session_user_id
-from app.payments import normalize_payment_method
+from app.payments import CUSTOMER_EWALLET_KEYS, CUSTOMER_PAYMENT_KEYS, normalize_payment_method
 from app.paymongo import PayMongoError, create_checkout_session, require_paid_checkout
 from app.stock import match_prescription_to_stock, sync_stock_status_for_drug
 from app.profile_photos import (
@@ -425,7 +425,7 @@ def order_details(order_id: int, request: Request, kind: str = "online"):
         }
 
     header = fetch_one(
-        "SELECT customer_id, order_status FROM customer_orders WHERE order_id = %s",
+        "SELECT customer_id, order_status, payment_method FROM customer_orders WHERE order_id = %s",
         (order_id,),
     )
     if not header:
@@ -452,6 +452,7 @@ def order_details(order_id: int, request: Request, kind: str = "online"):
         "customer_id": header["customer_id"],
         "loyalty_points": loyalty,
         "status": header["order_status"],
+        "payment_method": header.get("payment_method") or "cash",
         "items": [dict(i) for i in items],
     }
 
@@ -491,8 +492,8 @@ async def customer_ewallet_checkout(request: Request):
     if not items:
         return JSONResponse({"success": False, "message": "Your cart is empty."}, status_code=400)
     method = str(payload.get("payment_method") or "").strip().lower()
-    if method not in ("gcash", "maya"):
-        return JSONResponse({"success": False, "message": "Choose GCash or Maya."}, status_code=400)
+    if method not in CUSTOMER_EWALLET_KEYS:
+        return JSONResponse({"success": False, "message": "Choose GCash or Maya for e-wallet checkout."}, status_code=400)
     order_token = str(payload.get("order_token") or "").strip()
     if not order_token or order_token == "no_token":
         return JSONResponse({"success": False, "message": "Missing order token. Please refresh the page and try again."}, status_code=400)
@@ -527,7 +528,7 @@ async def customer_ewallet_complete(request: Request):
     items = request.session.get("ewallet_items") or []
     order_token = str(request.session.get("ewallet_token") or "").strip()
     method = str(request.session.get("ewallet_method") or "").strip().lower()
-    if not checkout_id or not items or method not in ("gcash", "maya"):
+    if not checkout_id or not items or method not in CUSTOMER_EWALLET_KEYS:
         return RedirectResponse(url="/customer/customer.html#products", status_code=302)
     placed = await place_order_with_payload(request, customer_id, {
         "items": items,
@@ -566,6 +567,12 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
     items = payload.get("items") or []
     if not items:
         return JSONResponse({"success": False, "message": "Your cart is empty."}, status_code=400)
+    payment_method = normalize_payment_method(payload.get("payment_method"), "cash")
+    if payment_method not in CUSTOMER_PAYMENT_KEYS:
+        return JSONResponse(
+            {"success": False, "message": "Choose Cash, GCash, or Maya."},
+            status_code=400,
+        )
     order_token = str(payload.get("order_token") or "").strip()
     if not order_token or order_token == "no_token":
         return JSONResponse(
@@ -601,13 +608,11 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
                     unit_price = float(lot["price"] or item.get("price_per_unit") or 0)
                     server_total += unit_price * qty
 
-                payment_method = normalize_payment_method(payload.get("payment_method"), "cash") or "cash"
-                if payment_method in ("gcash", "maya"):
+                payment_reference = None
+                if payment_method in CUSTOMER_EWALLET_KEYS:
                     checkout_id = str(payload.get("paymongo_checkout_id") or request.session.get("ewallet_checkout_id") or "").strip()
                     paid = require_paid_checkout(checkout_id, server_total, payment_method)
                     payment_reference = paid.get("reference") or checkout_id
-                else:
-                    payment_reference = None
 
                 order_id = next_id(cur, "customer_orders", "order_id")
                 cur.execute("SAVEPOINT order_header")

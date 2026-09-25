@@ -40,7 +40,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=home-ui1';
+        script.src = '/customer/js/customer.js?v=cash-ewallet1';
         document.body.appendChild(script);
     });
 

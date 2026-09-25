@@ -491,7 +491,11 @@ function displayOrderDetails(data) {
                 <span>Total</span>
                 <span>₱${calculatedTotal.toFixed(2)}</span>
             </div>
-            <p class="mo-detail-note">${data.kind === 'walkin' ? 'Paid at the cashier (walk-in sale).' : 'Payment and change will be finalized upon pickup.'}</p>
+            <p class="mo-detail-note">${data.kind === 'walkin'
+                ? 'Paid at the cashier (walk-in sale).'
+                : (String(data.payment_method || '').toLowerCase() === 'gcash' || String(data.payment_method || '').toLowerCase() === 'maya'
+                    ? 'Paid online with GCash or Maya. Pickup after payment.'
+                    : 'Cash will be collected at pickup.')}</p>
         `;
     }
 
@@ -644,10 +648,33 @@ function displayOrderDetails(data) {
 
         if (checkoutBtn) {
             checkoutBtn.disabled = totalItems === 0;
-            checkoutBtn.innerText = totalItems > 0 ? `Submit Order for Pickup (₱${finalTotal.toFixed(2)})` : 'Submit Order for Pickup';
+            checkoutBtn.innerText = checkoutCta(totalItems, finalTotal);
         }
 
+        syncPayHint();
+
         return { finalTotal };
+    }
+
+    function currentPayMethod() {
+        return String(document.getElementById('checkoutPaymentMethod')?.value || 'cash').toLowerCase();
+    }
+
+    function isEwalletPay(method) {
+        return method === 'gcash' || method === 'maya';
+    }
+
+    function checkoutCta(totalItems, finalTotal) {
+        const base = isEwalletPay(currentPayMethod()) ? 'Pay and Place Order' : 'Submit Order for Pickup';
+        return totalItems > 0 ? `${base} (₱${finalTotal.toFixed(2)})` : base;
+    }
+
+    function syncPayHint() {
+        const hint = document.getElementById('shopPayHint');
+        if (!hint) return;
+        hint.textContent = isEwalletPay(currentPayMethod())
+            ? 'Pay now with GCash or Maya through PayMongo. Pickup is after payment.'
+            : 'Cash is collected at pickup. GCash and Maya are paid now through PayMongo.';
     }
 
 
@@ -671,7 +698,11 @@ function displayOrderDetails(data) {
             return;
         }
 
-        const payMethod = document.getElementById('checkoutPaymentMethod')?.value || 'cash';
+        const payMethod = currentPayMethod();
+        if (payMethod !== 'cash' && !isEwalletPay(payMethod)) {
+            alert('Choose Cash, GCash, or Maya.');
+            return;
+        }
         const orderData = {
             customer_id: selectedCustomer,
             total_amount: finalTotal,
@@ -681,18 +712,25 @@ function displayOrderDetails(data) {
             items: Object.values(cart).map(item => ({
                 lot_id: item.lot_id,
                 drug_id: item.drug_id,
-                name: item.name, 
+                name: item.name,
                 quantity: item.qty,
                 price_per_unit: item.price
             }))
         };
 
+        const resetCheckoutBtn = () => {
+            if (checkoutBtn) {
+                checkoutBtn.disabled = false;
+                checkoutBtn.innerText = checkoutCta(totalItems, finalTotal);
+            }
+        };
+
         if (checkoutBtn) {
             checkoutBtn.disabled = true;
-            checkoutBtn.innerText = (payMethod === 'gcash' || payMethod === 'maya') ? 'Opening PayMongo...' : 'Processing...';
+            checkoutBtn.innerText = isEwalletPay(payMethod) ? 'Opening PayMongo...' : 'Processing...';
         }
 
-        if (payMethod === 'gcash' || payMethod === 'maya') {
+        if (isEwalletPay(payMethod)) {
             fetch('/api/customer/ewallet/checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -709,10 +747,8 @@ function displayOrderDetails(data) {
             })
             .catch((err) => {
                 alert(err.message || 'Could not start e-wallet payment.');
-                if (checkoutBtn) {
-                    checkoutBtn.disabled = false;
-                    checkoutBtn.innerText = 'Submit Order for Pickup';
-                }
+                resetCheckoutBtn();
+                updateCartPanel();
             });
             return;
         }
@@ -723,27 +759,15 @@ function displayOrderDetails(data) {
             credentials: 'same-origin',
             body: JSON.stringify(orderData),
         })
-        .then(response => {
-            // Re-enable button early to prevent it from staying disabled if .json() fails
-            if (checkoutBtn) checkoutBtn.disabled = false;
-            
-            if (response.status === 409) {
-                 return response.json(); 
-            }
-            
+        .then((response) => {
+            if (response.status === 409) return response.json();
             if (!response.ok) {
-                // Try to read the real error out of the response body (JSON
-                // message, or a PHP fatal-error HTML page) instead of just
-                // throwing a generic status code - this is what used to get
-                // swallowed and reported to the customer as a fake "network
-                // error", hiding the actual server-side problem.
-                return response.text().then(text => {
+                return response.text().then((text) => {
                     let serverMessage = null;
                     try {
                         const parsed = JSON.parse(text);
                         serverMessage = parsed.message || null;
                     } catch (e) {
-                        // Not JSON - likely a raw PHP fatal error/warning page.
                         const stripped = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
                         if (stripped) serverMessage = stripped.substring(0, 300);
                     }
@@ -752,61 +776,33 @@ function displayOrderDetails(data) {
                     throw err;
                 });
             }
-            
             return response.json();
         })
-        .then(data => {
+        .then((data) => {
             if (data.success) {
-                // SUCCESS PATH
                 showReceiptModal(data.order_id, finalTotal, orderData.items);
-                loadCustomerOrders(); // Force reload ng orders tab
-                loadHomeStats(); // Reflect the new order/spend total immediately on Home
+                loadCustomerOrders();
+                loadHomeStats();
                 if (data.order_token) {
                     window.GLOBAL_UNIQUE_TOKEN_FROM_PHP_SESSION = data.order_token;
                 }
                 refreshProductStock();
-                
-                // Clear the cart
                 for (let lotId in cart) delete cart[lotId];
                 updateCartPanel();
-
             } else {
-                // FAILURE PATH
-                alert(`❌ Order submission failed: ${data.message}`);
-                console.error(data);
+                alert(`Order submission failed: ${data.message || 'Please try again.'}`);
             }
         })
-        .catch(error => {
-            // CRITICAL FIX: a network error/timeout here does NOT mean the
-            // order was saved. The previous version of this code assumed
-            // success, deleted every item from `cart`, and showed a fake
-            // receipt - that's why items appeared to vanish right after
-            // checkout even though nothing had actually been ordered.
-            //
-            // The cart is now left untouched on failure. The customer can
-            // safely click "Submit Order for Pickup" again: process_customer_order.php
-            // is idempotent per order_token, so even if the first request
-            // actually did reach the server, retrying will NOT create a
-            // duplicate order or double-deduct stock - it just returns the
-            // original order.
+        .catch((error) => {
             console.error('Checkout error:', error);
             if (error && error.isServerError) {
-                // The server responded, just with an error - show that real
-                // message instead of the misleading "check your connection"
-                // text, which used to hide actual server-side bugs.
-                alert('❌ Order could not be placed: ' + error.message);
+                alert('Order could not be placed: ' + error.message);
             } else {
-                // fetch() itself rejected - this really is a network-level
-                // failure (offline, DNS, CORS, etc.), so the connection
-                // message is accurate here.
-                alert('⚠️ Could not reach the server to place your order. Your cart has been kept - please check your connection and try again.');
+                alert('Could not reach the server to place your order. Your cart has been kept - please check your connection and try again.');
             }
         })
         .finally(() => {
-            if (checkoutBtn) {
-                checkoutBtn.disabled = false;
-                checkoutBtn.innerText = 'Submit Order for Pickup';
-            }
+            resetCheckoutBtn();
             updateCartPanel();
         });
     }
@@ -937,6 +933,7 @@ function displayOrderDetails(data) {
     }
 
     if (checkoutBtn) checkoutBtn.addEventListener('click', submitOrder);
+    document.getElementById('checkoutPaymentMethod')?.addEventListener('change', () => updateCartPanel());
     if (clearCartBtn) clearCartBtn.addEventListener('click', clearCart);
 
     // Initial Load
