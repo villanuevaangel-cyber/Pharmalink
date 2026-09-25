@@ -277,8 +277,9 @@
 #pos-page #posPayQr img, #pos-page #posPayQr canvas{ width:160px; height:160px; }
 #pos-page .pos-pay-qr-title{ margin:0; font-size:.85rem; color:#1E3A34; font-weight:600; }
 #pos-page .pos-pay-qr-amt{ margin:4px 0 0; font-size:1.15rem; font-weight:800; color:#1E3A34; }
+#pos-page #ewalletQrModal{ z-index:2700; }
 #pos-page #regenPaymentRefBtn{
-    width:40px !important; margin:0 !important; height:40px; padding:0 !important;
+    width:100% !important; margin:8px 0 0 !important; height:40px; padding:0 12px !important;
     background:#4BAA8B !important; box-shadow:none !important; justify-content:center;
 }
 #pos-page .pos-ref-row input{ flex:1; margin-bottom:0 !important; }
