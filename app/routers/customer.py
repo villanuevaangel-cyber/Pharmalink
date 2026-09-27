@@ -458,7 +458,11 @@ def order_details(order_id: int, request: Request, kind: str = "online"):
 
 
 def _paymongo_base_url() -> str:
-    return (os.getenv("PAYMONGO_BASE_URL") or "http://127.0.0.1:8080").rstrip("/")
+    configured = (os.getenv("PAYMONGO_BASE_URL") or "").strip().rstrip("/")
+    public = (os.getenv("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
+    if configured and "127.0.0.1" not in configured and "localhost" not in configured:
+        return configured
+    return public or configured or "http://127.0.0.1:8080"
 
 
 def _quote_online_total(items) -> float:
