@@ -585,3 +585,176 @@
   flex-shrink:0;
   white-space:nowrap;
 }
+
+/* Forecast layout (inline sizes removed so phone can stack them) */
+#forecast .forecast-cards{
+  display:flex; gap:14px; margin-bottom:18px;
+}
+#forecast .forecast-cards .card{
+  flex:1; min-width:0; padding:15px; border-radius:12px; background:#fff;
+}
+#forecast .forecast-cards h3{ margin:0 0 6px; color:#4BAA8B; font-size:14px; }
+#forecast .forecast-cards .value{ margin:0; font-size:1.45rem; font-weight:800; color:#4BAA8B; }
+#forecast .forecast-card-gold h3,
+#forecast .forecast-card-gold .value{ color:#FFC857; }
+#forecast .forecast-main{
+  display:flex; align-items:stretch; gap:16px; margin-bottom:8px;
+}
+#forecast .forecast-chart,
+#forecast .top-items-chart{
+  background:#fff; border-radius:12px; padding:16px; box-sizing:border-box;
+  box-shadow:0 4px 16px rgba(30,58,138,0.08); min-width:0; height:420px; overflow:hidden;
+}
+#forecast .forecast-chart{ flex:7; position:relative; }
+#forecast .top-items-chart{
+  flex:3; display:flex; flex-direction:column; min-width:220px;
+}
+#forecast .forecast-chart-title,
+#forecast .top-items-chart h3{
+  margin:0 0 8px; color:#1E3A34; font-size:15px; font-weight:600;
+}
+#forecast .top-items-chart h3{ text-align:center; }
+#forecast .top-items-chart p{
+  text-align:center; color:#94a3b8; margin:8px 0 0; font-size:12px;
+}
+#forecast .forecast-canvas-wrap{ position:relative; width:100%; min-height:0; }
+#forecast .forecast-chart .forecast-canvas-wrap{ height:calc(100% - 28px); }
+#forecast .top-items-chart .forecast-canvas-wrap{ flex:1; }
+#forecastEngineBadge{
+  font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px;
+  background:#FFE3B3; color:#1E3A34; display:none;
+}
+#forecastHint{
+  position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);
+  color:#888; font-size:1.05rem; text-align:center; pointer-events:none; width:80%;
+}
+
+/* Reports upload — same Choose / Upload pattern as the customer prescription drop */
+#reports .rpt-file-input{ display:none; }
+#reports .rpt-upload-card{
+  text-align:center; border:2px dashed #93c5fd; padding:28px 22px 22px;
+}
+#reports .rpt-drop-icon{
+  width:64px; height:64px; margin:0 auto 12px; border-radius:18px;
+  display:flex; align-items:center; justify-content:center;
+  background:#4BAA8B; color:#fff; font-size:1.5rem;
+}
+#reports .rpt-upload-card h3{ font-size:1.15rem; }
+#reports .rpt-upload-card p{ margin-left:auto; margin-right:auto; max-width:460px; }
+#reports .rpt-upload-actions{
+  display:flex; justify-content:center; gap:10px; flex-wrap:wrap;
+}
+#reports .rpt-choose, #reports .rpt-upload{
+  width:auto !important; margin:0 !important; padding:10px 16px !important;
+  font-size:13px !important; font-weight:700 !important; box-shadow:none !important;
+  border-radius:8px !important; display:inline-flex !important; align-items:center;
+  justify-content:center; gap:8px; cursor:pointer; text-decoration:none !important;
+  min-height:40px; box-sizing:border-box;
+}
+#reports .rpt-choose{
+  background:#fff !important; color:#1E3A34 !important; border:1px solid #1E3A34 !important;
+}
+#reports .rpt-upload{ background:#1E3A34 !important; color:#fff !important; border:none !important; }
+#reports .rpt-filename{
+  margin:12px 0 0; font-size:.85rem; color:#4b5563; font-weight:600;
+}
+#maintenance .maint-loyalty-row{
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; padding:4px 0 8px;
+}
+
+@media (max-width: 900px){
+  #forecast .forecast-cards{ display:grid; grid-template-columns:1fr; }
+  #forecast .forecast-main{ flex-direction:column; }
+  #forecast .forecast-chart,
+  #forecast .top-items-chart{ width:100%; height:300px; flex:none; min-width:0; }
+  .content{ padding:16px 14px 24px; }
+  .header{ padding:0 14px; }
+}
+
+@media (max-width: 720px){
+  body{
+    display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden;
+  }
+  .sidebar{
+    position:relative; top:auto; left:auto; bottom:auto;
+    width:100%; height:auto; flex-direction:row; align-items:stretch;
+    padding:0; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.16);
+  }
+  .sidebar-header{ display:none; }
+  .sidebar-nav{
+    flex-direction:row; flex:1; min-width:0; gap:2px;
+    padding:6px 8px; overflow-x:auto; align-items:stretch;
+  }
+  .sidebar .nav-item{
+    flex-direction:column; justify-content:center; gap:3px;
+    min-width:68px; padding:8px 8px; margin:0;
+    transform:none;
+  }
+  .sidebar .nav-item span{
+    display:block; margin:0; font-size:10px; line-height:1.15; text-align:center; white-space:nowrap;
+  }
+  .sidebar a.nav-item{
+    position:static; margin:6px 8px 6px 0 !important; width:auto; border-top:none !important;
+    flex:0 0 auto;
+  }
+  .main{
+    margin-left:0 !important; min-height:0; flex:1; overflow:hidden;
+  }
+  .header{
+    height:56px; min-height:56px; padding:0 12px; gap:8px;
+  }
+  .header h3{ font-size:16px; }
+  .header-right{ gap:8px; }
+  .header-profile{ padding:4px; }
+  .header-profile span{ display:none; }
+  .content{ padding:12px 12px 20px; }
+  .dashboard-header{ margin-bottom:10px; }
+  .dashboard-header h2{ font-size:1.25rem; }
+  .um-card{ padding:14px 12px 12px; }
+  .um-card-head{ align-items:stretch; }
+  .um-card-head .um-add-btn,
+  .um-card-head .add-btn,
+  #maintenance .add-btn,
+  #addDrugMasterBtn{
+    width:100% !important; margin:0 !important; justify-content:center;
+  }
+  .um-toolbar{
+    display:grid; grid-template-columns:1fr; gap:8px; align-items:stretch;
+  }
+  .um-search{ min-width:0; width:100%; }
+  .um-toolbar select{ width:100%; min-width:0; }
+  #supplier-section .supplier-list{ grid-template-columns:1fr; }
+  #maintenance .um-subnav,
+  #user-management .um-subnav,
+  #inventory .inv-subnav{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px;
+  }
+  #maintenance .um-subnav button,
+  #user-management .um-subnav button,
+  #inventory .inv-subnav button{
+    width:100% !important; justify-content:center; text-align:center;
+    white-space:normal; height:auto; min-height:40px; line-height:1.25;
+  }
+  #maintenance .maint-loyalty-row{
+    display:grid; grid-template-columns:1fr; align-items:stretch;
+  }
+  #maintenance .maint-loyalty-row input,
+  #maintenance .maint-loyalty-row button{ width:100% !important; }
+  #deliveries .controls{ flex-direction:column; align-items:stretch; }
+  #deliveries .controls .left,
+  #deliveries .controls select,
+  #deliveries #createPoBtn{ width:100% !important; }
+  #deliveries #createPoBtn{ justify-content:center; }
+  .report-hub{ grid-template-columns:1fr; }
+  .modal-content,
+  .modal-content.modal-wide{
+    width:calc(100vw - 16px) !important;
+    max-width:calc(100vw - 16px) !important;
+    max-height:88vh;
+  }
+  #createPoModal .modal-content > div[style*="display:flex"],
+  #viewPoModal .modal-content > div[style*="display:flex"]{
+    flex-direction:column;
+  }
+  .um-pagination{ justify-content:space-between; flex-wrap:wrap; }
+}
