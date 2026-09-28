@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink - Customer Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=palette-w4">
-    <link rel="stylesheet" href="/customer/css/customer.css?v=rx-icon1">
+    <link rel="stylesheet" href="/customer/css/customer.css?v=cart-mobile2">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -154,7 +154,7 @@
             <button type="button" id="clear-cart-btn">Clear</button>
         </div>
         <p id="emptyCartMessage">Your cart is empty. Add medicines to request a pickup order.</p>
-        <table class="cart-table"><tbody id="cart-items"></tbody></table>
+        <div class="cart-lines" id="cart-items"></div>
         <div class="summary">
             <p>Subtotal <strong>₱<span id="subtotalDisplay">0.00</span></strong></p>
             <p>Total <strong>₱<span id="total-price">0.00</span></strong></p>
@@ -169,6 +169,10 @@
         <p class="shop-pay-hint" id="shopPayHint">Cash is collected at pickup. GCash and Maya are paid now through PayMongo.</p>
     </aside>
 </div>
+<button type="button" id="cartMobileBar" class="cart-mobile-bar" hidden>
+    <span id="cartMobileBarText">Added to cart</span>
+    <strong id="cartMobileBarTotal">₱0.00</strong>
+</button>
 </section>
 
 <section id="prescription">
