@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=palette-w4">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=catalog-btn1">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=mobile-admin1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -40,7 +40,7 @@
         }
         .modal-header .rpt-export-row{ margin-top:0; }
         #forecast .forecast-controls{
-            display:flex; flex-wrap:nowrap; align-items:center; gap:8px; margin-bottom:22px; width:100%;
+            display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:22px; width:100%;
         }
         #forecast .forecast-controls label{
             margin:0; font-weight:700; font-size:13px; color:#4BAA8B; white-space:nowrap; flex:0 0 auto;
@@ -204,6 +204,43 @@
             border:1px solid #d1d5db; border-radius:8px; font-size:14px;
         }
         .um-modal-card button[type=submit]{ width:100%; margin-top:14px; }
+
+        @media (max-width: 720px){
+            #forecast .forecast-controls{
+                display:grid; grid-template-columns:1fr 1fr; gap:8px; align-items:stretch;
+            }
+            #forecast .forecast-controls label,
+            #forecast .forecast-controls select#forecastPeriod,
+            #forecast .forecast-controls .generate-btn{
+                grid-column:1 / -1; width:100% !important; max-width:none; min-width:0;
+            }
+            #forecast .forecast-controls .rpt-btn,
+            #forecast .forecast-controls .generate-btn{
+                width:100% !important; flex:1 1 auto !important;
+            }
+            #reports .report-hub-card .hub-actions{ flex-direction:column; align-items:stretch; }
+            #reports .report-hub-card .hub-actions .rpt-btn{ width:100% !important; flex:1 1 auto !important; }
+            #reports .rpt-upload-actions{ flex-direction:column; align-items:stretch; }
+            #reports .rpt-choose, #reports .rpt-upload{ width:100% !important; }
+            .um-toolbar{
+                display:grid !important; grid-template-columns:1fr !important;
+                align-items:stretch; gap:8px;
+            }
+            .um-search, .um-toolbar select{ width:100% !important; min-width:0 !important; }
+            #maintenance .um-subnav,
+            #user-management .um-subnav{
+                display:grid !important; grid-template-columns:1fr 1fr; gap:8px;
+            }
+            #maintenance .um-subnav button,
+            #user-management .um-subnav button{
+                width:100% !important; justify-content:center; text-align:center;
+            }
+            #maintenance .maint-loyalty-row{
+                display:grid !important; grid-template-columns:1fr;
+            }
+            #maintenance .maint-loyalty-row input,
+            #maintenance .maint-loyalty-row button{ width:100% !important; }
+        }
     </style>
 </head>
 <body>
@@ -936,46 +973,39 @@
 </div>
 
 <!-- Forecast Cards -->
-<div class="forecast-cards" style="display:flex; gap:15px; margin-bottom:30px;">
-    <div class="card" style="flex:1; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-        <h3 style="color:#4BAA8B;">Predicted Total Sales</h3>
-        <p class="value" style="font-size:1.5em; color:#4BAA8B;">₱0</p>
+<div class="forecast-cards">
+    <div class="card">
+        <h3>Predicted Total Sales</h3>
+        <p class="value">₱0</p>
     </div>
-    <div class="card" style="flex:1; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-        <h3 style="color:#4BAA8B;">Predicted Items Sold</h3>
-        <p class="value" style="font-size:1.5em; color:#4BAA8B;">0</p>
+    <div class="card">
+        <h3>Predicted Items Sold</h3>
+        <p class="value">0</p>
     </div>
-    <div class="card" style="flex:1; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-        <h3 style="color:#FFC857;">Top Forecasted Category</h3>
-        <p class="value" style="font-size:1.5em; color:#FFC857;">N/A</p>
+    <div class="card forecast-card-gold">
+        <h3>Top Forecasted Category</h3>
+        <p class="value">N/A</p>
     </div>
 </div>
 
-<!-- 70/30 Layout: Main Forecast & Top Items Chart -->
-<div class="forecast-main" style="display:flex; align-items:flex-start; gap:20px; margin-bottom:30px;">
-    <!-- Main Forecast Chart (70%) -->
-    <div class="forecast-chart" style="flex:7; position:relative; height:420px; max-height:420px; overflow:hidden; background:#ffffff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); box-sizing:border-box;">
-        <h3 style="color:#1E3A34; margin:0 0 8px 0; font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px;">
-            📊 Predicted Sales Trend
-            <span id="forecastEngineBadge" style="font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:#FFE3B3; color:#1E3A34; display:none;"></span>
+<div class="forecast-main">
+    <div class="forecast-chart">
+        <h3 class="forecast-chart-title">
+            Predicted Sales Trend
+            <span id="forecastEngineBadge"></span>
         </h3>
-        <div style="position:relative; width:100%; height:calc(100% - 28px);">
+        <div class="forecast-canvas-wrap">
             <canvas id="forecastChart"></canvas>
         </div>
-        <!-- Centered hint text -->
-        <div id="forecastHint" 
-             style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#888; font-size:1.2em; text-align:center; pointer-events:none;">
-            Forecast will appear here
-        </div>
+        <div id="forecastHint">Forecast will appear here</div>
     </div>
 
-    <!-- Top Forecasted Items Chart (30%) -->
-    <div class="top-items-chart" style="flex:3; height:420px; max-height:420px; overflow:hidden; background:#ffffff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); box-sizing:border-box; display:flex; flex-direction:column;">
-        <h3 style="color:#1E3A34; text-align:center; margin:0 0 10px 0; font-size:15px; font-weight:600;">🔥 Top Forecasted Items</h3>
-        <div style="position:relative; width:100%; flex:1; min-height:0;">
+    <div class="top-items-chart">
+        <h3>Top Forecasted Items</h3>
+        <div class="forecast-canvas-wrap">
             <canvas id="topItemsChart"></canvas>
         </div>
-        <p style="text-align:center; color:#94a3b8; margin:8px 0 0 0; font-size:12px;">Bar chart of forecasted best-selling items.</p>
+        <p>Bar chart of forecasted best-selling items.</p>
     </div>
 </div>
 </section>
@@ -987,13 +1017,16 @@
     </div>
 
     <div class="rpt-upload-card">
-        <h3><i class="fas fa-file-import"></i> Upload sales data</h3>
-        <p>Import historical sales from CSV or Excel so consumption and forecast can use them. Matching is by <strong>drug_id</strong> or generic/brand name. Inventory is not deducted.</p>
-        <div class="rpt-upload-row">
-            <input type="file" id="rptSalesFile" accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
-            <button type="button" id="rptSalesUploadBtn" class="rpt-btn navy"><i class="fas fa-upload"></i> Upload</button>
-            <a class="rpt-btn ghost" id="rptSalesTemplateLink" href="/api/admin/reports/sales-template"><i class="fas fa-download"></i> Template</a>
+        <div class="rpt-drop-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+        <h3>Upload sales data</h3>
+        <p>CSV or Excel, matched by drug id or generic/brand name. Inventory is not deducted.</p>
+        <input type="file" id="rptSalesFile" class="rpt-file-input" accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
+        <div class="rpt-upload-actions">
+            <label for="rptSalesFile" class="rpt-choose"><i class="fas fa-folder-open"></i> Choose File</label>
+            <button type="button" id="rptSalesUploadBtn" class="rpt-upload"><i class="fas fa-upload"></i> Upload</button>
+            <a class="rpt-choose" id="rptSalesTemplateLink" href="/api/admin/reports/sales-template"><i class="fas fa-download"></i> Template</a>
         </div>
+        <p class="rpt-filename" id="rptFileName">No file selected</p>
         <p id="rptUploadMsg"></p>
     </div>
     <h3 style="color:#1E3A34; margin:0 0 10px; font-size:1.15rem;">Operational reports</h3>
@@ -1310,7 +1343,7 @@
                     <p>Ilagay kung magkano ang bawas sa bayad para sa <strong>1 loyalty point</strong>. Halimbawa: ₱0.30 = 10 points ay ₱3.00 off sa POS.</p>
                 </div>
             </div>
-            <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;padding:4px 0 8px;">
+            <div class="maint-loyalty-row">
                 <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:#1E3A34;">
                     1 point = ₱
                     <input type="number" id="loyalty_peso_per_point" step="0.01" min="0.01" max="10" value="0.30" style="width:140px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;">
@@ -2316,6 +2349,14 @@
             window.downloadAdminReport(btn.getAttribute('data-rpt-kind'), btn.getAttribute('data-rpt-format'));
         });
     });
+    const rptFileInput = document.getElementById('rptSalesFile');
+    const rptFileName = document.getElementById('rptFileName');
+    if (rptFileInput && rptFileName) {
+        rptFileInput.addEventListener('change', () => {
+            const file = rptFileInput.files && rptFileInput.files[0];
+            rptFileName.textContent = file ? file.name : 'No file selected';
+        });
+    }
     const rptUploadBtn = document.getElementById('rptSalesUploadBtn');
     if (rptUploadBtn) {
         rptUploadBtn.addEventListener('click', async () => {
