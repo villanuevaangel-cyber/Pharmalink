@@ -538,7 +538,11 @@ function displayOrderDetails(data) {
         } else {
             cart[lotId] = { name: name, price: price, qty: 1, drug_id: drugId, max_stock: maxStock, lot_id: lotId };
         }
-        updateCartPanel();
+        updateCartPanel({ name: name, qty: cart[lotId].qty });
+        flashAddedButton(button);
+        if (typeof window.phToast === 'function') {
+            window.phToast('Added to cart: ' + name);
+        }
     }
 
     window.addRxMatchToCart = function (item) {
@@ -614,26 +618,25 @@ function displayOrderDetails(data) {
             finalTotal += itemTotal;
             totalItems += item.qty;
 
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                 <td class="cart-item-name">
+            const line = document.createElement('div');
+            line.className = 'cart-line';
+            line.innerHTML = `
+                <div class="cart-item-name">
                     ${item.name}
                     <span class="cart-item-price">₱${item.price.toFixed(2)} each</span>
-                </td>
-                <td>
+                </div>
+                <div class="cart-line-actions">
                     <div class="qty-wrapper">
-                        <button class="qty-control-btn qty-minus" onclick="updateCartQty(this.closest('tr').querySelector('.qty-input'), -1)">−</button>
+                        <button type="button" class="qty-control-btn qty-minus" onclick="updateCartQty(this.closest('.cart-line').querySelector('.qty-input'), -1)">−</button>
                         <input type="number" class="qty-input" min="1" value="${item.qty}" data-lot-id="${lotId}" onchange="updateCartQty(this)">
-                        <button class="qty-control-btn qty-plus" onclick="updateCartQty(this.closest('tr').querySelector('.qty-input'), 1)" ${item.qty >= item.max_stock ? 'disabled style="opacity:0.5;"' : ''}>+</button>
+                        <button type="button" class="qty-control-btn qty-plus" onclick="updateCartQty(this.closest('.cart-line').querySelector('.qty-input'), 1)" ${item.qty >= item.max_stock ? 'disabled style="opacity:0.5;"' : ''}>+</button>
                     </div>
-                </td>
-                <td class="cart-item-total">₱${itemTotal.toFixed(2)}</td>
-                <td>
-                    <button class="cart-remove-btn" onclick="removeItem('${lotId}')">&times;</button>
-                </td>
+                    <button type="button" class="cart-remove-btn" onclick="removeItem('${lotId}')" aria-label="Remove">&times;</button>
+                </div>
+                <div class="cart-item-total">₱${itemTotal.toFixed(2)}</div>
             `;
 
-            cartItemsTableBody.appendChild(tr);
+            cartItemsTableBody.appendChild(line);
 
             const addBtn = document.querySelector(`.add-btn[data-lot-id="${lotId}"]`);
             if (addBtn) {
@@ -652,8 +655,45 @@ function displayOrderDetails(data) {
         }
 
         syncPayHint();
+        syncMobileCartBar(arguments[0]);
 
         return { finalTotal };
+    }
+
+    function flashAddedButton(button) {
+        if (!button) return;
+        if (!button.dataset.addLabel) button.dataset.addLabel = button.innerHTML;
+        button.classList.add('is-added');
+        button.innerHTML = '<i class="fas fa-check"></i> Added';
+        window.clearTimeout(button._addFlash);
+        button._addFlash = window.setTimeout(() => {
+            if (button.isConnected) button.innerHTML = button.dataset.addLabel;
+            button.classList.remove('is-added');
+        }, 1100);
+    }
+
+    function syncMobileCartBar(notice) {
+        const bar = document.getElementById('cartMobileBar');
+        const products = document.getElementById('products');
+        if (!bar) return;
+        const items = Object.values(cart);
+        const count = items.reduce((sum, item) => sum + item.qty, 0);
+        const total = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+        const text = document.getElementById('cartMobileBarText');
+        const price = document.getElementById('cartMobileBarTotal');
+        if (count === 0) {
+            bar.hidden = true;
+            if (products) products.classList.remove('has-cart-bar');
+            return;
+        }
+        bar.hidden = false;
+        if (products) products.classList.add('has-cart-bar');
+        if (text) {
+            text.textContent = notice && notice.name
+                ? `Added: ${notice.name}`
+                : (count === 1 ? '1 item in cart' : `${count} items in cart`);
+        }
+        if (price) price.textContent = `₱${total.toFixed(2)}`;
     }
 
     function currentPayMethod() {
@@ -931,6 +971,10 @@ function displayOrderDetails(data) {
             }
         });
     }
+
+    document.getElementById('cartMobileBar')?.addEventListener('click', () => {
+        document.getElementById('cart-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
 
     if (checkoutBtn) checkoutBtn.addEventListener('click', submitOrder);
     document.getElementById('checkoutPaymentMethod')?.addEventListener('change', () => updateCartPanel());

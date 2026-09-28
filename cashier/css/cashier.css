@@ -17,6 +17,7 @@
 .page.active {
     display: block;
 }
+.nav-short{ display:none; }
 
 /* =======================================
    CASHIER DASHBOARD
@@ -525,4 +526,209 @@
 .sr-modal-body th, .sr-modal-body td{ padding:8px 6px; border-bottom:1px solid #f3f4f6; text-align:left; font-size:.85rem; }
 @media (max-width: 980px){
     #sales-report-page .sr-toolbar{ grid-template-columns:1fr 1fr; }
+}
+
+@media (max-width: 720px){
+    body{
+        display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden;
+    }
+    .sidebar{
+        position:relative; top:auto; left:auto; bottom:auto;
+        width:100%; height:auto; flex-direction:row; align-items:stretch;
+        padding:0; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.16);
+    }
+    .sidebar-header{ display:none; }
+    .sidebar-nav{
+        flex-direction:row; flex:1; min-width:0; gap:2px;
+        padding:6px 8px; overflow-x:auto; align-items:stretch;
+    }
+    .sidebar .nav-item{
+        flex:1 1 0; flex-direction:column; justify-content:center; gap:3px;
+        min-width:0; padding:8px 2px; margin:0; transform:none;
+    }
+    .sidebar .nav-item span,
+    .sidebar .nav-short{
+        display:block !important; margin:0 !important; max-width:none;
+        font-size:10px; line-height:1.15; text-align:center; white-space:normal;
+        overflow:visible; text-overflow:clip;
+    }
+    .sidebar .nav-item .nav-long{ display:none !important; }
+    .sidebar .nav-item .nav-short{ display:block !important; }
+    .sidebar a.nav-item{
+        position:static; margin:4px 4px 4px 0 !important; width:auto;
+        border-top:none !important; flex:0 0 auto; padding:8px 6px;
+    }
+    .sidebar a.nav-item span{ display:none !important; }
+    .main{ margin-left:0 !important; min-height:0; flex:1; overflow:hidden; }
+    .header{ height:56px; min-height:56px; padding:0 12px; }
+    .header h3{ font-size:16px; }
+    .header-right{ gap:8px; }
+    .header-profile{ padding:4px; }
+    .header-profile span{ display:none; }
+    .content{ padding:12px 12px 20px; }
+    .dashboard-header{ margin-bottom:10px; }
+    .dashboard-header h2{ font-size:1.25rem; }
+
+    #dashboard-page .cs-dash-header,
+    #dashboard-page .cs-dash-clock{ width:100%; min-width:0; }
+    #dashboard-page .cs-dash-toolbar,
+    #dashboard-page .cs-dash-stats{ grid-template-columns:1fr; }
+    #dashboard-page .cs-dash-toolbar input[type="date"]{ min-width:0; width:100% !important; }
+    #dashboard-page #applyFilterBtn{ width:100% !important; }
+
+    #pos-page .pos-mode-selector{ display:grid; grid-template-columns:1fr; }
+    #pos-page .pos-mode-btn{ width:100% !important; justify-content:center; white-space:normal; }
+    #pos-page .pos-left,
+    #pos-page .pos-right{ flex:1 1 100%; min-width:0; max-width:none; position:static; }
+    #pos-page .filter-row{ display:grid; grid-template-columns:1fr; gap:8px; }
+    #pos-page .filter-row input,
+    #pos-page .filter-row select,
+    #pos-page #scanBarcodeBtn{ width:100% !important; min-width:0; }
+
+    #sales-report-page .sr-toolbar{ grid-template-columns:1fr; }
+    #sales-report-page .sr-toolbar input,
+    #sales-report-page .sr-toolbar select,
+    #sales-report-page .sr-toolbar button{ width:100% !important; min-width:0; }
+
+    #customer-segmentation-page .cs-seg-stats,
+    #customer-segmentation-page .cs-seg-split,
+    #customer-segmentation-page .cs-seg-charts{ grid-template-columns:1fr; }
+    #customer-segmentation-page .cs-seg-toolbar,
+    #customer-segmentation-page .ph-select-wrap{ flex-direction:column; align-items:stretch; }
+    #customer-segmentation-page #segmentCountTop{ width:100%; }
+
+    .content{ overflow-x:hidden; }
+    .page{ min-width:0; max-width:100%; }
+    #dashboard-page .cs-chart-wrap,
+    #customer-segmentation-page .cs-seg-chart{ height:220px; max-width:100%; }
+    #dashboard-page canvas,
+    #customer-segmentation-page canvas{ max-width:100% !important; }
+
+    #pos-page #posTableWrapper{ overflow:visible; max-height:none; }
+    #pos-page .pos-cart-head{ flex-wrap:wrap; }
+    #pos-page #removeAllCartIcon{ margin-left:auto !important; }
+
+    #posTableWrapper .pos-inventory-table,
+    #posTableWrapper .pos-inventory-table tbody,
+    #onlineOrdersTable,
+    #onlineOrdersTable tbody,
+    #dashboard-page .table-card table,
+    #dashboard-page .table-card tbody,
+    #sales-report-page .sr-table-card table,
+    #sales-report-page .sr-table-card tbody,
+    #customer-segmentation-page .cs-seg-table,
+    #customer-segmentation-page .cs-seg-table tbody{ display:block; width:100%; }
+    #posTableWrapper .pos-inventory-table thead,
+    #onlineOrdersTable thead,
+    #dashboard-page .table-card thead,
+    #sales-report-page .sr-table-card thead,
+    #customer-segmentation-page .cs-seg-table thead{ display:none; }
+    #posTableWrapper .pos-inventory-table tr,
+    #onlineOrdersTable tr,
+    #dashboard-page .table-card tr,
+    #sales-report-page .sr-table-card tr,
+    #customer-segmentation-page .cs-seg-table tr{
+        display:grid; grid-template-columns:1fr 1fr; gap:2px 12px;
+        border:1px solid #FFE3B3; border-radius:14px; padding:10px 12px;
+        margin:0 0 10px; background:#fff;
+    }
+    #posTableWrapper .pos-inventory-table td,
+    #onlineOrdersTable td,
+    #dashboard-page .table-card td,
+    #sales-report-page .sr-table-card td,
+    #customer-segmentation-page .cs-seg-table td{
+        display:flex; flex-direction:column; gap:2px; min-width:0;
+        padding:4px 0; border:none; text-align:left; font-size:13px;
+    }
+    #posTableWrapper .pos-inventory-table td::before,
+    #onlineOrdersTable td::before,
+    #dashboard-page .table-card td::before,
+    #sales-report-page .sr-table-card td::before,
+    #customer-segmentation-page .cs-seg-table td::before{
+        font-size:10px; font-weight:700; letter-spacing:.04em;
+        text-transform:uppercase; color:#4BAA8B;
+    }
+    #posTableWrapper .pos-inventory-table td[colspan],
+    #onlineOrdersTable td[colspan],
+    #dashboard-page .table-card td[colspan],
+    #sales-report-page .sr-table-card td[colspan],
+    #customer-segmentation-page .cs-seg-table td[colspan]{
+        grid-column:1 / -1; text-align:center; align-items:center;
+    }
+    #posTableWrapper .pos-inventory-table td[colspan]::before,
+    #onlineOrdersTable td[colspan]::before,
+    #dashboard-page .table-card td[colspan]::before,
+    #sales-report-page .sr-table-card td[colspan]::before,
+    #customer-segmentation-page .cs-seg-table td[colspan]::before{ content:none; }
+
+    #posTableWrapper .pos-inventory-table td:nth-child(1)::before{ content:"Category"; }
+    #posTableWrapper .pos-inventory-table td:nth-child(2){
+        grid-column:1 / -1; order:-1; font-weight:700; font-size:15px; color:#1E3A34;
+    }
+    #posTableWrapper .pos-inventory-table td:nth-child(2)::before{ content:none; }
+    #posTableWrapper .pos-inventory-table td:nth-child(3)::before{ content:"Generic"; }
+    #posTableWrapper .pos-inventory-table td:nth-child(4)::before{ content:"Dosage"; }
+    #posTableWrapper .pos-inventory-table td:nth-child(5)::before{ content:"Form"; }
+    #posTableWrapper .pos-inventory-table td:nth-child(6)::before{ content:"Stock"; }
+    #posTableWrapper .pos-inventory-table td:nth-child(7)::before{ content:"Price"; }
+    #posTableWrapper .pos-inventory-table td:nth-child(8){ grid-column:1 / -1; }
+    #posTableWrapper .pos-inventory-table td:nth-child(8)::before{ content:none; }
+    #posTableWrapper .pos-inventory-table .add-btn{ width:100% !important; justify-content:center; }
+
+    #onlineOrdersTable td:nth-child(1)::before{ content:"Order"; }
+    #onlineOrdersTable td:nth-child(2)::before{ content:"Customer"; }
+    #onlineOrdersTable td:nth-child(3)::before{ content:"Status"; }
+    #onlineOrdersTable td:nth-child(4){ grid-column:1 / -1; }
+    #onlineOrdersTable td:nth-child(4)::before{ content:none; }
+    #onlineOrdersTable td:nth-child(4) button{ width:100% !important; justify-content:center; }
+
+    #pos-page .pos-cart-table,
+    #pos-page .pos-cart-table tbody{ display:block; width:100%; }
+    #pos-page .pos-cart-table tr{
+        display:grid; grid-template-columns:minmax(0,1fr) 56px auto auto;
+        align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #f3f4f6;
+    }
+    #pos-page .pos-cart-table td{ display:block; border:none; padding:0; min-width:0; }
+    #pos-page .pos-qty{ width:56px; }
+
+    #dashboard-page .cs-dash-grid > .table-card:nth-child(3) td:nth-child(1)::before{ content:"Date"; }
+    #dashboard-page .cs-dash-grid > .table-card:nth-child(3) td:nth-child(2)::before{ content:"Time"; }
+    #dashboard-page .cs-dash-grid > .table-card:nth-child(3) td:nth-child(3)::before{ content:"Customer"; }
+    #dashboard-page .cs-dash-grid > .table-card:nth-child(3) td:nth-child(4)::before{ content:"Amount"; }
+    #dashboard-page .cs-dash-grid > .table-card:nth-child(3) td:nth-child(5)::before{ content:"Status"; }
+    #dashboard-page .cs-dash-grid > .table-card:nth-child(4) td:nth-child(1)::before{ content:"Patient"; }
+    #dashboard-page .cs-dash-grid > .table-card:nth-child(4) td:nth-child(2)::before{ content:"Medicine"; }
+    #dashboard-page .cs-dash-grid > .table-card:nth-child(4) td:nth-child(3)::before{ content:"Status"; }
+    #dashboard-page .cs-dash-grid > .table-card:nth-child(4) td:nth-child(4){ grid-column:1 / -1; }
+    #dashboard-page .cs-dash-grid > .table-card:nth-child(4) td:nth-child(4)::before{ content:none; }
+    #dashboard-page .cs-dash-grid > .table-card:nth-child(4) td:nth-child(4) button{ width:100% !important; justify-content:center; }
+
+    #sales-report-page .sr-table-card td:nth-child(1)::before{ content:"Txn ID"; }
+    #sales-report-page .sr-table-card td:nth-child(2)::before{ content:"Date"; }
+    #sales-report-page .sr-table-card td:nth-child(3)::before{ content:"Time"; }
+    #sales-report-page .sr-table-card td:nth-child(4)::before{ content:"Customer"; }
+    #sales-report-page .sr-table-card td:nth-child(5)::before{ content:"Cashier"; }
+    #sales-report-page .sr-table-card td:nth-child(6)::before{ content:"Payment"; }
+    #sales-report-page .sr-table-card td:nth-child(7)::before{ content:"Reference"; }
+    #sales-report-page .sr-table-card td:nth-child(8)::before{ content:"Amount"; }
+    #sales-report-page .sr-table-card td:nth-child(9){ grid-column:1 / -1; }
+    #sales-report-page .sr-table-card td:nth-child(9)::before{ content:none; }
+    #sales-report-page .sr-view-btn{ width:100% !important; justify-content:center; }
+
+    #customer-segmentation-page .cs-seg-table td:nth-child(1)::before{ content:"Segment"; }
+    #customer-segmentation-page .cs-seg-table td:nth-child(2)::before{ content:"Customers"; }
+    #customer-segmentation-page .cs-seg-table td:nth-child(3)::before{ content:"Avg. Spend"; }
+    #customer-segmentation-page .cs-seg-table td:nth-child(4)::before{ content:"Members"; }
+
+    .modal-content,
+    #pos-page .pos-scan-card,
+    #pos-page .pos-modal-card,
+    .sr-modal-card{
+        width:calc(100vw - 16px) !important;
+        max-width:calc(100vw - 16px) !important;
+    }
+    #pos-page #closeEwalletQrModal,
+    #pos-page #closeBarcodeScannerModal{
+        cursor:pointer; font-size:22px; line-height:1; color:#4BAA8B;
+    }
 }
