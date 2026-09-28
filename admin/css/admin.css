@@ -232,6 +232,11 @@
   padding:7px 12px !important; font-size:12px !important;
   background:#dc2626 !important; box-shadow:none !important;
 }
+#dashboard .expiring-mission-btn{
+  width:auto !important; margin:0 !important;
+  padding:6px 10px !important; font-size:12px !important;
+  background:#1E3A34 !important; box-shadow:none !important; white-space:nowrap;
+}
 #dashboard .ad-dash-card-head label{ font-size:12px; font-weight:700; color:#4b5563; margin-right:8px; }
 #dashboard #analytics-year{
   height:36px; padding:0 10px; border-radius:8px; border:1px solid #FFE3B3;

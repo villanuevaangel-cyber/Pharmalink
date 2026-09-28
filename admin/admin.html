@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=palette-w4">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=mobile-admin1">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=medical-mission1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -370,7 +370,7 @@
 <div class="ad-dash-panel" data-ad-panel="expiring">
 <div class="ad-dash-card">
     <div class="ad-dash-card-head">
-        <h4>Expiring lots</h4>
+        <h4>Near expiration</h4>
         <button type="button" class="ad-dash-inv-btn" onclick="document.querySelector('.nav-item[data-target=inventory]')?.click(); setTimeout(()=>document.querySelector('.inv-summary-card[data-filter=expiring30]')?.click(), 50);">Inventory</button>
     </div>
     <div class="table-wrap">
@@ -384,9 +384,10 @@
                     <th>Days Left</th>
                     <th>Qty on Hand</th>
                     <th>Value at Risk</th>
+                    <th></th>
                 </tr>
             </thead>
-            <tbody id="expiringMedsBody"><tr><td colspan="7">Loading...</td></tr></tbody>
+            <tbody id="expiringMedsBody"><tr><td colspan="8">Loading...</td></tr></tbody>
         </table>
     </div>
 </div>
@@ -4995,6 +4996,12 @@ document.getElementById('analytics-year')?.addEventListener('change', function (
         });
     });
 
+    function escExp(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
     function refreshExpiringMeds() {
         fetch('/api/admin/expiring?days=30')
             .then(r => r.json())
@@ -5005,27 +5012,79 @@ document.getElementById('analytics-year')?.addEventListener('change', function (
                 if (!body) return;
                 const items = d.items || [];
                 if (!items.length) {
-                    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#4BAA8B;padding:15px;"><i class="fas fa-circle-check"></i> No medicines expiring within 30 days.</td></tr>';
+                    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#4BAA8B;padding:15px;"><i class="fas fa-circle-check"></i> No medicines expiring within 30 days.</td></tr>';
                     return;
                 }
                 body.innerHTML = items.map(i => {
                     const critical = i.days_left <= 7;
                     const dayColor = critical ? '#dc2626' : '#FFC857';
                     const money = '₱' + Number(i.value_at_risk || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    const label = `${i.generic_name}${i.brand_name ? ' (' + i.brand_name + ')' : ''} lot ${i.lot_number}`;
                     return `
                     <tr>
-                        <td>${i.generic_name}</td>
-                        <td>${i.brand_name || '-'}</td>
-                        <td>${i.lot_number}</td>
-                        <td>${i.expiration_date}</td>
+                        <td>${escExp(i.generic_name)}</td>
+                        <td>${escExp(i.brand_name || '-')}</td>
+                        <td>${escExp(i.lot_number)}</td>
+                        <td>${escExp(i.expiration_date)}</td>
                         <td style="color:${dayColor};font-weight:600;">${i.days_left} day${i.days_left === 1 ? '' : 's'}${critical ? ' ⚠️' : ''}</td>
                         <td>${i.current_stock}</td>
                         <td>${money}</td>
+                        <td><button type="button" class="expiring-mission-btn" data-lot="${i.lot_inventory_id}" data-stock="${i.current_stock}" data-name="${escExp(label)}">Medical mission</button></td>
                     </tr>`;
                 }).join('');
             })
             .catch(err => console.error('Expiring meds error:', err));
     }
+
+    document.getElementById('expiringMedsBody')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.expiring-mission-btn');
+        if (!btn || btn.disabled) return;
+        const lotId = Number(btn.dataset.lot);
+        const stock = Number(btn.dataset.stock);
+        const name = btn.dataset.name || 'this lot';
+        window.phPrompt(
+            `How many pieces of ${name} go to the medical mission? On hand: ${stock}.`,
+            String(stock),
+            'Medical mission'
+        ).then((raw) => {
+            if (raw === null) return;
+            const qty = parseInt(String(raw).trim(), 10);
+            if (!Number.isFinite(qty) || qty < 1) {
+                alert('Enter a quantity of at least 1.');
+                return;
+            }
+            if (qty > stock) {
+                alert(`Only ${stock} on hand.`);
+                return;
+            }
+            btn.disabled = true;
+            fetch('/api/admin/lots/adjust', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    lot_inventory_id: lotId,
+                    adjustment_type: 'remove',
+                    quantity: qty,
+                    reason: 'Medical mission',
+                    notes: 'Near-expiry giveaway'
+                })
+            })
+                .then((res) => res.json())
+                .then((result) => {
+                    if (!result.success) {
+                        btn.disabled = false;
+                        alert(result.message || 'Could not update stock.');
+                        return;
+                    }
+                    alert(`${qty} removed for a medical mission. ${result.new_stock} left on this lot.`);
+                    refreshExpiringMeds();
+                })
+                .catch((err) => {
+                    btn.disabled = false;
+                    alert('Error: ' + err.message);
+                });
+        });
+    });
 
     refreshActivityLogs();
     refreshMovingItems();
