@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
     <link rel="stylesheet" href="/assets/theme.css?v=palette-w4">
-    <link rel="stylesheet" href="/cashier/css/cashier.css?v=ewallet-qr-modal">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=cashier-mobile2">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -32,7 +32,7 @@
       <i class="fas fa-file-invoice-dollar"></i><span>Sales Report</span>
     </div>
     <div class="nav-item" data-page="customer-segmentation-page">
-      <i class="fas fa-users"></i><span>Customer Segmentation</span>
+      <i class="fas fa-users"></i><span class="nav-long">Customer Segmentation</span><span class="nav-short">Segments</span>
     </div>
     <div class="nav-item" data-page="profile-page">
       <i class="fas fa-user"></i><span>Profile</span>
@@ -2162,16 +2162,13 @@ function snapshotCartItems() {
 
 function beginEwalletPayment(ctx) {
     const samePaid = posEwallet.paid && posEwallet.checkoutId && Math.abs((posEwallet.amount || 0) - ctx.total) < 0.009;
-    const printWindow = openReceiptWindow(samePaid
-        ? "Payment received. Saving the sale..."
-        : "Waiting for the customer to scan the QR and pay...", true);
     const modalTotal = document.getElementById('ewalletModalTotal');
     if (modalTotal) modalTotal.textContent = ctx.total.toFixed(2);
     const methodLabel = document.getElementById('ewalletMethodLabel');
     if (methodLabel) methodLabel.textContent = ctx.paymentMethod === 'maya' ? 'Maya' : 'GCash';
     posEwallet.pending = {
         ...ctx,
-        printWindow,
+        printWindow: null,
         subtotal: parseFloat(subtotalDisplay.textContent.replace('₱', '')) || 0,
         pointsDiscountValue: pointsDiscountValue,
         items: snapshotCartItems()
@@ -2208,13 +2205,7 @@ function finishEwalletSale() {
         points_discount_value: pending.pointsDiscountValue,
         items: pending.items
     };
-    const printWindow = pending.printWindow;
-    if (printWindow && !printWindow.closed) {
-        printWindow.document.open();
-        printWindow.document.write("<html><body><p>Payment received. Saving the sale...</p></body></html>");
-        printWindow.document.close();
-    }
-    postCashierSale(saleData, printWindow, false, 0, pending.paymentMethod, paymentReference);
+    postCashierSale(saleData, null, false, 0, pending.paymentMethod, paymentReference);
 }
 document.getElementById('closeBarcodeScannerModal')?.addEventListener('click', closeBarcodeScanner);
 document.getElementById('barcodeScannerModal')?.addEventListener('click', (e) => {
