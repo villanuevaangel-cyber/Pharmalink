@@ -1712,9 +1712,10 @@
 </script>
 
 
+<script src="/assets/chart-colors.js?v=chart-colors1"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>window.SEGMENTATION_MANAGE = true;</script>
-<script src="/shared/js/segmentation.js?v=seg2"></script>
+<script src="/shared/js/segmentation.js?v=chart-colors1"></script>
 <script src="/admin/js/admin-boot.js?v=photo-db1"></script>
 <script>
 (function () {
@@ -1727,20 +1728,6 @@
     const forecastCards = document.querySelectorAll('.forecast-cards .card .value');
     // forecastCards[0] = Predicted Total Sales, [1] = Predicted Items Sold, [2] = Top Forecasted Category
 
-    const PALETTE = ['#4BAA8B', '#4BAA8B', '#FFC857', '#FFC857', '#FFC857'];
-
-    // Gradient bars - same hue family as PharmaLink's brand blue, gives the
-    // "top items" chart some depth instead of flat fills.
-    function barGradient(ctx, color) {
-        color = color || PALETTE[0]; // guard: Chart.js can resolve this before a real index/color exists
-        const chartArea = ctx.chart.chartArea;
-        if (!chartArea) return color;
-        const g = ctx.chart.ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-        g.addColorStop(0, color + 'cc');
-        g.addColorStop(1, color);
-        return g;
-    }
-
     const topItemsChart = new Chart(topItemsCtx, {
         type: 'bar',
         data: {
@@ -1748,7 +1735,7 @@
             datasets: [{
                 label: 'Predicted Units Sold',
                 data: [],
-                backgroundColor: (ctx) => barGradient(ctx, PALETTE[(ctx.dataIndex ?? 0) % PALETTE.length]),
+                backgroundColor: PharmaChart.forecast,
                 borderRadius: 6,
                 borderSkipped: false,
                 maxBarThickness: 26
@@ -1786,7 +1773,7 @@
                     borderWidth: 0,
                     pointRadius: 0,
                     fill: '+1',
-                    backgroundColor: 'rgba(37,99,235,0.10)',
+                    backgroundColor: PharmaChart.forecastBand,
                     tension: 0.35
                 },
                 {
@@ -1800,21 +1787,14 @@
                 {
                     label: 'Forecasted Sales (₱)',
                     data: [],
-                    borderColor: '#4BAA8B',
-                    backgroundColor: (ctx) => {
-                        const chartArea = ctx.chart.chartArea;
-                        if (!chartArea) return 'rgba(37,99,235,0.12)';
-                        const g = ctx.chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                        g.addColorStop(0, 'rgba(37,99,235,0.35)');
-                        g.addColorStop(1, 'rgba(37,99,235,0.02)');
-                        return g;
-                    },
+                    borderColor: PharmaChart.forecast,
+                    backgroundColor: PharmaChart.forecastFill,
                     fill: true,
                     tension: 0.35,
                     borderWidth: 2.5,
                     pointRadius: 3,
                     pointHoverRadius: 6,
-                    pointBackgroundColor: '#4BAA8B',
+                    pointBackgroundColor: PharmaChart.forecast,
                     pointBorderColor: '#fff',
                     pointBorderWidth: 1.5
                 }
@@ -2111,7 +2091,7 @@
             type: 'bar',
             data: {
                 labels: labels,
-                datasets: [{ label: 'Units Sold', data: values, backgroundColor: '#4BAA8B', borderRadius: 4 }],
+                datasets: [{ label: 'Units Sold', data: values, backgroundColor: PharmaChart.sales, borderRadius: 4 }],
             },
             options: {
                 responsive: true,
@@ -2177,8 +2157,6 @@
     }
 
     function renderProcurementCharts(bySupplier, byCategory) {
-        const palette = ['#4BAA8B', '#4BAA8B', '#FFC857', '#dc2626', '#4BAA8B', '#4BAA8B', '#FFC857', '#4BAA8B'];
-
         const supplierCtx = document.getElementById('procurementSupplierChart')?.getContext('2d');
         if (supplierCtx) {
             const labels = bySupplier.map(s => s.supplier_name);
@@ -2190,7 +2168,7 @@
             } else if (labels.length) {
                 procurementSupplierChart = new Chart(supplierCtx, {
                     type: 'bar',
-                    data: { labels, datasets: [{ label: 'Inventory Cost', data: values, backgroundColor: '#4BAA8B', borderRadius: 4 }] },
+                    data: { labels, datasets: [{ label: 'Inventory Cost', data: values, backgroundColor: PharmaChart.cost, borderRadius: 4 }] },
                     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
                 });
             }
@@ -2203,11 +2181,12 @@
             if (procurementCategoryChart) {
                 procurementCategoryChart.data.labels = labels;
                 procurementCategoryChart.data.datasets[0].data = values;
+                procurementCategoryChart.data.datasets[0].backgroundColor = PharmaChart.slices('cost', labels.length);
                 procurementCategoryChart.update();
             } else if (labels.length) {
                 procurementCategoryChart = new Chart(categoryCtx, {
                     type: 'doughnut',
-                    data: { labels, datasets: [{ data: values, backgroundColor: palette }] },
+                    data: { labels, datasets: [{ data: values, backgroundColor: PharmaChart.slices('cost', labels.length) }] },
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } },
                 });
             }
@@ -2266,8 +2245,6 @@
     }
 
     function renderExpiryCharts(monthly, byCategory) {
-        const palette = ['#dc2626', '#FFC857', '#4BAA8B', '#4BAA8B', '#4BAA8B', '#4BAA8B', '#FFC857', '#4BAA8B'];
-
         const monthlyCtx = document.getElementById('expiryMonthlyChart')?.getContext('2d');
         if (monthlyCtx) {
             const labels = monthly.map(m => m.month);
@@ -2279,7 +2256,7 @@
             } else {
                 expiryMonthlyChart = new Chart(monthlyCtx, {
                     type: 'bar',
-                    data: { labels, datasets: [{ label: 'Value Lost (₱)', data: values, backgroundColor: '#dc2626', borderRadius: 4 }] },
+                    data: { labels, datasets: [{ label: 'Value Lost (₱)', data: values, backgroundColor: PharmaChart.loss, borderRadius: 4 }] },
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
@@ -2296,11 +2273,12 @@
             if (expiryCategoryChart) {
                 expiryCategoryChart.data.labels = labels;
                 expiryCategoryChart.data.datasets[0].data = values;
+                expiryCategoryChart.data.datasets[0].backgroundColor = PharmaChart.slices('loss', labels.length);
                 expiryCategoryChart.update();
             } else if (labels.length) {
                 expiryCategoryChart = new Chart(categoryCtx, {
                     type: 'doughnut',
-                    data: { labels, datasets: [{ data: values, backgroundColor: palette }] },
+                    data: { labels, datasets: [{ data: values, backgroundColor: PharmaChart.slices('loss', labels.length) }] },
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } },
                 });
             }
@@ -4672,8 +4650,6 @@ if (userManagementSection && userManagementSection.style.display === 'block') {
 // Monthly Sales Trend + Top Categories (year-aware)
 let monthlySalesChartInstance = null;
 let topCategoriesChartInstance = null;
-const catColors = ['#4BAA8B','#FFC857','#4BAA8B','#FFC857','#ef4444','#FFC857','#4BAA8B','#FFC857'];
-
 let seasonalTrendChartInstance = null;
 
 function renderSeasonalChart(labels, salesData) {
@@ -4687,7 +4663,7 @@ function renderSeasonalChart(labels, salesData) {
             datasets: [{
                 label: 'Sales by month (all years)',
                 data: salesData || [],
-                backgroundColor: '#4BAA8B',
+                backgroundColor: PharmaChart.sales,
                 borderRadius: 4,
             }],
         },
@@ -4720,8 +4696,8 @@ function renderSalesCharts(labels, salesData, catLabels, catData) {
                 datasets: [{
                     label: 'Sales',
                     data: salesData,
-                    borderColor: '#4BAA8B',
-                    backgroundColor: 'rgba(37,99,235,0.08)',
+                    borderColor: PharmaChart.sales,
+                    backgroundColor: PharmaChart.salesFill,
                     fill: true,
                     tension: 0.35,
                     borderWidth: 2.5,
@@ -4756,7 +4732,7 @@ function renderSalesCharts(labels, salesData, catLabels, catData) {
                 labels: catLabels.length ? catLabels : ['No data'],
                 datasets: [{
                     data: catData.length ? catData : [1],
-                    backgroundColor: catColors,
+                    backgroundColor: catData.length ? PharmaChart.slices('sales', catLabels.length) : [PharmaChart.empty],
                     borderColor: '#fff',
                     borderWidth: 2
                 }]
