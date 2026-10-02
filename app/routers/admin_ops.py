@@ -12,7 +12,7 @@ from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import Response
 from psycopg2.extras import RealDictCursor
 
-from app.activity import actor_display_name, write_activity_log
+from app.activity import actor_display_name, log_event, write_activity_log
 from app.automation import (
     apply_received_lot,
     compute_reorder_suggestions,
@@ -161,8 +161,9 @@ async def add_promo(request: Request):
             if scope == "drugs":
                 for did in drug_ids:
                     cur.execute("INSERT INTO promo_drugs (promo_id, drug_id) VALUES (%s, %s)", (promo_id, did))
-            note = f" - {len(drug_ids)} selected products" if scope == "drugs" else ""
-            _log(cur, request, "Create Promo", f"Created promo '{name}' ({discount_type} {discount_value}) from {start_date} to {end_date}{note}.")
+            note = f" on {len(drug_ids)} products" if scope == "drugs" else ""
+            amount = f"{discount_value:g}% off" if discount_type == "percent" else f"₱{discount_value:g} off"
+            _log(cur, request, "Create Promo", f"Created promo {name}: {amount}, {start_date} to {end_date}{note}.")
     return {"success": True, "promo_id": promo_id}
 
 
@@ -375,7 +376,11 @@ async def create_po(request: Request):
             items.append((drug_id, qty, unit_cost))
     if not items:
         return {"success": False, "message": "Please add at least one item with a valid quantity."}
-    if not fetch_one("SELECT supplier_id FROM suppliers WHERE supplier_id = %s AND status = 'Active'", (supplier_id,)):
+    supplier = fetch_one(
+        "SELECT supplier_id, supplier_name FROM suppliers WHERE supplier_id = %s AND status = 'Active'",
+        (supplier_id,),
+    )
+    if not supplier:
         return {"success": False, "message": "Please select an active supplier."}
     admin_name = request.session.get("user_first_name") or "Admin"
     order_date = _parse_iso_date(data.get("order_date")) or _manila_today()
@@ -403,7 +408,12 @@ async def create_po(request: Request):
                     (item_id, po_id, drug_id, qty, unit_cost),
                 )
             po_number = f"PO-{po_id:05d}"
-            _log(cur, request, "Create Purchase Order", f"Created {po_number} with {len(items)} item(s).")
+            _log(
+                cur,
+                request,
+                "Create Purchase Order",
+                f"Created {po_number} for {supplier['supplier_name']} with {len(items)} item(s).",
+            )
     return {"success": True, "po_id": po_id, "po_number": po_number}
 
 
@@ -513,7 +523,7 @@ async def receive_delivery(request: Request):
                 cur,
                 request,
                 "Receive Delivery",
-                f"Received delivery for {po_number}: {created} new lot(s), {updated} existing lot(s) topped up (prices/stock of other lots not overwritten). New PO status: {new_status}.",
+                f"Received {po_number}: {created} new lot(s), {updated} existing lot(s) topped up. Status is now {new_status}.",
             )
     return {
         "success": True,
@@ -581,17 +591,46 @@ def sales_analytics(request: Request, year: int = 0):
 
 
 @router.get("/activity-logs")
-def activity_logs(request: Request, limit: int = 20, offset: int = 0):
+def activity_logs(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+    days: int = 0,
+    start: str = "",
+    end: str = "",
+    q: str = "",
+):
     if not require_admin(request):
         return _unauthorized()
     limit = max(1, min(200, int(limit)))
     offset = max(0, int(offset))
-    total_row = fetch_one("SELECT COUNT(*) AS n FROM activity_logs")
+    where = ["action <> 'UI Click'", "action NOT ILIKE %s"]
+    params: list = ["%click%"]
+    start_s = str(start or "").strip()[:10]
+    end_s = str(end or "").strip()[:10]
+    if start_s and end_s and start_s > end_s:
+        start_s, end_s = end_s, start_s
+    if start_s and end_s:
+        where.append("date::date BETWEEN %s AND %s")
+        params.extend([start_s, end_s])
+    elif int(days or 0) > 0:
+        span = max(1, min(365, int(days)))
+        where.append("date::date >= (CURRENT_DATE - (%s - 1))")
+        params.append(span)
+    query = " ".join(str(q or "").split())[:80]
+    if query:
+        like = f"%{query}%"
+        where.append("(admin_name ILIKE %s OR action ILIKE %s OR details ILIKE %s)")
+        params.extend([like, like, like])
+    clause = " WHERE " + " AND ".join(where)
+    total_row = fetch_one("SELECT COUNT(*) AS n FROM activity_logs" + clause, tuple(params))
     total = int((total_row or {}).get("n") or 0)
     logs = []
     for row in fetch_all(
-        "SELECT date, admin_name, action, details FROM activity_logs ORDER BY date DESC LIMIT %s OFFSET %s",
-        (limit, offset),
+        "SELECT date, admin_name, action, details FROM activity_logs"
+        + clause
+        + " ORDER BY date DESC LIMIT %s OFFSET %s",
+        tuple(params) + (limit, offset),
     ):
         dt = row["date"]
         if hasattr(dt, "strftime"):
@@ -1497,6 +1536,9 @@ def export_report(request: Request, kind: str = "", format: str = "xlsx", period
         filename = "expiry-waste"
     else:
         return {"success": False, "message": "Unknown report type."}
+
+    kind_label = {"forecast": "Sales forecast", "consumption": "Monthly consumption", "procurement": "Procurement cost", "expiry": "Expiry and waste"}.get(kind, title)
+    log_event("Generate Report", f"Generated the {kind_label} report as {fmt.upper()}.", request=request)
 
     if fmt == "pdf":
         return _file_response(pdf_bytes(title, headers, rows), f"{filename}.pdf", "pdf")

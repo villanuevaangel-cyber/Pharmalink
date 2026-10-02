@@ -92,11 +92,48 @@
   height:36px; padding:0 10px; border-radius:8px; border:1px solid #FFC857;
   background:#ffffff; color:#1E3A34; font-weight:600;
 }
-#dashboard #dash-apply-filter{
+#dashboard #dash-apply-filter,
+#activity-logs #activity-apply{
   width:auto !important; margin:0 !important; height:36px;
   padding:0 14px !important; font-size:13px !important; box-shadow:none !important;
   background:#4BAA8B !important;
 }
+#dashboard #activity-see-all{
+  width:auto !important; margin:0 !important; height:36px;
+  padding:0 14px !important; font-size:13px !important; box-shadow:none !important;
+  background:#1E3A34 !important; color:#fff !important;
+}
+#activity-logs .dashboard-header h2{ margin:0; color:#1E3A34; }
+#activity-logs .dashboard-header .subtitle{ margin:4px 0 14px; font-size:13px; color:#4BAA8B; }
+#activity-logs .ad-dash-toolbar{
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 14px;
+  margin-bottom:14px;
+}
+#activity-logs .ad-dash-toolbar .um-search{ flex:1 1 220px; min-width:180px; }
+#activity-logs .ad-dash-dates{
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px;
+}
+#activity-logs .ad-dash-dates label{
+  display:flex; flex-direction:column; gap:4px;
+  font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#1E3A34;
+}
+#activity-logs .ad-dash-dates input[type="date"]{
+  height:36px; padding:0 10px; border-radius:8px; border:1px solid #FFE3B3;
+  background:#fff; color:#1E3A34; font-weight:600;
+}
+#activity-logs .ad-dash-card{
+  background:#fff; border:1px solid #FFE3B3; border-radius:16px; padding:16px;
+}
+#activity-logs #activity-page-pager{
+  display:flex; gap:10px; align-items:center; justify-content:flex-end; margin-top:12px;
+}
+#activity-logs #activity-page-pager button{
+  width:auto !important; margin:0 !important; height:36px;
+  padding:0 14px !important; font-size:13px !important; box-shadow:none !important;
+  background:#FFE3B3 !important; color:#1E3A34 !important;
+}
+#activity-logs #activity-page-pager button:disabled{ opacity:.45; cursor:default; }
+#activity-logs #activity-page-label{ font-size:13px; color:#4BAA8B; font-weight:700; }
 #dashboard .ad-dash-presets{ display:flex; flex-wrap:wrap; gap:6px; }
 #dashboard .ad-dash-preset{
   width:auto !important; margin:0 !important; height:36px;

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=palette-w4">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=medical-mission1">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=activity-logs1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -256,6 +256,7 @@
             <div class="nav-item" data-target="deliveries"><i class="fas fa-truck-loading"></i><span>Deliveries</span></div>
             <div class="nav-item" data-target="forecast"><i class="fas fa-chart-line"></i><span>Forecast</span></div>
             <div class="nav-item" data-target="reports"><i class="fas fa-file-alt"></i><span>Reports</span></div>
+            <div class="nav-item" data-target="activity-logs"><i class="fas fa-clipboard-list"></i><span>Activity Logs</span></div>
             <div class="nav-item" data-target="maintenance"><i class="fas fa-sliders"></i><span>Maintenance</span></div>
             <div class="nav-item" data-target="user-management"><i class="fas fa-users"></i><span>User Management</span></div>
             <div class="nav-item" data-target="customer-segmentation"><i class="fas fa-chart-pie"></i><span>Customer Segmentation</span></div>
@@ -421,7 +422,13 @@
 
 <div class="ad-dash-panel" data-ad-panel="activity">
 <div class="ad-dash-card">
-    <h3>Activity</h3>
+    <div class="ad-dash-card-head">
+        <div>
+            <h3>Activity</h3>
+            <p class="ad-dash-kicker-note">Last 5 days, 10 most recent</p>
+        </div>
+        <button type="button" id="activity-see-all">See all</button>
+    </div>
     <div class="table-wrap">
         <table>
             <thead>
@@ -434,11 +441,6 @@
             </thead>
             <tbody id="activity-logs-body"><tr><td colspan="4">Loading…</td></tr></tbody>
         </table>
-    </div>
-    <div id="activity-logs-pager" style="display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:10px;">
-        <button type="button" class="um-btn" id="activity-prev">Previous</button>
-        <span id="activity-page-label" style="font-size:13px;color:#64748b;">Page 1</span>
-        <button type="button" class="um-btn" id="activity-next">Next</button>
     </div>
 </div>
 </div>
@@ -1377,6 +1379,48 @@
                     <tbody id="promosBody"><tr><td colspan="6" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</section>
+
+<section id="activity-logs" style="display:none;">
+    <div class="dashboard-header">
+        <h2>Activity Logs</h2>
+        <p class="subtitle">Create, update, delete, and other major actions.</p>
+    </div>
+    <div class="ad-dash-toolbar">
+        <div class="um-search">
+            <i class="fas fa-search"></i>
+            <input type="text" id="activity-search" placeholder="Search user, action, or details" autocomplete="off">
+        </div>
+        <div class="ad-dash-dates">
+            <label for="activity-start">From
+                <input type="date" id="activity-start">
+            </label>
+            <label for="activity-end">To
+                <input type="date" id="activity-end">
+            </label>
+            <button type="button" id="activity-apply">Apply</button>
+        </div>
+    </div>
+    <div class="ad-dash-card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>User</th>
+                        <th>Action</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody id="activity-page-body"><tr><td colspan="4">Loading…</td></tr></tbody>
+            </table>
+        </div>
+        <div id="activity-page-pager">
+            <button type="button" id="activity-page-prev">Previous</button>
+            <span id="activity-page-label">Page 1</span>
+            <button type="button" id="activity-page-next">Next</button>
         </div>
     </div>
 </section>
@@ -3811,6 +3855,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 requestAnimationFrame(() => {
                     if (window.bootSegmentation) window.bootSegmentation();
                 });
+            } else if (targetId === 'activity-logs') {
+                if (typeof window.refreshActivityPage === 'function') window.refreshActivityPage();
             }
             // Add other module initializations here (e.g., inventory)
             if (window.phSetPortalHash) window.phSetPortalHash(targetId);
@@ -4878,8 +4924,6 @@ document.getElementById('analytics-year')?.addEventListener('change', function (
     tickClock();
     setInterval(tickClock, 30000);
 
-    let activityPage = 1;
-    const ACTIVITY_PAGE_SIZE = 20;
     function escapeActivity(value) {
         return String(value ?? '')
             .replace(/&/g, '&amp;')
@@ -4887,49 +4931,89 @@ document.getElementById('analytics-year')?.addEventListener('change', function (
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
     }
+    function activityRows(logs) {
+        if (!logs || !logs.length) {
+            return '<tr><td colspan="4" style="padding:15px;text-align:center;color:#6b7280;">No activity in this range.</td></tr>';
+        }
+        return logs.map(log => `
+            <tr>
+                <td>${escapeActivity(log.date)}</td>
+                <td>${escapeActivity(log.admin_name)}</td>
+                <td>${escapeActivity(log.action)}</td>
+                <td>${escapeActivity(log.details)}</td>
+            </tr>`).join('');
+    }
     function refreshActivityLogs() {
-        const offset = (activityPage - 1) * ACTIVITY_PAGE_SIZE;
-        fetch(`/api/admin/activity-logs?limit=${ACTIVITY_PAGE_SIZE}&offset=${offset}`)
+        fetch('/api/admin/activity-logs?days=5&limit=10')
             .then(r => r.json())
             .then(d => {
                 const body = document.getElementById('activity-logs-body');
                 if (!body) return;
-                const total = Number(d.total || 0);
-                const pages = Math.max(1, Math.ceil(total / ACTIVITY_PAGE_SIZE));
-                if (activityPage > pages) {
-                    activityPage = pages;
-                    refreshActivityLogs();
-                    return;
-                }
-                const label = document.getElementById('activity-page-label');
-                if (label) label.textContent = total ? `Page ${activityPage} of ${pages} (${total} logs)` : 'No logs';
-                const prev = document.getElementById('activity-prev');
-                const next = document.getElementById('activity-next');
-                if (prev) prev.disabled = activityPage <= 1;
-                if (next) next.disabled = activityPage >= pages;
-                if (!d.logs || !d.logs.length) {
-                    body.innerHTML = '<tr><td colspan="4" style="padding:15px;text-align:center;color:#6b7280;">No recent activities.</td></tr>';
-                    return;
-                }
-                body.innerHTML = d.logs.map(log => `
-                    <tr>
-                        <td style="padding:12px 15px;border-bottom:1px solid #f1f5f9;">${escapeActivity(log.date)}</td>
-                        <td style="padding:12px 15px;border-bottom:1px solid #f1f5f9;">${escapeActivity(log.admin_name)}</td>
-                        <td style="padding:12px 15px;border-bottom:1px solid #f1f5f9;">${escapeActivity(log.action)}</td>
-                        <td style="padding:12px 15px;border-bottom:1px solid #f1f5f9;">${escapeActivity(log.details)}</td>
-                    </tr>`).join('');
+                body.innerHTML = activityRows(d.logs);
             })
             .catch(err => console.error('Logs refresh error:', err));
     }
-    document.getElementById('activity-prev')?.addEventListener('click', () => {
-        if (activityPage > 1) {
-            activityPage -= 1;
-            refreshActivityLogs();
+    document.getElementById('activity-see-all')?.addEventListener('click', () => {
+        document.querySelector('.nav-item[data-target="activity-logs"]')?.click();
+    });
+
+    let activityListPage = 1;
+    const ACTIVITY_LIST_SIZE = 20;
+    function activityRangeDefaults() {
+        const end = todayLocal();
+        const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 4);
+        const startEl = document.getElementById('activity-start');
+        const endEl = document.getElementById('activity-end');
+        if (startEl && !startEl.value) startEl.value = toYmd(start);
+        if (endEl && !endEl.value) endEl.value = toYmd(end);
+    }
+    function refreshActivityPage() {
+        activityRangeDefaults();
+        const start = document.getElementById('activity-start')?.value || '';
+        const end = document.getElementById('activity-end')?.value || '';
+        const q = document.getElementById('activity-search')?.value || '';
+        const offset = (activityListPage - 1) * ACTIVITY_LIST_SIZE;
+        const url = `/api/admin/activity-logs?limit=${ACTIVITY_LIST_SIZE}&offset=${offset}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&q=${encodeURIComponent(q)}`;
+        fetch(url)
+            .then(r => r.json())
+            .then(d => {
+                const body = document.getElementById('activity-page-body');
+                if (!body) return;
+                const total = Number(d.total || 0);
+                const pages = Math.max(1, Math.ceil(total / ACTIVITY_LIST_SIZE));
+                if (activityListPage > pages) {
+                    activityListPage = pages;
+                    refreshActivityPage();
+                    return;
+                }
+                const label = document.getElementById('activity-page-label');
+                if (label) label.textContent = total ? `Page ${activityListPage} of ${pages} (${total})` : 'No logs';
+                const prev = document.getElementById('activity-page-prev');
+                const next = document.getElementById('activity-page-next');
+                if (prev) prev.disabled = activityListPage <= 1;
+                if (next) next.disabled = activityListPage >= pages || !total;
+                body.innerHTML = activityRows(d.logs);
+            })
+            .catch(err => console.error('Activity page error:', err));
+    }
+    window.refreshActivityPage = refreshActivityPage;
+    document.getElementById('activity-apply')?.addEventListener('click', () => {
+        activityListPage = 1;
+        refreshActivityPage();
+    });
+    document.getElementById('activity-search')?.addEventListener('input', () => {
+        activityListPage = 1;
+        refreshActivityPage();
+    });
+    document.getElementById('activity-page-prev')?.addEventListener('click', () => {
+        if (activityListPage > 1) {
+            activityListPage -= 1;
+            refreshActivityPage();
         }
     });
-    document.getElementById('activity-next')?.addEventListener('click', () => {
-        activityPage += 1;
-        refreshActivityLogs();
+    document.getElementById('activity-page-next')?.addEventListener('click', () => {
+        activityListPage += 1;
+        refreshActivityPage();
     });
 
     let movingData = { fast_moving: [], slow_moving: [] };
@@ -5213,6 +5297,5 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
 });
 </script>
 <script src="/assets/theme.js?v=spa-hash1"></script>
-<script src="/assets/activity-clicks.js?v=click1"></script>
 </body>
 </html>

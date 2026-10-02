@@ -894,7 +894,7 @@ async def upload_prescription(request: Request, prescription_file: UploadFile = 
             write_activity_log(
                 cur,
                 "Upload Prescription",
-                f"Uploaded prescription #{prescription_id} ({filename}); OCR {ocr_status}.",
+                f"Uploaded a prescription ({filename}). Reading status: {ocr_status}.",
                 request=request,
             )
 

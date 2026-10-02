@@ -243,7 +243,7 @@ def register(body: RegisterBody):
                 write_activity_log(
                     cur,
                     "Register",
-                    f"Created customer account '{username}'.",
+                    f"Created a customer account for {first_name} {last_name}.",
                     actor=f"{first_name} {last_name}".strip(),
                 )
         return {"success": True, "message": "Registration successful! You can now log in."}

@@ -329,7 +329,7 @@ async def add_drug(request: Request):
                 if "barcode" in err:
                     return {"success": False, "message": "That barcode is already used by another drug."}
                 return {"success": False, "message": "Error: This exact drug (Generic Name, Dosage, Form) already exists."}
-            _log(cur, request, "Add Drug", f"Added new drug: {generic_name} ({dosage}, {form}) barcode {barcode}")
+            _log(cur, request, "Create Drug", f"Created {generic_name} ({dosage}, {form}).")
     return {"success": True, "id": drug_id, "barcode": barcode}
 
 
@@ -383,7 +383,11 @@ async def update_drug(request: Request):
                     return {"success": False, "message": "That barcode is already used by another drug."}
                 return {"success": False, "message": str(exc)}
             sync_stock_status_for_drug(cur, drug_id)
-            _log(cur, request, "Edit Drug", f"Edited drug ID {drug_id} to {data.get('generic_name')}")
+            name = str(data.get("generic_name") or "medicine").strip()
+            brand = str(data.get("brand_name") or "").strip()
+            if brand:
+                name = f"{name} ({brand})"
+            _log(cur, request, "Update Drug", f"Updated {name}.")
     return {"success": True}
 
 
@@ -400,7 +404,7 @@ def deactivate_drug(request: Request, id: int = 0):
         with conn.cursor() as cur:
             cur.execute("UPDATE drugs_master SET is_active = 0 WHERE drug_id = %s", (id,))
             label = f"{drug['generic_name']}" + (f" ({drug['brand_name']})" if drug.get("brand_name") else "")
-            _log(cur, request, "Deactivate Drug", f"Drug '{label}' (ID: {id}) has been deactivated.")
+            _log(cur, request, "Deactivate Drug", f"Deactivated {label}.")
     return {"success": True, "message": "Drug archived successfully."}
 
 
@@ -410,10 +414,16 @@ def reactivate_drug(request: Request, id: int = 0):
         return _unauthorized()
     if id <= 0:
         return JSONResponse({"success": False, "message": "Drug ID is required."}, status_code=400)
+    drug = fetch_one("SELECT generic_name, brand_name FROM drugs_master WHERE drug_id = %s", (id,))
+    label = "this medicine"
+    if drug:
+        label = str(drug["generic_name"] or "this medicine")
+        if drug.get("brand_name"):
+            label += f" ({drug['brand_name']})"
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE drugs_master SET is_active = 1 WHERE drug_id = %s", (id,))
-            _log(cur, request, "Reactivate Drug", f"Reactivated drug_master ID: {id}")
+            _log(cur, request, "Reactivate Drug", f"Turned {label} back on.")
     return {"success": True, "message": "Drug definition reactivated successfully."}
 
 
@@ -499,7 +509,7 @@ async def update_lot(request: Request):
                     ),
                 )
                 sync_stock_status_for_drug(cur, drug_id)
-                _log(cur, request, "Update Stock Lot", f"Updated stock lot ID {lot_id} ({data.get('lot_number')}).")
+                _log(cur, request, "Update Stock Lot", f"Updated lot {data.get('lot_number') or lot_id}.")
         return {"success": True, "message": "Stock lot updated successfully."}
     except IntegrityError:
         return {"success": False, "message": "This lot number already exists for this drug. Please use a different lot/batch number."}
@@ -511,10 +521,21 @@ def deactivate_lot(request: Request, id: int = 0):
         return _unauthorized()
     if id <= 0:
         return JSONResponse({"success": False, "message": "Lot ID is required."}, status_code=400)
+    lot = fetch_one(
+        """
+        SELECT l.lot_number, d.generic_name FROM inventory_lots l
+        LEFT JOIN drugs_master d ON d.drug_id = l.drug_id
+        WHERE l.lot_inventory_id = %s
+        """,
+        (id,),
+    )
+    lot_label = (lot or {}).get("lot_number") or "this lot"
+    med = (lot or {}).get("generic_name") or ""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE inventory_lots SET is_active = 0 WHERE lot_inventory_id = %s", (id,))
-            _log(cur, request, "Deactivate Stock Lot", f"Stock lot ID {id} has been deactivated.")
+            detail = f"Deactivated lot {lot_label}" + (f" of {med}." if med else ".")
+            _log(cur, request, "Deactivate Stock Lot", detail)
     return {"success": True, "message": "Stock lot deactivated successfully."}
 
 
@@ -524,10 +545,21 @@ def reactivate_lot(request: Request, id: int = 0):
         return _unauthorized()
     if id <= 0:
         return JSONResponse({"success": False, "message": "Lot ID is required."}, status_code=400)
+    lot = fetch_one(
+        """
+        SELECT l.lot_number, d.generic_name FROM inventory_lots l
+        LEFT JOIN drugs_master d ON d.drug_id = l.drug_id
+        WHERE l.lot_inventory_id = %s
+        """,
+        (id,),
+    )
+    lot_label = (lot or {}).get("lot_number") or "this lot"
+    med = (lot or {}).get("generic_name") or ""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE inventory_lots SET is_active = 1 WHERE lot_inventory_id = %s", (id,))
-            _log(cur, request, "Reactivate Stock Lot", f"Stock lot ID {id} has been reactivated.")
+            detail = f"Turned lot {lot_label} back on" + (f" for {med}." if med else ".")
+            _log(cur, request, "Reactivate Stock Lot", detail)
     return {"success": True, "message": "Stock lot reactivated successfully."}
 
 
@@ -564,7 +596,15 @@ async def adjust_stock(request: Request):
     if not lot_id or adj_type not in {"add", "remove", "set"} or quantity is None or int(quantity) < 0 or not reason:
         return JSONResponse({"success": False, "message": "Missing or invalid fields. Lot, adjustment type, a non-negative quantity, and a reason are all required."}, status_code=400)
     quantity = int(quantity)
-    lot = fetch_one("SELECT current_stock, drug_id FROM inventory_lots WHERE lot_inventory_id = %s", (lot_id,))
+    lot = fetch_one(
+        """
+        SELECT l.current_stock, l.drug_id, l.lot_number, d.generic_name, d.brand_name
+        FROM inventory_lots l
+        LEFT JOIN drugs_master d ON d.drug_id = l.drug_id
+        WHERE l.lot_inventory_id = %s
+        """,
+        (lot_id,),
+    )
     if not lot:
         return JSONResponse({"success": False, "message": "Stock lot not found."}, status_code=404)
     previous = int(lot["current_stock"] or 0)
@@ -592,8 +632,21 @@ async def adjust_stock(request: Request):
                 (adj_id, lot_id, lot["drug_id"], adj_type, change, previous, new_stock, reason, notes, admin_name),
             )
             sync_stock_status_for_drug(cur, int(lot["drug_id"]))
-            sign = "+" if change > 0 else ""
-            _log(cur, request, "Stock Adjustment", f"Lot #{lot_id}: {sign}{change} units ({previous} → {new_stock}). Reason: {reason}.")
+            med = str(lot.get("generic_name") or "medicine")
+            if lot.get("brand_name"):
+                med += f" ({lot['brand_name']})"
+            lot_no = lot.get("lot_number") or "this lot"
+            if change < 0:
+                moved = f"Removed {abs(change)} unit(s)"
+            else:
+                moved = f"Added {change} unit(s)"
+            note = f" Note: {notes}." if notes else ""
+            _log(
+                cur,
+                request,
+                "Update Stock",
+                f"{moved} of {med}, lot {lot_no}. Stock is now {new_stock} (was {previous}). Reason: {reason}.{note}",
+            )
     return {"success": True, "new_stock": new_stock, "quantity_change": change}
 
 
@@ -715,7 +768,7 @@ async def add_category(request: Request):
                     """,
                     (name, admin_name),
                 )
-                _log(cur, request, "Add Category", f"Added category '{name}' (default markup 30%).")
+                _log(cur, request, "Create Category", f"Created category {name} with a 30% markup.")
     except IntegrityError:
         return {"success": False, "message": "That category already exists."}
     return {"success": True, "category": name}
@@ -832,7 +885,7 @@ async def add_supplier(request: Request):
                 """,
                 (sid, data.get("name"), data.get("contact"), data.get("email"), data.get("address"), policy),
             )
-            _log(cur, request, "Add Supplier", f"Added new supplier: {data.get('name')}")
+            _log(cur, request, "Create Supplier", f"Created supplier {data.get('name')}.")
     return {"success": True}
 
 
@@ -863,7 +916,7 @@ async def update_supplier(request: Request):
                 (name, data.get("contact") or "", data.get("email") or "", data.get("address") or "", status, inactive_reason, policy, supplier_id),
             )
             extra = f" - Reason: {inactive_reason}" if status == "Inactive" else ""
-            _log(cur, request, "Edit Supplier", f"Updated supplier: {name} (ID {supplier_id}){extra}")
+            _log(cur, request, "Update Supplier", f"Updated supplier {name}.{extra}")
     return {"success": True}
 
 
@@ -988,7 +1041,7 @@ async def update_staff(request: Request):
                 cur.execute("UPDATE users SET role_id=%s, password=%s WHERE user_id=%s", (role_row["role_id"], hash_password(password), user_id))
             else:
                 cur.execute("UPDATE users SET role_id=%s WHERE user_id=%s", (role_row["role_id"], user_id))
-            _log(cur, request, "Update Staff", f"Updated staff ID {user_id} ({first_name} {last_name}).")
+            _log(cur, request, "Update Staff", f"Updated staff {first_name} {last_name}.")
     return {"success": True, "message": "Staff updated successfully."}
 
 
@@ -1053,7 +1106,7 @@ async def update_customer(request: Request):
                     """,
                     (*fields, customer_id),
                 )
-            _log(cur, request, "Update Customer", f"Updated customer ID {customer_id} ({first_name} {last_name}).")
+            _log(cur, request, "Update Customer", f"Updated customer {first_name} {last_name}.")
     return {"success": True, "message": "Customer updated successfully."}
 
 
@@ -1082,8 +1135,9 @@ async def deactivate_staff(request: Request):
         return {"success": False, "message": "You cannot deactivate your own account."}
     staff = fetch_one(
         """
-        SELECT r.role_name FROM users u
+        SELECT r.role_name, s.first_name, s.last_name FROM users u
         JOIN role r ON u.role_id = r.role_id
+        LEFT JOIN staff_info s ON s.user_id = u.user_id
         WHERE u.user_id = %s
         """,
         (user_id,),
@@ -1095,7 +1149,8 @@ async def deactivate_staff(request: Request):
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE users SET is_active = 0 WHERE user_id = %s", (user_id,))
-            _log(cur, request, "Deactivate Staff", f"Staff account ID {user_id} has been deactivated.")
+            who = f"{staff.get('first_name') or ''} {staff.get('last_name') or ''}".strip() or "this staff account"
+            _log(cur, request, "Deactivate Staff", f"Deactivated {who} ({staff['role_name']}).")
     return {"success": True, "message": "Staff account successfully deactivated."}
 
 
@@ -1107,10 +1162,24 @@ async def activate_staff(request: Request):
     user_id = int(data.get("user_id") or 0)
     if not user_id:
         return {"success": False, "message": "Invalid request."}
+    staff = fetch_one(
+        """
+        SELECT r.role_name, s.first_name, s.last_name FROM users u
+        JOIN role r ON u.role_id = r.role_id
+        LEFT JOIN staff_info s ON s.user_id = u.user_id
+        WHERE u.user_id = %s
+        """,
+        (user_id,),
+    )
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE users SET is_active = 1 WHERE user_id = %s", (user_id,))
-            _log(cur, request, "Activate Staff", f"Staff account ID {user_id} has been activated.")
+            who = "this staff account"
+            role = "staff"
+            if staff:
+                who = f"{staff.get('first_name') or ''} {staff.get('last_name') or ''}".strip() or who
+                role = staff.get("role_name") or role
+            _log(cur, request, "Activate Staff", f"Turned {who} back on ({role}).")
     return {"success": True, "message": "Staff account successfully activated."}
 
 
@@ -1123,11 +1192,15 @@ async def deactivate_customer(request: Request):
     if raw_cid in (None, ""):
         return {"success": False, "message": "Invalid request."}
     customer_id = int(raw_cid)
+    person = fetch_one("SELECT first_name, last_name FROM customers WHERE customer_id = %s", (customer_id,))
+    who = "this customer"
+    if person:
+        who = f"{person.get('first_name') or ''} {person.get('last_name') or ''}".strip() or who
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE customers SET is_active = 0 WHERE customer_id = %s", (customer_id,))
             cur.execute("UPDATE users SET is_active = 0 WHERE user_id = %s", (customer_id,))
-            _log(cur, request, "Deactivate Customer", f"Customer ID {customer_id} was deactivated.")
+            _log(cur, request, "Deactivate Customer", f"Deactivated customer {who}.")
     return {"success": True, "message": "Customer account successfully deactivated."}
 
 
@@ -1140,11 +1213,15 @@ async def activate_customer(request: Request):
     if raw_cid in (None, ""):
         return {"success": False, "message": "Invalid request."}
     customer_id = int(raw_cid)
+    person = fetch_one("SELECT first_name, last_name FROM customers WHERE customer_id = %s", (customer_id,))
+    who = "this customer"
+    if person:
+        who = f"{person.get('first_name') or ''} {person.get('last_name') or ''}".strip() or who
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE customers SET is_active = 1 WHERE customer_id = %s", (customer_id,))
             cur.execute("UPDATE users SET is_active = 1 WHERE user_id = %s", (customer_id,))
-            _log(cur, request, "Activate Customer", f"Customer ID {customer_id} was activated.")
+            _log(cur, request, "Activate Customer", f"Turned customer {who} back on.")
     return {"success": True, "message": "Customer account successfully activated."}
 
 
@@ -1251,7 +1328,7 @@ async def user_actions(request: Request):
                         customer_type, hashed, loyalty_points, email,
                     ),
                 )
-                _log(cur, request, "Add Customer", f"Added customer {first_name} {last_name} (ID {new_id}).")
+                _log(cur, request, "Create Customer", f"Created customer {first_name} {last_name}.")
                 return {"status": "success", "user_id": new_id}
             role_row = fetch_one("SELECT role_id FROM role WHERE role_name = %s", (role,))
             if not role_row:
@@ -1269,6 +1346,6 @@ async def user_actions(request: Request):
                 """,
                 (staff_id, user_id, first_name, middle, last_name, email, phone, address),
             )
-            _log(cur, request, "Add Staff", f"Added staff {first_name} {last_name} ({role}, ID {user_id}).")
+            _log(cur, request, "Create Staff", f"Created staff {first_name} {last_name} ({role}).")
             return {"status": "success", "user_id": user_id}
 

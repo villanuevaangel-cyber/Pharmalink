@@ -283,8 +283,8 @@ async def update_order_status(request: Request):
             cur.execute("UPDATE customer_orders SET order_status = %s WHERE order_id = %s", (status, order_id))
             write_activity_log(
                 cur,
-                "Update Order Status",
-                f"Order #{order_id} status set to '{status}'.",
+                "Update Order",
+                f"Set order #{order_id} to {status}.",
                 request=request,
             )
     return {"success": True}
@@ -913,8 +913,13 @@ async def loyalty_points(request: Request):
                 return {"success": False, "message": "Customer not found."}
             new_balance = max(0.0, float(row["loyalty_points"] or 0) + points)
             cur.execute("UPDATE customers SET loyalty_points = %s WHERE customer_id = %s", (new_balance, customer_id))
-            details = f"Customer ID {customer_id} points {points:+} (new balance: {new_balance}) - via Customer Segmentation."
-            write_activity_log(cur, "Adjust Loyalty Points", details, request=request)
+            person = fetch_one("SELECT first_name, last_name FROM customers WHERE customer_id = %s", (customer_id,))
+            who = "this customer"
+            if person:
+                who = f"{person.get('first_name') or ''} {person.get('last_name') or ''}".strip() or who
+            direction = "added" if points > 0 else "removed"
+            details = f"{direction.capitalize()} {abs(points):g} loyalty point(s) for {who}. Balance is now {new_balance:g}."
+            write_activity_log(cur, "Update Loyalty Points", details, request=request)
     return {"success": True, "new_balance": new_balance}
 
 
@@ -1147,7 +1152,7 @@ async def segmentation_config(request: Request):
     cached["payload"] = payload
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     cache_file.write_text(json.dumps(cached, default=str), encoding="utf-8")
-    log_event("Update Segmentation", f"Set customer segments to {k}.", request=request)
+    log_event("Update Segmentation", f"Set customer groups to {k} segments.", request=request)
     return {"success": True, "active_k": k}
 
 
