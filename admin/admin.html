@@ -256,10 +256,10 @@
             <div class="nav-item" data-target="deliveries"><i class="fas fa-truck-loading"></i><span>Deliveries</span></div>
             <div class="nav-item" data-target="forecast"><i class="fas fa-chart-line"></i><span>Forecast</span></div>
             <div class="nav-item" data-target="reports"><i class="fas fa-file-alt"></i><span>Reports</span></div>
-            <div class="nav-item" data-target="activity-logs"><i class="fas fa-clipboard-list"></i><span>Activity Logs</span></div>
-            <div class="nav-item" data-target="maintenance"><i class="fas fa-sliders"></i><span>Maintenance</span></div>
-            <div class="nav-item" data-target="user-management"><i class="fas fa-users"></i><span>User Management</span></div>
             <div class="nav-item" data-target="customer-segmentation"><i class="fas fa-chart-pie"></i><span>Customer Segmentation</span></div>
+            <div class="nav-item" data-target="maintenance"><i class="fas fa-sliders"></i><span>Maintenance</span></div>
+            <div class="nav-item" data-target="activity-logs"><i class="fas fa-clipboard-list"></i><span>Activity Logs</span></div>
+            <div class="nav-item" data-target="user-management"><i class="fas fa-users"></i><span>User Management</span></div>
             <div class="nav-item" data-target="profile"><i class="fas fa-user"></i><span>Profile</span></div>
         </div>
         <a href="/api/auth/logout" class="nav-item" style="margin-top:auto;border-top:1px solid rgba(255,255,255,0.04);">
@@ -1022,7 +1022,7 @@
     <div class="rpt-upload-card">
         <div class="rpt-drop-icon"><i class="fas fa-cloud-arrow-up"></i></div>
         <h3>Upload sales data</h3>
-        <p>CSV or Excel. Fill in the date, medicine, brand, quantity, and price. Uploaded sales are included in the forecast. Inventory is not deducted.</p>
+        <p>CSV or Excel. Every row is checked first. Medicine and brand must match the inventory, and quantity and price must be numbers. Nothing is saved if a row is wrong. Inventory is not deducted.</p>
         <input type="file" id="rptSalesFile" class="rpt-file-input" accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
         <div class="rpt-upload-actions">
             <label for="rptSalesFile" class="rpt-choose"><i class="fas fa-folder-open"></i> Choose File</label>
@@ -2407,7 +2407,9 @@
                     if (typeof generateForecast === 'function') generateForecast();
                 } else if (msg) {
                     msg.style.color = '#dc2626';
-                    msg.textContent = data.message || 'Upload failed.';
+                    msg.style.whiteSpace = 'pre-line';
+                    const lines = [data.message || 'Upload failed.'].concat(data.errors || []);
+                    msg.textContent = lines.filter(Boolean).join('\n');
                 }
             } catch (err) {
                 if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Network error while uploading.'; }

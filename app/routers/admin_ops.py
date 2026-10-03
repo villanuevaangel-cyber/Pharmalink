@@ -1326,6 +1326,89 @@ def _cell(row, *names):
     return ""
 
 
+def _whole_number(value):
+    if isinstance(value, bool):
+        raise ValueError("not a number")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not value.is_integer():
+            raise ValueError("not a whole number")
+        return int(value)
+    text = str(value or "").strip().replace(",", "")
+    if not re.fullmatch(r"\d+", text):
+        raise ValueError("not a whole number")
+    return int(text)
+
+
+def _money(value):
+    if isinstance(value, bool):
+        raise ValueError("not a price")
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value or "").strip().replace(",", "").replace("₱", "").replace("PHP", "")
+    if not text:
+        raise ValueError("missing price")
+    return float(text)
+
+
+def _inventory_label(drug):
+    name = str(drug.get("generic_name") or "").strip()
+    brand = str(drug.get("brand_name") or "").strip()
+    return f"{name} ({brand})" if brand else name
+
+
+def _match_inventory_drug(row, by_id, by_generic, by_brand):
+    problems = []
+    generic_raw = str(_cell(row, "generic_name", "generic", "drug", "medicine")).strip()
+    brand_raw = str(_cell(row, "brand_name", "brand")).strip()
+    generic = generic_raw.lower()
+    brand = brand_raw.lower()
+    drug = None
+    drug_id_raw = _cell(row, "drug_id", "id")
+    if drug_id_raw not in ("", None):
+        try:
+            drug = by_id.get(int(float(drug_id_raw)))
+        except (TypeError, ValueError):
+            drug = None
+        if drug is None:
+            problems.append("that drug id is not in the inventory")
+    generic_hits = by_generic.get(generic) or []
+    if generic and brand:
+        named = next((d for d in generic_hits if str(d.get("brand_name") or "").strip().lower() == brand), None)
+        if named is None:
+            known = [str(d.get("brand_name")).strip() for d in generic_hits if str(d.get("brand_name") or "").strip()]
+            hint = f" Use {', '.join(known)}" if known else ""
+            problems.append(f"brand \"{brand_raw}\" does not match {generic_raw} in the inventory.{hint}")
+        elif drug is not None and int(drug["drug_id"]) != int(named["drug_id"]):
+            problems.append(f"{generic_raw} ({brand_raw}) does not match that drug id")
+        else:
+            drug = named
+    elif generic and not brand:
+        if len(generic_hits) == 1:
+            drug = drug or generic_hits[0]
+        elif generic_hits:
+            known = [str(d.get("brand_name")).strip() or generic_raw for d in generic_hits]
+            problems.append(f"add the brand for {generic_raw}. In the inventory: {', '.join(known)}")
+        else:
+            brand_hits = by_brand.get(generic) or []
+            if len(brand_hits) == 1:
+                drug = drug or brand_hits[0]
+            else:
+                problems.append(f"{generic_raw} is not in the inventory")
+    elif brand and not generic:
+        brand_hits = by_brand.get(brand) or []
+        if len(brand_hits) == 1:
+            drug = drug or brand_hits[0]
+        elif brand_hits:
+            problems.append(f"brand \"{brand_raw}\" matches more than one medicine. Add the medicine name")
+        else:
+            problems.append(f"{brand_raw} is not in the inventory")
+    elif drug is None:
+        problems.append("medicine is required")
+    return drug, problems
+
+
 @router.get("/reports/sales-template")
 def sales_template(request: Request):
     if not require_admin(request):
@@ -1375,92 +1458,55 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
             by_generic.setdefault(generic, []).append(d)
         if brand:
             by_brand.setdefault(brand, []).append(d)
-    catalog_price = {}
-    for row in fetch_all(
-        """
-        SELECT DISTINCT ON (drug_id) drug_id, price
-        FROM inventory_lots
-        WHERE price IS NOT NULL AND price > 0
-        ORDER BY drug_id, is_active DESC, expiration_date DESC NULLS LAST, lot_inventory_id DESC
-        """
-    ):
-        catalog_price[int(row["drug_id"])] = float(row["price"])
-
     grouped = {}
-    skipped = []
+    errors = []
+    today = _manila_today()
     for idx, row in enumerate(parsed, start=2):
+        row_errors = []
         try:
             sale_day = _parse_sale_date(row)
+            if sale_day > today:
+                row_errors.append(f"Row {idx}: date is in the future.")
         except Exception:
-            skipped.append(f"Row {idx}: invalid date")
-            continue
-        if sale_day > _manila_today():
-            skipped.append(f"Row {idx}: date is in the future")
-            continue
-        qty_raw = _cell(row, "quantity", "qty", "units")
+            sale_day = None
+            row_errors.append(f"Row {idx}: date must look like 2026-08-01.")
         try:
-            qty = int(float(qty_raw))
+            qty = _whole_number(_cell(row, "quantity", "qty", "units"))
+            if qty <= 0:
+                raise ValueError("quantity")
         except (TypeError, ValueError):
-            skipped.append(f"Row {idx}: invalid quantity")
-            continue
-        if qty <= 0:
-            skipped.append(f"Row {idx}: quantity must be greater than 0")
-            continue
-        drug = None
-        drug_id_raw = _cell(row, "drug_id", "id")
+            qty = 0
+            row_errors.append(f"Row {idx}: quantity must be a whole number greater than 0.")
         try:
-            if drug_id_raw not in ("", None):
-                drug = by_id.get(int(float(drug_id_raw)))
-        except (TypeError, ValueError):
-            drug = None
-        if not drug:
-            generic = str(_cell(row, "generic_name", "generic", "drug", "medicine")).strip().lower()
-            brand = str(_cell(row, "brand_name", "brand")).strip().lower()
-            generic_hits = by_generic.get(generic) or []
-            if brand:
-                drug = next((d for d in generic_hits if str(d["brand_name"] or "").strip().lower() == brand), None)
-            if not drug and len(generic_hits) == 1:
-                drug = generic_hits[0]
-            if not drug and brand:
-                brand_hits = by_brand.get(brand) or []
-                if len(brand_hits) == 1:
-                    drug = brand_hits[0]
-            if not drug and generic and not brand:
-                brand_hits = by_brand.get(generic) or []
-                if len(brand_hits) == 1:
-                    drug = brand_hits[0]
-            if not drug and len(generic_hits) > 1 and not brand:
-                drug = generic_hits[0]
-        if not drug:
-            skipped.append(f"Row {idx}: drug not found")
-            continue
-        price_raw = _cell(row, "unit_price", "price", "selling_price")
-        total_raw = _cell(row, "total", "amount", "line_total")
-        try:
-            price = float(price_raw) if price_raw not in ("", None) else 0.0
+            price = _money(_cell(row, "unit_price", "price", "selling_price"))
+            if price <= 0:
+                raise ValueError("price")
         except (TypeError, ValueError):
             price = 0.0
-        if price <= 0 and total_raw not in ("", None):
-            try:
-                price = float(total_raw) / qty
-            except (TypeError, ValueError, ZeroDivisionError):
-                price = 0.0
-        if price <= 0:
-            price = catalog_price.get(int(drug["drug_id"]), 0.0)
-        line_total = round(price * qty, 2)
-        label = str(drug["generic_name"] or "").strip()
-        if drug.get("brand_name"):
-            label = f"{label} ({drug['brand_name']})"
+            row_errors.append(f"Row {idx}: price must be a number greater than 0.")
+        drug, match_problems = _match_inventory_drug(row, by_id, by_generic, by_brand)
+        for problem in match_problems:
+            row_errors.append(f"Row {idx}: {problem}.")
+        if row_errors:
+            errors.extend(row_errors)
+            continue
         grouped.setdefault(sale_day, []).append({
             "drug_id": int(drug["drug_id"]),
             "qty": qty,
             "price": price,
-            "subtotal": line_total,
-            "label": label,
+            "subtotal": round(price * qty, 2),
+            "label": _inventory_label(drug),
         })
 
+    if errors:
+        return {
+            "success": False,
+            "message": "Upload stopped. Nothing was saved. Fix the file and try again.",
+            "errors": errors[:20],
+            "error_count": len(errors),
+        }
     if not grouped:
-        return {"success": False, "message": "No valid rows to import.", "skipped": skipped[:20]}
+        return {"success": False, "message": "No data rows found. Check the header row and try again."}
 
     user_id = require_admin(request)
     imported_sales = 0
@@ -1475,7 +1521,6 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
                     conn.rollback()
                     lot_optional = False
                 for sale_day, items in grouped.items():
-                    ready = []
                     for item in items:
                         cur.execute(
                             "SELECT lot_inventory_id FROM inventory_lots WHERE drug_id = %s ORDER BY lot_inventory_id LIMIT 1",
@@ -1483,13 +1528,9 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
                         )
                         lot = cur.fetchone()
                         if not lot and not lot_optional:
-                            skipped.append(f"{sale_day.isoformat()}: {item['label']} has no stock lot, so it was not added")
-                            continue
+                            raise ValueError(f"{item['label']} is not in the inventory.")
                         item["lot_id"] = int(lot["lot_inventory_id"]) if lot else None
-                        ready.append(item)
-                    if not ready:
-                        continue
-                    subtotal = round(sum(i["subtotal"] for i in ready), 2)
+                    subtotal = round(sum(i["subtotal"] for i in items), 2)
                     sale_id = next_id(cur, "sales", "sale_id")
                     txn = f"IMP-{sale_day.strftime('%Y%m%d')}-{sale_id}"
                     created = datetime.combine(sale_day, datetime.min.time().replace(hour=12))
@@ -1504,7 +1545,7 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
                         (sale_id, txn, user_id, subtotal, subtotal, subtotal, created),
                     )
                     imported_sales += 1
-                    for item in ready:
+                    for item in items:
                         item_id = next_id(cur, "sales_items", "id")
                         cur.execute(
                             """
@@ -1523,14 +1564,12 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
     except Exception as exc:
         return {"success": False, "message": "Could not save the uploaded sales. " + str(exc)}
     if imported_items == 0:
-        return {"success": False, "message": "No valid rows to import.", "skipped": skipped[:20], "skipped_count": len(skipped)}
+        return {"success": False, "message": "No data rows found. Check the header row and try again."}
     return {
         "success": True,
         "message": f"Imported {imported_items} line(s) in {imported_sales} sale(s). Inventory was not changed.",
         "sales": imported_sales,
         "items": imported_items,
-        "skipped": skipped[:20],
-        "skipped_count": len(skipped),
     }
 
 

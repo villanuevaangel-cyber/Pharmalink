@@ -23,13 +23,32 @@ ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
 
+def _boot_database() -> None:
+    import time
+
+    while True:
+        try:
+            init_pool()
+            from app.automation import start_scheduler
+            start_scheduler()
+            print("Database connected.", flush=True)
+            return
+        except Exception as exc:
+            print(f"Database not ready, retrying: {exc}", flush=True)
+            time.sleep(10)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    init_pool()
-    from app.automation import start_scheduler, stop_scheduler
-    start_scheduler()
+    import threading
+
+    threading.Thread(target=_boot_database, daemon=True, name="pharmalink-db").start()
     yield
-    stop_scheduler()
+    try:
+        from app.automation import stop_scheduler
+        stop_scheduler()
+    except Exception:
+        pass
 
 
 app = FastAPI(title="PharmaLink", lifespan=lifespan)
