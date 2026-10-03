@@ -1107,7 +1107,7 @@ def forecast(request: Request, period: int = 30):
         return _unauthorized()
     if period not in (7, 30, 90):
         period = 30
-    history_days = 365
+    history_days = 1095
     history = []
     for row in fetch_all(
         """
@@ -1121,7 +1121,7 @@ def forecast(request: Request, period: int = 30):
                 SELECT sale_id, SUM(quantity) AS qty FROM sales_items GROUP BY sale_id
             ) q ON q.sale_id = s.sale_id
             WHERE LOWER(TRIM(s.status)) = 'completed'
-              AND s.date_created >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+              AND s.date_created::date >= (CURRENT_DATE - %s)
             GROUP BY s.date_created::date
             UNION ALL
             SELECT co.order_date::date AS sale_date,
@@ -1130,7 +1130,7 @@ def forecast(request: Request, period: int = 30):
             FROM customer_orders co
             LEFT JOIN order_details od ON od.order_id = co.order_id
             WHERE LOWER(TRIM(co.order_status)) IN ('completed', 'ready for pickup')
-              AND co.order_date >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+              AND co.order_date::date >= (CURRENT_DATE - %s)
             GROUP BY co.order_date::date
         ) t
         GROUP BY sale_date
@@ -1162,7 +1162,7 @@ def forecast(request: Request, period: int = 30):
             JOIN sales s ON si.sale_id = s.sale_id
             JOIN drugs_master d ON si.drug_id = d.drug_id
             WHERE LOWER(TRIM(s.status)) = 'completed'
-              AND s.date_created >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+              AND s.date_created::date >= (CURRENT_DATE - %s)
             GROUP BY d.drug_id, d.generic_name, d.brand_name, d.category, s.date_created::date
             UNION ALL
             SELECT d.drug_id, d.generic_name, d.brand_name, d.category,
@@ -1171,7 +1171,7 @@ def forecast(request: Request, period: int = 30):
             JOIN customer_orders co ON od.order_id = co.order_id
             JOIN drugs_master d ON od.drug_id = d.drug_id
             WHERE LOWER(TRIM(co.order_status)) IN ('completed', 'ready for pickup')
-              AND co.order_date >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+              AND co.order_date::date >= (CURRENT_DATE - %s)
             GROUP BY d.drug_id, d.generic_name, d.brand_name, d.category, co.order_date::date
         ) t
         GROUP BY drug_id, generic_name, brand_name, category, sale_date
@@ -1185,7 +1185,8 @@ def forecast(request: Request, period: int = 30):
             per_drug[did] = {"name": label, "category": row["category"], "series": []}
         per_drug[did]["series"].append({"date": _jsonable(row["sale_date"]), "qty": int(row["daily_qty"] or 0)})
     today = _manila_today()
-    range_start = today - timedelta(days=history_days)
+    first_sale = min(date.fromisoformat(str(p["date"])[:10]) for p in history)
+    range_start = max(first_sale, today - timedelta(days=history_days))
     payload = json.dumps({
         "period": period,
         "today": today.isoformat(),
@@ -1197,7 +1198,7 @@ def forecast(request: Request, period: int = 30):
     if script.exists():
         for cmd in (["python", str(script)], ["py", "-3", str(script)]):
             try:
-                proc = subprocess.run(cmd, input=payload, capture_output=True, text=True, timeout=20)
+                proc = subprocess.run(cmd, input=payload, capture_output=True, text=True, timeout=90)
                 if proc.returncode != 0:
                     continue
                 decoded = json.loads(proc.stdout or "{}")
@@ -1245,7 +1246,7 @@ def forecast(request: Request, period: int = 30):
     }
 
 
-SALES_TEMPLATE_HEADERS = ["date", "drug_id", "generic_name", "brand_name", "quantity", "unit_price"]
+SALES_TEMPLATE_HEADERS = ["Date", "Medicine", "Brand", "Quantity", "Price"]
 
 
 def _file_response(content: bytes, filename: str, kind: str):
@@ -1301,10 +1302,21 @@ def _parse_sale_date(row):
         return value.date()
     if isinstance(value, date):
         return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        from openpyxl.utils.datetime import from_excel
+        return from_excel(value).date()
     text = str(value or "").strip()
     if not text:
         raise ValueError("missing date")
-    return datetime.strptime(text[:10], "%Y-%m-%d").date()
+    head = text[:10]
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(head if fmt == "%Y-%m-%d" else text[:10], fmt).date()
+        except ValueError:
+            continue
+    if len(text) >= 10 and text[2] in "/-" and int(text[:2]) > 12:
+        return datetime.strptime(text[:10], "%d/%m/%Y" if "/" in text[:10] else "%d-%m-%Y").date()
+    raise ValueError("invalid date")
 
 
 def _cell(row, *names):
@@ -1331,8 +1343,8 @@ def sales_template(request: Request):
         cell.font = font
         cell.alignment = Alignment(horizontal="left")
         ws.column_dimensions[cell.column_letter].width = 16
-    ws.append(["2026-08-01", 1, "Paracetamol", "Biogesic", 10, 5.50])
-    ws.append(["2026-08-01", "", "Amoxicillin", "", 4, 12.00])
+    ws.append(["2026-08-01", "Paracetamol", "Biogesic", 10, 5.50])
+    ws.append(["2026-08-02", "Amoxicillin", "", 4, 12.00])
     buf = io.BytesIO()
     wb.save(buf)
     return _file_response(buf.getvalue(), "pharmalink-sales-template.xlsx", "xlsx")
@@ -1354,11 +1366,25 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
 
     drugs = fetch_all("SELECT drug_id, generic_name, brand_name FROM drugs_master")
     by_id = {int(d["drug_id"]): d for d in drugs}
-    by_name = {}
+    by_generic = {}
+    by_brand = {}
     for d in drugs:
-        key = (str(d["generic_name"] or "").strip().lower(), str(d["brand_name"] or "").strip().lower())
-        by_name.setdefault(key, d)
-        by_name.setdefault((key[0], ""), d)
+        generic = str(d["generic_name"] or "").strip().lower()
+        brand = str(d["brand_name"] or "").strip().lower()
+        if generic:
+            by_generic.setdefault(generic, []).append(d)
+        if brand:
+            by_brand.setdefault(brand, []).append(d)
+    catalog_price = {}
+    for row in fetch_all(
+        """
+        SELECT DISTINCT ON (drug_id) drug_id, price
+        FROM inventory_lots
+        WHERE price IS NOT NULL AND price > 0
+        ORDER BY drug_id, is_active DESC, expiration_date DESC NULLS LAST, lot_inventory_id DESC
+        """
+    ):
+        catalog_price[int(row["drug_id"])] = float(row["price"])
 
     grouped = {}
     skipped = []
@@ -1367,6 +1393,9 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
             sale_day = _parse_sale_date(row)
         except Exception:
             skipped.append(f"Row {idx}: invalid date")
+            continue
+        if sale_day > _manila_today():
+            skipped.append(f"Row {idx}: date is in the future")
             continue
         qty_raw = _cell(row, "quantity", "qty", "units")
         try:
@@ -1387,7 +1416,21 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
         if not drug:
             generic = str(_cell(row, "generic_name", "generic", "drug", "medicine")).strip().lower()
             brand = str(_cell(row, "brand_name", "brand")).strip().lower()
-            drug = by_name.get((generic, brand)) or by_name.get((generic, ""))
+            generic_hits = by_generic.get(generic) or []
+            if brand:
+                drug = next((d for d in generic_hits if str(d["brand_name"] or "").strip().lower() == brand), None)
+            if not drug and len(generic_hits) == 1:
+                drug = generic_hits[0]
+            if not drug and brand:
+                brand_hits = by_brand.get(brand) or []
+                if len(brand_hits) == 1:
+                    drug = brand_hits[0]
+            if not drug and generic and not brand:
+                brand_hits = by_brand.get(generic) or []
+                if len(brand_hits) == 1:
+                    drug = brand_hits[0]
+            if not drug and len(generic_hits) > 1 and not brand:
+                drug = generic_hits[0]
         if not drug:
             skipped.append(f"Row {idx}: drug not found")
             continue
@@ -1402,12 +1445,18 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
                 price = float(total_raw) / qty
             except (TypeError, ValueError, ZeroDivisionError):
                 price = 0.0
+        if price <= 0:
+            price = catalog_price.get(int(drug["drug_id"]), 0.0)
         line_total = round(price * qty, 2)
+        label = str(drug["generic_name"] or "").strip()
+        if drug.get("brand_name"):
+            label = f"{label} ({drug['brand_name']})"
         grouped.setdefault(sale_day, []).append({
             "drug_id": int(drug["drug_id"]),
             "qty": qty,
             "price": price,
             "subtotal": line_total,
+            "label": label,
         })
 
     if not grouped:
@@ -1419,8 +1468,28 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                lot_optional = True
+                try:
+                    cur.execute("ALTER TABLE sales_items ALTER COLUMN lot_id DROP NOT NULL")
+                except Exception:
+                    conn.rollback()
+                    lot_optional = False
                 for sale_day, items in grouped.items():
-                    subtotal = round(sum(i["subtotal"] for i in items), 2)
+                    ready = []
+                    for item in items:
+                        cur.execute(
+                            "SELECT lot_inventory_id FROM inventory_lots WHERE drug_id = %s ORDER BY lot_inventory_id LIMIT 1",
+                            (item["drug_id"],),
+                        )
+                        lot = cur.fetchone()
+                        if not lot and not lot_optional:
+                            skipped.append(f"{sale_day.isoformat()}: {item['label']} has no stock lot, so it was not added")
+                            continue
+                        item["lot_id"] = int(lot["lot_inventory_id"]) if lot else None
+                        ready.append(item)
+                    if not ready:
+                        continue
+                    subtotal = round(sum(i["subtotal"] for i in ready), 2)
                     sale_id = next_id(cur, "sales", "sale_id")
                     txn = f"IMP-{sale_day.strftime('%Y%m%d')}-{sale_id}"
                     created = datetime.combine(sale_day, datetime.min.time().replace(hour=12))
@@ -1435,13 +1504,7 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
                         (sale_id, txn, user_id, subtotal, subtotal, subtotal, created),
                     )
                     imported_sales += 1
-                    for item in items:
-                        cur.execute(
-                            "SELECT lot_inventory_id FROM inventory_lots WHERE drug_id = %s ORDER BY lot_inventory_id LIMIT 1",
-                            (item["drug_id"],),
-                        )
-                        lot = cur.fetchone()
-                        lot_id = int(lot["lot_inventory_id"]) if lot else None
+                    for item in ready:
                         item_id = next_id(cur, "sales_items", "id")
                         cur.execute(
                             """
@@ -1449,15 +1512,18 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
                                 (id, sale_id, drug_id, lot_id, quantity, price, subtotal, discount_amount, vat_exempt)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, 0, 0)
                             """,
-                            (item_id, sale_id, item["drug_id"], lot_id, item["qty"], item["price"], item["subtotal"]),
+                            (item_id, sale_id, item["drug_id"], item["lot_id"], item["qty"], item["price"], item["subtotal"]),
                         )
                         imported_items += 1
-                _log(
-                    cur, request, "Upload Sales Data",
-                    f"Imported {imported_items} line(s) across {imported_sales} sale(s) from {file.filename}.",
-                )
+                if imported_items:
+                    _log(
+                        cur, request, "Upload Sales Data",
+                        f"Imported {imported_items} line(s) across {imported_sales} sale(s) from {file.filename}.",
+                    )
     except Exception as exc:
         return {"success": False, "message": "Could not save the uploaded sales. " + str(exc)}
+    if imported_items == 0:
+        return {"success": False, "message": "No valid rows to import.", "skipped": skipped[:20], "skipped_count": len(skipped)}
     return {
         "success": True,
         "message": f"Imported {imported_items} line(s) in {imported_sales} sale(s). Inventory was not changed.",
