@@ -616,4 +616,41 @@
     }
     window.phRestorePortalHash();
   });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var header = document.querySelector('.header');
+    var sidebar = document.querySelector('.sidebar');
+    if (!header || !sidebar || document.getElementById('navToggle')) return;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'navToggle';
+    btn.className = 'nav-toggle';
+    btn.setAttribute('aria-label', 'Open menu');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = '<i class="fas fa-bars"></i>';
+    header.insertBefore(btn, header.firstChild);
+    var backdrop = document.createElement('div');
+    backdrop.className = 'nav-backdrop';
+    document.body.appendChild(backdrop);
+    function setOpen(open) {
+      document.body.classList.toggle('nav-open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+      var icon = btn.querySelector('i');
+      if (icon) icon.className = open ? 'fas fa-xmark' : 'fas fa-bars';
+    }
+    btn.addEventListener('click', function () {
+      setOpen(!document.body.classList.contains('nav-open'));
+    });
+    backdrop.addEventListener('click', function () { setOpen(false); });
+    sidebar.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('.nav-item')) setOpen(false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') setOpen(false);
+    });
+    window.addEventListener('resize', function () {
+      if (window.innerWidth > 900) setOpen(false);
+    });
+  });
 })();

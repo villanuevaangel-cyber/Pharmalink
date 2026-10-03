@@ -824,3 +824,7 @@ body.customer-guest #customerNotificationBell{ display:none !important; }
     #products .cart-mobile-bar:not([hidden]),
     .toast{ left:262px; }
 }
+@media (max-width: 900px){
+    #products .cart-mobile-bar:not([hidden]),
+    .toast{ left:12px; right:12px; }
+}

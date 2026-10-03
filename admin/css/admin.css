@@ -717,28 +717,6 @@
   body{
     display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden;
   }
-  .sidebar{
-    position:relative; top:auto; left:auto; bottom:auto;
-    width:100%; height:auto; flex-direction:row; align-items:stretch;
-    padding:0; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.16);
-  }
-  .sidebar-header{ display:none; }
-  .sidebar-nav{
-    flex-direction:row; flex:1; min-width:0; gap:2px;
-    padding:6px 8px; overflow-x:auto; align-items:stretch;
-  }
-  .sidebar .nav-item{
-    flex-direction:column; justify-content:center; gap:3px;
-    min-width:68px; padding:8px 8px; margin:0;
-    transform:none;
-  }
-  .sidebar .nav-item span{
-    display:block; margin:0; font-size:10px; line-height:1.15; text-align:center; white-space:nowrap;
-  }
-  .sidebar a.nav-item{
-    position:static; margin:6px 8px 6px 0 !important; width:auto; border-top:none !important;
-    flex:0 0 auto;
-  }
   .main{
     margin-left:0 !important; min-height:0; flex:1; overflow:hidden;
   }

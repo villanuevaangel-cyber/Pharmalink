@@ -1,19 +1,6 @@
 (function () {
-    const SEGMENT_COLORS = ['#3b5b92', '#3f8f7a', '#c08a3e', '#7a6aa8', '#b25c5c'];
-    if (!window.CHART_PALETTE) {
-        window.CHART_PALETTE = ['#4BAA8B', '#4BAA8B', '#FFC857', '#FFC857', '#FFC857', '#4BAA8B'];
-    }
-    if (!window.chartBarGradient) {
-        window.chartBarGradient = function (ctx, color) {
-            color = color || window.CHART_PALETTE[0];
-            const chartArea = ctx.chart && ctx.chart.chartArea;
-            if (!chartArea) return color;
-            const g = ctx.chart.ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-            g.addColorStop(0, color + 'cc');
-            g.addColorStop(1, color);
-            return g;
-        };
-    }
+    const SEGMENT_COLORS = (window.PharmaChart && window.PharmaChart.segments) || ['#1E3A34', '#24544C', '#4BAA8B', '#7BC4A8', '#C5E6D8'];
+    const SALES_COLOR = (window.PharmaChart && window.PharmaChart.sales) || '#4BAA8B';
 
     const shadowPlugin = {
         id: 'softShadow',
@@ -382,7 +369,7 @@
                     datasets: [{
                         label: 'Number of Orders',
                         data: window.CASHIER_FREQ_DATA || [],
-                        backgroundColor: (c) => window.chartBarGradient(c, window.CHART_PALETTE[(c.dataIndex ?? 0) % window.CHART_PALETTE.length]),
+                        backgroundColor: SALES_COLOR,
                         borderRadius: 6,
                         borderSkipped: false,
                         maxBarThickness: 26
@@ -414,7 +401,7 @@
                     datasets: [{
                         label: 'Total Spending (₱)',
                         data: window.CASHIER_SPEND_DATA || [],
-                        backgroundColor: (c) => window.chartBarGradient(c, window.CHART_PALETTE[(c.dataIndex ?? 0) % window.CHART_PALETTE.length]),
+                        backgroundColor: SALES_COLOR,
                         borderRadius: 6,
                         borderSkipped: false,
                         maxBarThickness: 26
