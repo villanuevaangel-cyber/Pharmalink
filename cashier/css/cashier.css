@@ -532,33 +532,6 @@
     body{
         display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden;
     }
-    .sidebar{
-        position:relative; top:auto; left:auto; bottom:auto;
-        width:100%; height:auto; flex-direction:row; align-items:stretch;
-        padding:0; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.16);
-    }
-    .sidebar-header{ display:none; }
-    .sidebar-nav{
-        flex-direction:row; flex:1; min-width:0; gap:2px;
-        padding:6px 8px; overflow-x:auto; align-items:stretch;
-    }
-    .sidebar .nav-item{
-        flex:1 1 0; flex-direction:column; justify-content:center; gap:3px;
-        min-width:0; padding:8px 2px; margin:0; transform:none;
-    }
-    .sidebar .nav-item span,
-    .sidebar .nav-short{
-        display:block !important; margin:0 !important; max-width:none;
-        font-size:10px; line-height:1.15; text-align:center; white-space:normal;
-        overflow:visible; text-overflow:clip;
-    }
-    .sidebar .nav-item .nav-long{ display:none !important; }
-    .sidebar .nav-item .nav-short{ display:block !important; }
-    .sidebar a.nav-item{
-        position:static; margin:4px 4px 4px 0 !important; width:auto;
-        border-top:none !important; flex:0 0 auto; padding:8px 6px;
-    }
-    .sidebar a.nav-item span{ display:none !important; }
     .main{ margin-left:0 !important; min-height:0; flex:1; overflow:hidden; }
     .header{ height:56px; min-height:56px; padding:0 12px; }
     .header h3{ font-size:16px; }
