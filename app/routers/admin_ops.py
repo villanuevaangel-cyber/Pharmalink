@@ -1,4 +1,5 @@
 import csv
+import html
 import io
 import json
 import math
@@ -24,6 +25,7 @@ from app.automation import (
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin
 from app.loyalty import get_loyalty_settings, save_loyalty_peso
+from app.mailer import send_mail
 from app.report_files import pdf_bytes, workbook_bytes
 from app.routers.admin import _jsonable, _log, _row, _rows, _unauthorized
 from app.stock import sync_stock_status_for_drug
@@ -415,6 +417,286 @@ async def create_po(request: Request):
                 f"Created {po_number} for {supplier['supplier_name']} with {len(items)} item(s).",
             )
     return {"success": True, "po_id": po_id, "po_number": po_number}
+
+
+def _esc(value) -> str:
+    return html.escape("" if value is None else str(value), quote=True)
+
+
+def _date_text(value) -> str:
+    if value is None or value == "":
+        return ""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()[:10]
+    return str(value)[:10]
+
+
+def _peso(amount) -> str:
+    return f"₱{amount:,.2f}"
+
+
+def _po_email_subject(po_number: str) -> str:
+    return f"Purchase order {po_number}"
+
+
+def _po_email_html(po_number, supplier_name, to_email, order_date, expected_date, notes, lines) -> str:
+    """One document for the on-screen preview and the message that is sent."""
+    body_rows = []
+    total = 0.0
+    priced = 0
+    for line in lines:
+        qty = int(line["quantity"])
+        cost = line.get("unit_cost")
+        if cost is None:
+            cost_txt = "—"
+            amount_txt = "—"
+        else:
+            cost_val = round(float(cost), 2)
+            amount = round(qty * cost_val, 2)
+            total += amount
+            priced += 1
+            cost_txt = _peso(cost_val)
+            amount_txt = _peso(amount)
+        body_rows.append(
+            "<tr>"
+            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('generic_name') or '—')}</td>"
+            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('brand_name') or '—')}</td>"
+            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('dosage') or '—')}</td>"
+            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;text-align:right;\">{qty}</td>"
+            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;text-align:right;\">{cost_txt}</td>"
+            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;text-align:right;\">{amount_txt}</td>"
+            "</tr>"
+        )
+    total_txt = _peso(round(total, 2)) if priced else "—"
+    to_txt = to_email if to_email else "No email on file"
+    rows = "".join(body_rows) or (
+        "<tr><td colspan=\"6\" style=\"padding:8px;\">No items</td></tr>"
+    )
+    th = "padding:8px;text-align:left;font-size:12px;"
+    thr = "padding:8px;text-align:right;font-size:12px;"
+    return (
+        "<div style=\"font-family:Arial,sans-serif;color:#1E3A34;font-size:14px;line-height:1.45;\">"
+        f"<p style=\"margin:0 0 6px;\"><strong>To:</strong> {_esc(to_txt)}</p>"
+        f"<p style=\"margin:0 0 14px;\"><strong>Subject:</strong> {_esc(_po_email_subject(po_number))}</p>"
+        f"<h2 style=\"margin:0 0 12px;font-size:20px;\">{_esc(po_number)}</h2>"
+        f"<p style=\"margin:0 0 4px;\"><strong>Supplier:</strong> {_esc(supplier_name or '—')}</p>"
+        f"<p style=\"margin:0 0 4px;\"><strong>Order date:</strong> {_esc(order_date or '—')}</p>"
+        f"<p style=\"margin:0 0 4px;\"><strong>Expected date:</strong> {_esc(expected_date or '—')}</p>"
+        f"<p style=\"margin:0 0 14px;\"><strong>Notes:</strong> {_esc(notes or '—')}</p>"
+        "<table style=\"width:100%;min-width:640px;border-collapse:collapse;\">"
+        "<thead><tr style=\"background:#1E3A34;color:#ffffff;\">"
+        f"<th style=\"{th}\">Generic name</th>"
+        f"<th style=\"{th}\">Brand</th>"
+        f"<th style=\"{th}\">Dosage</th>"
+        f"<th style=\"{thr}\">Quantity</th>"
+        f"<th style=\"{thr}\">Unit cost</th>"
+        f"<th style=\"{thr}\">Line amount</th>"
+        "</tr></thead><tbody>"
+        f"{rows}</tbody></table>"
+        f"<p style=\"margin:12px 0 0;text-align:right;\"><strong>Grand total:</strong> {_esc(total_txt)}</p>"
+        "</div>"
+    )
+
+
+def _email_preview_payload(po_number, supplier_name, to_email, order_date, expected_date, notes, lines) -> dict:
+    cleaned = (to_email or "").strip()
+    html_doc = _po_email_html(
+        po_number, supplier_name, cleaned, order_date, expected_date, notes, lines
+    )
+    if cleaned:
+        return {
+            "success": True,
+            "can_send": True,
+            "to": cleaned,
+            "subject": _po_email_subject(po_number),
+            "po_number": po_number,
+            "html": html_doc,
+            "message": "",
+        }
+    return {
+        "success": True,
+        "can_send": False,
+        "to": "",
+        "subject": _po_email_subject(po_number),
+        "po_number": po_number,
+        "html": html_doc,
+        "message": "This supplier has no email. Add it on the supplier record.",
+    }
+
+
+def _lines_for_items(raw_items) -> tuple[list, str | None]:
+    wanted = []
+    for it in raw_items or []:
+        drug_id = int(it.get("drug_id") or 0)
+        qty = int(it.get("quantity_ordered") or it.get("quantity") or 0)
+        if not drug_id or qty <= 0:
+            continue
+        cost_raw = it.get("unit_cost")
+        cost = None if cost_raw in (None, "") else round(float(cost_raw), 2)
+        if cost is not None and cost < 0:
+            return [], "Unit cost cannot be negative."
+        wanted.append((drug_id, qty, cost))
+    if not wanted:
+        return [], "Please add at least one item with a valid quantity."
+    ids = list(dict.fromkeys(drug_id for drug_id, _, _ in wanted))
+    drugs = {
+        int(row["drug_id"]): row
+        for row in fetch_all(
+            "SELECT drug_id, generic_name, brand_name, dosage FROM drugs_master WHERE drug_id = ANY(%s)",
+            (ids,),
+        )
+    }
+    lines = []
+    for drug_id, qty, cost in wanted:
+        drug = drugs.get(drug_id)
+        if not drug:
+            return [], "One of the items is not in the catalog."
+        lines.append({
+            "generic_name": drug.get("generic_name") or "",
+            "brand_name": drug.get("brand_name") or "",
+            "dosage": drug.get("dosage") or "",
+            "quantity": qty,
+            "unit_cost": cost,
+        })
+    return lines, None
+
+
+def _next_po_number() -> str:
+    row = fetch_one("SELECT COALESCE(MAX(po_id), 0) + 1 AS nid FROM purchase_orders")
+    nid = int(row["nid"] if isinstance(row, dict) else row[0])
+    return f"PO-{nid:05d}"
+
+
+@router.post("/purchase-orders/email-preview")
+async def preview_purchase_order_email(request: Request):
+    """Build the email document only. Nothing is saved or sent."""
+    if not require_admin(request):
+        return _unauthorized()
+    data = await request.json()
+    try:
+        po_id = int(data.get("po_id") or 0)
+    except (TypeError, ValueError):
+        return {"success": False, "message": "Invalid purchase order."}
+    if po_id:
+        po = fetch_one(
+            """
+            SELECT po.po_id, po.order_date, po.expected_date, po.notes, s.supplier_name, s.email
+            FROM purchase_orders po JOIN suppliers s ON po.supplier_id = s.supplier_id
+            WHERE po.po_id = %s
+            """,
+            (po_id,),
+        )
+        if not po:
+            return {"success": False, "message": "Purchase order not found."}
+        po = _row(po)
+        raw_items = []
+        for row in fetch_all(
+            """
+            SELECT poi.drug_id, poi.quantity_ordered, poi.unit_cost
+            FROM purchase_order_items poi
+            WHERE poi.po_id = %s ORDER BY poi.po_item_id ASC
+            """,
+            (po_id,),
+        ):
+            item = _row(row)
+            raw_items.append(item)
+        lines, err = _lines_for_items(raw_items)
+        if err:
+            return {"success": False, "message": err}
+        return _email_preview_payload(
+            f"PO-{int(po['po_id']):05d}",
+            po.get("supplier_name") or "",
+            po.get("email") or "",
+            _date_text(po.get("order_date")),
+            _date_text(po.get("expected_date")),
+            (po.get("notes") or "").strip(),
+            lines,
+        )
+
+    supplier_id = int(data.get("supplier_id") or 0)
+    if not supplier_id:
+        return {"success": False, "message": "Please select a supplier."}
+    supplier = fetch_one(
+        "SELECT supplier_id, supplier_name, email FROM suppliers WHERE supplier_id = %s AND status = 'Active'",
+        (supplier_id,),
+    )
+    if not supplier:
+        return {"success": False, "message": "Please select an active supplier."}
+    order_date = _parse_iso_date(data.get("order_date")) or _manila_today()
+    expected_date = _parse_iso_date(data.get("expected_date"))
+    today = _manila_today()
+    if order_date < today:
+        return {"success": False, "message": "Order date cannot be in the past."}
+    if expected_date and expected_date < today:
+        return {"success": False, "message": "Expected date cannot be in the past."}
+    lines, err = _lines_for_items(data.get("items") or [])
+    if err:
+        return {"success": False, "message": err}
+    return _email_preview_payload(
+        _next_po_number(),
+        supplier["supplier_name"],
+        supplier.get("email") or "",
+        order_date.isoformat(),
+        expected_date.isoformat() if expected_date else "",
+        str(data.get("notes") or "").strip(),
+        lines,
+    )
+
+
+@router.post("/purchase-orders/{po_id}/email")
+async def email_purchase_order(po_id: int, request: Request):
+    """Send the preview HTML. Does not create a purchase order."""
+    if not require_admin(request):
+        return _unauthorized()
+    data = await request.json()
+    html_doc = str(data.get("html") or "")
+    subject = str(data.get("subject") or "").strip()
+    po = fetch_one(
+        """
+        SELECT po.po_id, po.status, s.email, s.supplier_name
+        FROM purchase_orders po JOIN suppliers s ON po.supplier_id = s.supplier_id
+        WHERE po.po_id = %s
+        """,
+        (po_id,),
+    )
+    if not po:
+        return {"success": False, "email_sent": False, "message": "Purchase order not found."}
+    po = _row(po)
+    po_number = f"PO-{int(po['po_id']):05d}"
+    email = (po.get("email") or "").strip()
+    if not email:
+        return {
+            "success": False,
+            "email_sent": False,
+            "message": "This supplier has no email. Add it on the supplier record.",
+        }
+    expected_subject = _po_email_subject(po_number)
+    if subject != expected_subject or po_number not in html_doc:
+        return {
+            "success": False,
+            "email_sent": False,
+            "message": "The preview does not match this purchase order. Open it again.",
+        }
+    sent = send_mail(email, expected_subject, html_doc)
+    if sent.get("success"):
+        log_event("Email Purchase Order", f"Emailed {po_number} to {email}.", request=request)
+        return {
+            "success": True,
+            "email_sent": True,
+            "po_number": po_number,
+            "message": f"Emailed {po_number} to {email}.",
+        }
+    log_event(
+        "Email Purchase Order",
+        f"Did not email {po_number} to {email}.",
+        request=request,
+    )
+    return {
+        "success": True,
+        "email_sent": False,
+        "po_number": po_number,
+        "message": f"{po_number} is still Pending. The email was not sent.",
+    }
 
 
 @router.post("/deliveries/receive")

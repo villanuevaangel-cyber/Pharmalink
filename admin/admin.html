@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=nav-drawer1">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=sup-list3">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=po-email1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -896,12 +896,13 @@
 
 <!-- Create Purchase Order Modal -->
 <div id="createPoModal" class="modal" style="z-index:2600;">
-    <div class="modal-content" style="width:600px;">
+    <div class="modal-content" style="width:min(760px, 96vw);">
         <div class="modal-header">
-            <h2><i class="fas fa-file-invoice"></i> Create Purchase Order</h2>
+            <h2 id="createPoTitle"><i class="fas fa-file-invoice"></i> Create Purchase Order</h2>
             <span class="close" id="closeCreatePoModal">&times;</span>
         </div>
 
+        <div id="createPoFormPane">
         <div class="form-group">
             <label for="po_supplier">Supplier:</label>
             <select id="po_supplier"></select>
@@ -930,7 +931,17 @@
             <button type="button" id="addPoItemRowBtn" class="action-btn" style="background:var(--ph-surface-2);color:var(--ph-text-soft);"><i class="fas fa-plus"></i> Add Item</button>
         </div>
 
-        <button type="button" id="submitPoBtn" style="width:100%;"><i class="fas fa-check"></i> Create Purchase Order</button>
+        <button type="button" id="submitPoBtn" style="width:100%;"><i class="fas fa-envelope"></i> Review email</button>
+        </div>
+
+        <div id="createPoPreviewPane" hidden>
+            <p id="poEmailMissing" class="po-email-missing" hidden>This supplier has no email. Add it on the supplier record.</p>
+            <div id="poEmailPreview" class="po-email-preview"></div>
+            <div class="po-email-actions">
+                <button type="button" id="poEmailBack" class="po-email-back">Back</button>
+                <button type="button" id="poEmailConfirm"><i class="fas fa-paper-plane"></i> Confirm and send</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1729,7 +1740,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>window.SEGMENTATION_MANAGE = true;</script>
 <script src="/shared/js/segmentation.js?v=chart-colors1"></script>
-<script src="/admin/js/admin-boot.js?v=photo-db1"></script>
+<script src="/admin/js/admin-boot.js?v=session-stay1"></script>
 <script>
 (function () {
     const topItemsCtx = document.getElementById('topItemsChart').getContext('2d');
@@ -2942,6 +2953,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let poSupplierList = [];  // cached suppliers list
     let currentPoId = null;   // which PO the View/Receive modal is showing
     let supplierPriorDrugIds = new Set();
+    let poEmailDraft = null;  // preview shown on screen; this HTML is what gets sent
 
     function manilaTodayYmd() {
         return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -3025,6 +3037,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <td><span class="status ${statusClass}">${escapeHtmlPo(po.status)}</span></td>
                             <td>
                                 <button type="button" class="view-po-btn action-btn" data-po-id="${po.po_id}"><i class="fas fa-eye"></i> View / Receive</button>
+                                ${po.status === 'Pending' ? `<button type="button" class="email-po-btn action-btn" data-po-id="${po.po_id}"><i class="fas fa-envelope"></i> Email supplier</button>` : ''}
                             </td>
                         </tr>`;
                 }).join('');
@@ -3038,8 +3051,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('poStatusFilter')?.addEventListener('change', loadPurchaseOrders);
 
     document.getElementById('poBody')?.addEventListener('click', e => {
-        const btn = e.target.closest('.view-po-btn');
-        if (btn) openViewPoModal(parseInt(btn.dataset.poId, 10));
+        const viewBtn = e.target.closest('.view-po-btn');
+        if (viewBtn) openViewPoModal(parseInt(viewBtn.dataset.poId, 10));
+        const emailBtn = e.target.closest('.email-po-btn');
+        if (emailBtn) openSavedPoEmail(parseInt(emailBtn.dataset.poId, 10));
     });
 
     // ---------- Create Purchase Order modal ----------
@@ -3117,7 +3132,44 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('poItemsContainer')?.appendChild(renderPoItemRow());
     });
 
+    function showPoFormPane() {
+        const form = document.getElementById('createPoFormPane');
+        const preview = document.getElementById('createPoPreviewPane');
+        const title = document.getElementById('createPoTitle');
+        if (form) form.hidden = false;
+        if (preview) preview.hidden = true;
+        if (title) title.innerHTML = '<i class="fas fa-file-invoice"></i> Create Purchase Order';
+    }
+
+    function showPoPreviewPane(draft, mode) {
+        poEmailDraft = draft;
+        poEmailDraft.mode = mode;
+        const form = document.getElementById('createPoFormPane');
+        const preview = document.getElementById('createPoPreviewPane');
+        const title = document.getElementById('createPoTitle');
+        const box = document.getElementById('poEmailPreview');
+        const missing = document.getElementById('poEmailMissing');
+        const confirmBtn = document.getElementById('poEmailConfirm');
+        if (form) form.hidden = true;
+        if (preview) preview.hidden = false;
+        if (box) box.innerHTML = draft.html || '';
+        if (missing) {
+            missing.hidden = !!draft.can_send;
+            missing.textContent = draft.message || 'This supplier has no email. Add it on the supplier record.';
+        }
+        if (confirmBtn) confirmBtn.disabled = !draft.can_send;
+        if (title) {
+            title.innerHTML = mode === 'create'
+                ? '<i class="fas fa-envelope"></i> Review email'
+                : `<i class="fas fa-envelope"></i> Email ${escapeHtmlPo(draft.po_number || 'supplier')}`;
+        }
+        const modal = document.getElementById('createPoModal');
+        if (modal) modal.style.display = 'flex';
+    }
+
     function openCreatePoModal(prefillItems, prefillSupplierId) {
+        poEmailDraft = null;
+        showPoFormPane();
         loadPoLookups().then(() => {
             const supplierSel = document.getElementById('po_supplier');
             if (supplierSel) {
@@ -3171,49 +3223,143 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modal) modal.style.display = 'none';
     });
 
-    document.getElementById('submitPoBtn')?.addEventListener('click', () => {
+    function collectNewPoPayload() {
         const supplier_id = document.getElementById('po_supplier')?.value;
         const items = Array.from(document.querySelectorAll('#poItemsContainer .po-item-row')).map(row => ({
             drug_id: row.querySelector('.po-item-drug').value,
             quantity_ordered: parseInt(row.querySelector('.po-item-qty').value, 10) || 0,
             unit_cost: row.querySelector('.po-item-cost').value || null,
         })).filter(it => it.drug_id && it.quantity_ordered > 0);
-
-        if (!supplier_id) { alert('Please select a supplier.'); return; }
-        if (items.length === 0) { alert('Please add at least one item with a valid quantity.'); return; }
-        const expected = document.getElementById('po_expected_date')?.value || '';
-        const orderDate = document.getElementById('po_order_date')?.value || '';
-        if (orderDate && orderDate < manilaTodayYmd()) {
-            alert('Order date cannot be in the past.');
-            return;
-        }
-        if (expected && expected < manilaTodayYmd()) {
-            alert('Expected date cannot be in the past.');
-            return;
-        }
-
-        const payload = {
+        return {
             supplier_id,
-            order_date: document.getElementById('po_order_date').value,
-            expected_date: document.getElementById('po_expected_date').value || null,
-            notes: document.getElementById('po_notes').value.trim(),
+            order_date: document.getElementById('po_order_date')?.value || '',
+            expected_date: document.getElementById('po_expected_date')?.value || null,
+            notes: document.getElementById('po_notes')?.value.trim() || '',
             items,
         };
+    }
 
-        fetch('/api/admin/purchase-orders', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    function openPoEmailPreview(body, mode) {
+        const btn = document.getElementById('submitPoBtn');
+        if (btn && mode === 'create') btn.disabled = true;
+        fetch('/api/admin/purchase-orders/email-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
         })
             .then(res => res.json())
             .then(result => {
-                if (result.success) {
-                    document.getElementById('createPoModal').style.display = 'none';
-                    loadPurchaseOrders();
-                } else {
-                    alert(result.message || 'Failed to create purchase order.');
+                if (!result.success) {
+                    alert(result.message || 'Could not build the email preview.');
+                    return;
                 }
+                result.payload = mode === 'create' ? body : null;
+                result.po_id = mode === 'saved' ? body.po_id : null;
+                showPoPreviewPane(result, mode);
             })
-            .catch(err => alert('Error: ' + err.message));
+            .catch(err => alert('Error: ' + err.message))
+            .finally(() => { if (btn) btn.disabled = false; });
+    }
+
+    function sendPreviewedEmail(poId, draft) {
+        return fetch('/api/admin/purchase-orders/' + poId + '/email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ html: draft.html, subject: draft.subject }),
+        }).then(res => res.json());
+    }
+
+    function finishPoEmail(message, sent) {
+        const modal = document.getElementById('createPoModal');
+        if (modal) modal.style.display = 'none';
+        poEmailDraft = null;
+        showPoFormPane();
+        loadPurchaseOrders();
+        if (message) alert(message);
+        return sent;
+    }
+
+    document.getElementById('submitPoBtn')?.addEventListener('click', () => {
+        const payload = collectNewPoPayload();
+        if (!payload.supplier_id) { alert('Please select a supplier.'); return; }
+        if (!payload.items.length) { alert('Please add at least one item with a valid quantity.'); return; }
+        if (payload.order_date && payload.order_date < manilaTodayYmd()) {
+            alert('Order date cannot be in the past.');
+            return;
+        }
+        if (payload.expected_date && payload.expected_date < manilaTodayYmd()) {
+            alert('Expected date cannot be in the past.');
+            return;
+        }
+        openPoEmailPreview(payload, 'create');
     });
+
+    document.getElementById('poEmailBack')?.addEventListener('click', () => {
+        if (poEmailDraft && poEmailDraft.mode === 'saved') {
+            const modal = document.getElementById('createPoModal');
+            if (modal) modal.style.display = 'none';
+            poEmailDraft = null;
+            showPoFormPane();
+            return;
+        }
+        poEmailDraft = null;
+        showPoFormPane();
+    });
+
+    document.getElementById('poEmailConfirm')?.addEventListener('click', () => {
+        const draft = poEmailDraft;
+        if (!draft || !draft.can_send) return;
+        const confirmBtn = document.getElementById('poEmailConfirm');
+        if (confirmBtn) confirmBtn.disabled = true;
+        const release = () => { if (confirmBtn) confirmBtn.disabled = !draft.can_send; };
+
+        if (draft.mode === 'saved') {
+            sendPreviewedEmail(draft.po_id, draft)
+                .then(result => {
+                    if (!result.success) {
+                        alert(result.message || 'The email was not sent.');
+                        release();
+                        return;
+                    }
+                    finishPoEmail(result.email_sent ? result.message : (result.message || 'The email was not sent.'), result.email_sent);
+                })
+                .catch(err => { alert('Error: ' + err.message); release(); });
+            return;
+        }
+
+        fetch('/api/admin/purchase-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(draft.payload),
+        })
+            .then(res => res.json())
+            .then(result => {
+                if (!result.success) {
+                    alert(result.message || 'Failed to create purchase order.');
+                    release();
+                    return null;
+                }
+                if (result.po_number !== draft.po_number) {
+                    finishPoEmail(result.po_number + ' was saved as Pending, but the email was not sent because the purchase order number changed. Use Email supplier on the list.', false);
+                    return null;
+                }
+                return sendPreviewedEmail(result.po_id, draft).then(sent => ({ created: result, sent }));
+            })
+            .then(bundle => {
+                if (!bundle) return;
+                if (!bundle.sent.success || !bundle.sent.email_sent) {
+                    const number = bundle.created.po_number;
+                    finishPoEmail(number + ' was saved as Pending, but the email was not sent.', false);
+                    return;
+                }
+                finishPoEmail(bundle.sent.message, true);
+            })
+            .catch(err => { alert('Error: ' + err.message); release(); });
+    });
+
+    function openSavedPoEmail(poId) {
+        openPoEmailPreview({ po_id: poId }, 'saved');
+    }
 
     // ---------- View / Receive Purchase Order modal ----------
     function openViewPoModal(poId) {
