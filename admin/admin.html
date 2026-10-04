@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=nav-drawer1">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=nav-drawer1">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=sup-list3">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -256,10 +256,10 @@
             <div class="nav-item" data-target="deliveries"><i class="fas fa-truck-loading"></i><span>Deliveries</span></div>
             <div class="nav-item" data-target="forecast"><i class="fas fa-chart-line"></i><span>Forecast</span></div>
             <div class="nav-item" data-target="reports"><i class="fas fa-file-alt"></i><span>Reports</span></div>
-            <div class="nav-item" data-target="activity-logs"><i class="fas fa-clipboard-list"></i><span>Activity Logs</span></div>
-            <div class="nav-item" data-target="maintenance"><i class="fas fa-sliders"></i><span>Maintenance</span></div>
-            <div class="nav-item" data-target="user-management"><i class="fas fa-users"></i><span>User Management</span></div>
             <div class="nav-item" data-target="customer-segmentation"><i class="fas fa-chart-pie"></i><span>Customer Segmentation</span></div>
+            <div class="nav-item" data-target="maintenance"><i class="fas fa-sliders"></i><span>Maintenance</span></div>
+            <div class="nav-item" data-target="activity-logs"><i class="fas fa-clipboard-list"></i><span>Activity Logs</span></div>
+            <div class="nav-item" data-target="user-management"><i class="fas fa-users"></i><span>User Management</span></div>
             <div class="nav-item" data-target="profile"><i class="fas fa-user"></i><span>Profile</span></div>
         </div>
         <a href="/api/auth/logout" class="nav-item" style="margin-top:auto;border-top:1px solid rgba(255,255,255,0.04);">
@@ -811,24 +811,24 @@
             
 <section id="supplier-section" style="display:none;">
     <div class="dashboard-header">
-        <h2>Supplier Management</h2>
-        <p class="subtitle">Manage your suppliers and the medicines they supply.</p>
+        <h2>Suppliers</h2>
+        <p class="subtitle">The list stays one line per supplier. Medicines open in the edit form.</p>
     </div>
 
     <div class="um-card">
         <div class="um-card-head">
             <div>
-                <h3>Supplier Directory</h3>
-                <p>Search by name, filter by status, then edit or deactivate a supplier.</p>
+                <h3>Supplier list</h3>
+                <p>Search by name, then edit. A long medicine list does not stretch the row.</p>
             </div>
             <button type="button" class="um-add-btn customer btn-add-supplier">
-                <i class="fas fa-plus"></i> Add Supplier
+                <i class="fas fa-plus"></i> Add supplier
             </button>
         </div>
         <div class="um-toolbar">
             <div class="um-search">
                 <i class="fas fa-search"></i>
-                <input type="text" id="supplier-search" placeholder="Search suppliers by name..." autocomplete="off">
+                <input type="text" id="supplier-search" placeholder="Search by name" autocomplete="off">
             </div>
             <label for="supplier-status-filter">Status</label>
             <select id="supplier-status-filter">
@@ -837,8 +837,21 @@
                 <option value="inactive">Inactive</option>
             </select>
         </div>
-        <div class="supplier-list">
-            <p class="empty-message">Loading suppliers...</p>
+        <div class="table-wrap">
+            <table class="sup-table">
+                <thead>
+                    <tr>
+                        <th>Supplier</th>
+                        <th>Contact</th>
+                        <th>Status</th>
+                        <th>Medicines</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="supplier-list">
+                    <tr><td colspan="5" class="empty-message">Loading suppliers...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </section>
@@ -1022,7 +1035,7 @@
     <div class="rpt-upload-card">
         <div class="rpt-drop-icon"><i class="fas fa-cloud-arrow-up"></i></div>
         <h3>Upload sales data</h3>
-        <p>CSV or Excel, matched by drug id or generic/brand name. Inventory is not deducted.</p>
+        <p>CSV or Excel. Every row is checked first. Medicine and brand must match the inventory, and quantity and price must be numbers. Nothing is saved if a row is wrong. Inventory is not deducted.</p>
         <input type="file" id="rptSalesFile" class="rpt-file-input" accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
         <div class="rpt-upload-actions">
             <label for="rptSalesFile" class="rpt-choose"><i class="fas fa-folder-open"></i> Choose File</label>
@@ -2407,7 +2420,9 @@
                     if (typeof generateForecast === 'function') generateForecast();
                 } else if (msg) {
                     msg.style.color = '#dc2626';
-                    msg.textContent = data.message || 'Upload failed.';
+                    msg.style.whiteSpace = 'pre-line';
+                    const lines = [data.message || 'Upload failed.'].concat(data.errors || []);
+                    msg.textContent = lines.filter(Boolean).join('\n');
                 }
             } catch (err) {
                 if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Network error while uploading.'; }
@@ -3771,7 +3786,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
     <script src="/admin/js/inventory.js?v=inv-catalog-maint1"></script>
-    <script src="/admin/js/supplier.js?v=sup-ui3"></script>
+    <script src="/admin/js/supplier.js?v=sup-list2"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     // Flag to ensure User Management events are initialized only once

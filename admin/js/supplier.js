@@ -1,10 +1,6 @@
 /**
- * supplier.js - Supplier Management module (admin/admin.php, #supplier-section)
- *
- * Talks to: get_suppliers.php, add_supplier.php, update_supplier.php
- *
- * Exposes window.initializeSupplierModule(), which admin.php calls the
- * first time (and every time) the "Supplier" nav item is clicked.
+ * supplier.js - Supplier list for the admin page.
+ * The table stays one line per supplier. Add and edit open a popup.
  */
 (function () {
     let eventsBound = false;
@@ -23,53 +19,28 @@
         return `<span class="sup-badge ${cls}">${escapeHtml(status || 'Active')}</span>`;
     }
 
-    function renderSupplierCard(s) {
+    function renderRow(s) {
         const medicines = Array.isArray(s.medicines_supplied) ? s.medicines_supplied : [];
-        const shown = medicines.slice(0, 5).map(m =>
-            `<span class="sup-chip">${escapeHtml(m)}</span>`
-        ).join('');
-        const medsHtml = medicines.length
-            ? shown + (medicines.length > 5 ? `<span class="sup-chip-more">+${medicines.length - 5} more</span>` : '')
-            : `<span class="sup-chip-empty">No medicines linked yet</span>`;
-
-        const reasonHtml = (s.status === 'Inactive' && s.inactive_reason)
-            ? `<p class="sup-reason"><i class="fas fa-circle-info"></i> ${escapeHtml(s.inactive_reason)}</p>`
-            : '';
-
-        const policy = String(s.consignment_policy || 'none').toLowerCase();
-        const policyLabel = policy === 'returnable'
-            ? 'Consignment: returnable'
-            : (policy === 'non_returnable' ? 'Consignment: non-returnable' : 'No consignment policy');
-        const policyChip = `<span class="sup-chip">${escapeHtml(policyLabel)}</span>`;
+        const countLabel = medicines.length ? String(medicines.length) : '0';
+        const tip = medicines.length ? medicines.join(', ') : 'No medicines linked yet';
+        const contact = s.contact_number || s.email || '—';
         const isActive = s.status === 'Active';
 
         return `
-        <div class="supplier-card" data-id="${s.supplier_id}">
-            <div class="sup-card-top">
-                <div>
-                    <h3>${escapeHtml(s.supplier_name)}</h3>
-                    ${statusBadge(s.status)}
-                </div>
-                <div class="sup-card-actions">
-                    <button type="button" class="sup-icon-btn edit-supplier-btn" title="Edit supplier"><i class="fas fa-pen"></i></button>
-                    <button type="button" class="sup-icon-btn toggle-supplier-btn ${isActive ? 'is-active' : 'is-inactive'}" title="${isActive ? 'Deactivate' : 'Reactivate'}">
+        <tr data-id="${s.supplier_id}">
+            <td class="sup-name">${escapeHtml(s.supplier_name)}</td>
+            <td class="sup-contact" title="${escapeHtml(contact)}">${escapeHtml(contact)}</td>
+            <td>${statusBadge(s.status)}</td>
+            <td><span class="sup-count" title="${escapeHtml(tip)}">${countLabel}</span></td>
+            <td>
+                <div class="sup-actions">
+                    <button type="button" class="um-btn um-btn-edit edit-supplier-btn" title="Edit" aria-label="Edit"><i class="fas fa-pen"></i></button>
+                    <button type="button" class="um-btn ${isActive ? 'um-btn-danger' : 'um-btn-activate'} toggle-supplier-btn" title="${isActive ? 'Deactivate' : 'Reactivate'}" aria-label="${isActive ? 'Deactivate' : 'Reactivate'}">
                         <i class="fas ${isActive ? 'fa-ban' : 'fa-rotate-left'}"></i>
                     </button>
                 </div>
-            </div>
-            <div class="sup-meta">
-                <div><i class="fas fa-phone"></i> ${escapeHtml(s.contact_number) || '-'}</div>
-                <div><i class="fas fa-envelope"></i> ${escapeHtml(s.email) || '-'}</div>
-                <div><i class="fas fa-location-dot"></i> ${escapeHtml(s.address) || '-'}</div>
-            </div>
-            <div class="sup-meds">
-                <p class="sup-meds-label">Consignment policy</p>
-                ${policyChip}
-                <p class="sup-meds-label">Medicines supplied</p>
-                ${medsHtml}
-            </div>
-            ${reasonHtml}
-        </div>`;
+            </td>
+        </tr>`;
     }
 
     function applyFiltersAndRender() {
@@ -87,13 +58,13 @@
         });
 
         list.innerHTML = filtered.length
-            ? filtered.map(renderSupplierCard).join('')
-            : '<p class="empty-message">No suppliers found.</p>';
+            ? filtered.map(renderRow).join('')
+            : '<tr><td colspan="5" class="empty-message">No suppliers found.</td></tr>';
     }
 
     function fetchSuppliers() {
         const list = document.querySelector('.supplier-list');
-        if (list) list.innerHTML = '<p class="empty-message">Loading suppliers...</p>';
+        if (list) list.innerHTML = '<tr><td colspan="5" class="empty-message">Loading suppliers...</td></tr>';
 
         return fetch('/api/admin/suppliers')
             .then(res => {
@@ -106,34 +77,39 @@
             })
             .catch(err => {
                 console.error('Failed to load suppliers:', err);
-                if (list) list.innerHTML = '<p class="empty-message empty-error">Failed to load suppliers. Please try again.</p>';
+                if (list) list.innerHTML = '<tr><td colspan="5" class="empty-message empty-error">Failed to load suppliers. Please try again.</td></tr>';
             });
     }
 
-    function openSupplierModal(mode, supplier) {
-        const isEdit = mode === 'edit';
+    function medicineListHtml(supplier) {
+        const medicines = supplier && Array.isArray(supplier.medicines_supplied) ? supplier.medicines_supplied : [];
+        if (!medicines.length) return '<li>No medicines linked yet.</li>';
+        return medicines.map(name => `<li>${escapeHtml(name)}</li>`).join('');
+    }
 
+    function openSupplierModal(mode, supplier) {
+        const isEdit = mode === 'edit' && supplier;
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay um-modal-overlay';
 
         overlay.innerHTML = `
-            <div class="modal-content um-modal-card">
+            <div class="modal-content um-modal-card sup-modal">
                 <div class="um-modal-head">
-                    <h3>${isEdit ? 'Edit Supplier' : 'Add Supplier'}</h3>
+                    <h3>${isEdit ? 'Edit supplier' : 'Add supplier'}</h3>
                     <span class="close-modal" title="Close">&times;</span>
                 </div>
                 <form id="supplierForm">
-                    <label for="sf-name">Supplier Name</label>
+                    <label for="sf-name">Supplier name</label>
                     <input type="text" id="sf-name" required value="${isEdit ? escapeHtml(supplier.supplier_name) : ''}">
-                    <label for="sf-contact">Contact Number</label>
+                    <label for="sf-contact">Contact number</label>
                     <input type="text" id="sf-contact" value="${isEdit ? escapeHtml(supplier.contact_number) : ''}">
                     <label for="sf-email">Email</label>
                     <input type="email" id="sf-email" value="${isEdit ? escapeHtml(supplier.email) : ''}">
                     <label for="sf-address">Address</label>
                     <input type="text" id="sf-address" value="${isEdit ? escapeHtml(supplier.address) : ''}">
-                    <label for="sf-consignment">Consignment policy</label>
+                    <label for="sf-consignment">Consignment</label>
                     <select id="sf-consignment">
-                        <option value="none" ${!isEdit || supplier.consignment_policy === 'none' || !supplier.consignment_policy ? 'selected' : ''}>None (not consignment)</option>
+                        <option value="none" ${!isEdit || !supplier.consignment_policy || supplier.consignment_policy === 'none' ? 'selected' : ''}>None</option>
                         <option value="returnable" ${isEdit && supplier.consignment_policy === 'returnable' ? 'selected' : ''}>Returnable</option>
                         <option value="non_returnable" ${isEdit && supplier.consignment_policy === 'non_returnable' ? 'selected' : ''}>Non-returnable</option>
                     </select>
@@ -143,12 +119,16 @@
                         <option value="Active" ${supplier.status === 'Active' ? 'selected' : ''}>Active</option>
                         <option value="Inactive" ${supplier.status === 'Inactive' ? 'selected' : ''}>Inactive</option>
                     </select>
-                    <div id="sf-reason-wrap" style="display:${supplier.status === 'Inactive' ? 'block' : 'none'};">
-                        <label for="sf-reason">Reason for Deactivation</label>
-                        <input type="text" id="sf-reason" value="${escapeHtml(supplier.inactive_reason || '')}" placeholder="e.g. No longer supplying">
+                    <div id="sf-reason-wrap" ${supplier.status === 'Inactive' ? '' : 'hidden'}>
+                        <label for="sf-reason">Reason for deactivation</label>
+                        <input type="text" id="sf-reason" value="${escapeHtml(supplier.inactive_reason || '')}" placeholder="Example: No longer supplying">
+                    </div>
+                    <div class="sup-meds">
+                        <p class="sup-meds-label">Medicines supplied</p>
+                        <ul class="sup-meds-scroll">${medicineListHtml(supplier)}</ul>
                     </div>` : ''}
                     <button type="submit">
-                        <i class="fas fa-floppy-disk"></i> ${isEdit ? 'Save Changes' : 'Add Supplier'}
+                        <i class="fas fa-floppy-disk"></i> ${isEdit ? 'Save changes' : 'Add supplier'}
                     </button>
                 </form>
             </div>`;
@@ -162,7 +142,7 @@
         if (statusSelect) {
             statusSelect.addEventListener('change', () => {
                 const wrap = overlay.querySelector('#sf-reason-wrap');
-                if (wrap) wrap.style.display = statusSelect.value === 'Inactive' ? 'block' : 'none';
+                if (wrap) wrap.hidden = statusSelect.value !== 'Inactive';
             });
         }
 
@@ -173,18 +153,25 @@
                 contact: overlay.querySelector('#sf-contact').value.trim(),
                 email: overlay.querySelector('#sf-email').value.trim(),
                 address: overlay.querySelector('#sf-address').value.trim(),
-                consignment_policy: overlay.querySelector('#sf-consignment')?.value || 'none',
+                consignment_policy: overlay.querySelector('#sf-consignment')?.value || 'none'
             };
-            if (!payload.name) { alert('Supplier name is required.'); return; }
+            if (!payload.name) {
+                alert('Supplier name is required.');
+                return;
+            }
 
             let url = '/api/admin/suppliers';
             if (isEdit) {
                 url = '/api/admin/suppliers/update';
                 payload.supplier_id = supplier.supplier_id;
                 payload.status = overlay.querySelector('#sf-status').value;
-                payload.inactive_reason = overlay.querySelector('#sf-reason')?.value.trim() || '';
+                payload.inactive_reason = payload.status === 'Inactive'
+                    ? (overlay.querySelector('#sf-reason')?.value.trim() || '')
+                    : '';
             }
 
+            const submitBtn = overlay.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
             fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -199,7 +186,8 @@
                         alert(result.message || 'Something went wrong. Please try again.');
                     }
                 })
-                .catch(err => alert('Error: ' + err.message));
+                .catch(err => alert('Error: ' + err.message))
+                .finally(() => { submitBtn.disabled = false; });
         });
     }
 
@@ -220,20 +208,16 @@
         })
             .then(res => res.json())
             .then(result => {
-                if (result.success) {
-                    fetchSuppliers();
-                } else {
-                    alert(result.message || 'Something went wrong. Please try again.');
-                }
+                if (result.success) fetchSuppliers();
+                else alert(result.message || 'Something went wrong. Please try again.');
             })
             .catch(err => alert('Error: ' + err.message));
     }
 
     function handleListClick(e) {
-        const card = e.target.closest('.supplier-card');
-        if (!card) return;
-        const id = card.getAttribute('data-id');
-        const supplier = allSuppliers.find(s => String(s.supplier_id) === String(id));
+        const row = e.target.closest('tr[data-id]');
+        if (!row) return;
+        const supplier = allSuppliers.find(s => String(s.supplier_id) === String(row.getAttribute('data-id')));
         if (!supplier) return;
 
         if (e.target.closest('.edit-supplier-btn')) {

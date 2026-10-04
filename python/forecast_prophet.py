@@ -126,7 +126,7 @@ def main():
     sales_forecast = fit_and_forecast(sales_series, period)
     qty_forecast = fit_and_forecast(qty_series, period)
 
-    forecast_labels = [d.strftime('%b %-d') for d in sales_forecast['ds']]
+    forecast_labels = [f"{d.strftime('%b')} {int(d.day)}" for d in sales_forecast['ds']]
     forecast_values = [round(float(v), 2) for v in sales_forecast['yhat']]
     forecast_lower = [round(float(v), 2) for v in sales_forecast['yhat_lower']]
     forecast_upper = [round(float(v), 2) for v in sales_forecast['yhat_upper']]
