@@ -13,22 +13,23 @@
     ready(async function () {
         try {
             const meRes = await fetch("/api/auth/me", { credentials: "same-origin" });
-            if (!meRes.ok) { window.location.href = "/"; return; }
-            const me = await meRes.json();
-            if (!me.success || String(me.role || "").toLowerCase() !== "admin") {
-                window.location.href = "/";
-                return;
+            if (meRes.status === 401) { window.location.href = "/"; return; }
+            if (meRes.ok) {
+                const me = await meRes.json();
+                if (!me.success || String(me.role || "").toLowerCase() !== "admin") {
+                    window.location.href = "/";
+                    return;
+                }
+                window.ADMIN_USER_ID = me.user_id;
+                let staff = me.staff || {};
+                try {
+                    const profileRes = await fetch("/api/admin/profile", { credentials: "same-origin" });
+                    const profile = await profileRes.json();
+                    if (profile.success && profile.staff) staff = profile.staff;
+                } catch (err) {}
+                applyProfile(staff, me.firstName, me.lastName, me.profile_image || staff.profile_image);
             }
-            window.ADMIN_USER_ID = me.user_id;
-            let staff = me.staff || {};
-            try {
-                const profileRes = await fetch("/api/admin/profile", { credentials: "same-origin" });
-                const profile = await profileRes.json();
-                if (profile.success && profile.staff) staff = profile.staff;
-            } catch (err) {}
-            applyProfile(staff, me.firstName, me.lastName, me.profile_image || staff.profile_image);
         } catch (err) {
-            window.location.href = "/";
             return;
         }
 

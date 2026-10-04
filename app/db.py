@@ -1,13 +1,14 @@
 import os
 import threading
+import time
 from contextlib import contextmanager
 
 import psycopg2
 from psycopg2.extensions import TRANSACTION_STATUS_INERROR
 from psycopg2.extras import RealDictCursor
-from psycopg2.pool import SimpleConnectionPool
+from psycopg2.pool import PoolError, ThreadedConnectionPool
 
-_pool: SimpleConnectionPool | None = None
+_pool: ThreadedConnectionPool | None = None
 _pool_lock = threading.Lock()
 
 
@@ -93,9 +94,9 @@ def _open_pool() -> None:
     last_error = None
     for _attempt in range(1):
         try:
-            _pool = SimpleConnectionPool(
+            _pool = ThreadedConnectionPool(
                 minconn=1,
-                maxconn=4,
+                maxconn=8,
                 host=os.getenv("SUPABASE_DB_HOST"),
                 port=os.getenv("SUPABASE_DB_PORT", "5432"),
                 dbname=os.getenv("SUPABASE_DB_NAME", "postgres"),
@@ -178,7 +179,15 @@ def _discard(conn) -> None:
 def get_conn():
     if _pool is None:
         init_pool()
-    conn = _pool.getconn()
+    deadline = time.monotonic() + 3
+    while True:
+        try:
+            conn = _pool.getconn()
+            break
+        except PoolError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
     try:
         if conn.closed:
             raise psycopg2.OperationalError("connection already closed")
