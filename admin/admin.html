@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=nav-drawer1">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=nav-drawer1">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=sup-list3">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -811,24 +811,24 @@
             
 <section id="supplier-section" style="display:none;">
     <div class="dashboard-header">
-        <h2>Supplier Management</h2>
-        <p class="subtitle">Manage your suppliers and the medicines they supply.</p>
+        <h2>Suppliers</h2>
+        <p class="subtitle">The list stays one line per supplier. Medicines open in the edit form.</p>
     </div>
 
     <div class="um-card">
         <div class="um-card-head">
             <div>
-                <h3>Supplier Directory</h3>
-                <p>Search by name, filter by status, then edit or deactivate a supplier.</p>
+                <h3>Supplier list</h3>
+                <p>Search by name, then edit. A long medicine list does not stretch the row.</p>
             </div>
             <button type="button" class="um-add-btn customer btn-add-supplier">
-                <i class="fas fa-plus"></i> Add Supplier
+                <i class="fas fa-plus"></i> Add supplier
             </button>
         </div>
         <div class="um-toolbar">
             <div class="um-search">
                 <i class="fas fa-search"></i>
-                <input type="text" id="supplier-search" placeholder="Search suppliers by name..." autocomplete="off">
+                <input type="text" id="supplier-search" placeholder="Search by name" autocomplete="off">
             </div>
             <label for="supplier-status-filter">Status</label>
             <select id="supplier-status-filter">
@@ -837,8 +837,21 @@
                 <option value="inactive">Inactive</option>
             </select>
         </div>
-        <div class="supplier-list">
-            <p class="empty-message">Loading suppliers...</p>
+        <div class="table-wrap">
+            <table class="sup-table">
+                <thead>
+                    <tr>
+                        <th>Supplier</th>
+                        <th>Contact</th>
+                        <th>Status</th>
+                        <th>Medicines</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="supplier-list">
+                    <tr><td colspan="5" class="empty-message">Loading suppliers...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </section>
@@ -3773,7 +3786,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
     <script src="/admin/js/inventory.js?v=inv-catalog-maint1"></script>
-    <script src="/admin/js/supplier.js?v=sup-ui3"></script>
+    <script src="/admin/js/supplier.js?v=sup-list2"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     // Flag to ensure User Management events are initialized only once
