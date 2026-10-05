@@ -823,19 +823,32 @@ def list_suppliers(request: Request):
         """
         SELECT s.supplier_id, s.supplier_name, s.contact_number, s.email,
                s.address, s.status, s.inactive_reason,
-               COALESCE(s.consignment_policy, 'none') AS consignment_policy,
-               STRING_AGG(DISTINCT d.generic_name, ', ') AS medicines
+               COALESCE(s.consignment_policy, 'none') AS consignment_policy
         FROM suppliers s
-        LEFT JOIN inventory_lots i ON s.supplier_id = i.supplier
-        LEFT JOIN drugs_master d ON i.drug_id = d.drug_id
-        GROUP BY s.supplier_id
+        ORDER BY s.supplier_name
         """
     )
+    med_rows = fetch_all(
+        """
+        SELECT DISTINCT i.supplier AS supplier_id, d.generic_name, d.brand_name, d.dosage
+        FROM inventory_lots i
+        JOIN drugs_master d ON d.drug_id = i.drug_id
+        WHERE i.supplier IS NOT NULL
+        ORDER BY d.generic_name, d.brand_name, d.dosage
+        """
+    )
+    by_supplier = {}
+    for med in med_rows:
+        item = _row(med)
+        by_supplier.setdefault(int(item["supplier_id"]), []).append({
+            "generic_name": item.get("generic_name") or "",
+            "brand_name": item.get("brand_name") or "",
+            "dosage": item.get("dosage") or "",
+        })
     out = []
     for row in rows:
         item = _row(row)
-        meds = item.pop("medicines", None)
-        item["medicines_supplied"] = meds.split(", ") if meds else []
+        item["medicines_supplied"] = by_supplier.get(int(item["supplier_id"]), [])
         out.append(item)
     return out
 
