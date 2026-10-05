@@ -1,10 +1,13 @@
 """Server-side automation: schema, expiry, alerts, trend/consignment POs, scheduler."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
+import subprocess
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from psycopg2.extras import RealDictCursor
@@ -255,8 +258,109 @@ def scan_stock_alerts(cur) -> int:
     return created
 
 
+def _prophet_units_by_drug(period: int = TARGET_DAYS) -> tuple[dict, str]:
+    """Predicted units per drug for the next `period` days, from Facebook Prophet.
+
+    Returns ({drug_id: units}, engine). Engine is "prophet" when the model ran,
+    or "recent_average" when Prophet is unavailable. Drugs with fewer than two
+    sale days are omitted so the caller can fall back per medicine.
+    """
+    history_days = 1095
+    per_drug = {}
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT drug_id, sale_date, SUM(daily_qty) AS daily_qty
+                FROM (
+                    SELECT si.drug_id, s.date_created::date AS sale_date, SUM(si.quantity) AS daily_qty
+                    FROM sales_items si
+                    JOIN sales s ON si.sale_id = s.sale_id
+                    WHERE LOWER(TRIM(s.status)) = 'completed'
+                      AND s.date_created::date >= (CURRENT_DATE - %s)
+                    GROUP BY si.drug_id, s.date_created::date
+                    UNION ALL
+                    SELECT od.drug_id, co.order_date::date AS sale_date, SUM(od.quantity) AS daily_qty
+                    FROM order_details od
+                    JOIN customer_orders co ON od.order_id = co.order_id
+                    WHERE LOWER(TRIM(co.order_status)) IN ('completed', 'ready for pickup')
+                      AND co.order_date::date >= (CURRENT_DATE - %s)
+                    GROUP BY od.drug_id, co.order_date::date
+                ) t
+                GROUP BY drug_id, sale_date
+                ORDER BY drug_id, sale_date ASC
+                """,
+                (history_days, history_days),
+            )
+            for row in cur.fetchall():
+                did = int(row["drug_id"])
+                bucket = per_drug.setdefault(did, [])
+                sold_on = row["sale_date"]
+                bucket.append({
+                    "date": sold_on.isoformat() if hasattr(sold_on, "isoformat") else str(sold_on)[:10],
+                    "qty": int(row["daily_qty"] or 0),
+                })
+    if not per_drug:
+        return {}, "recent_average"
+    today = datetime.now(MANILA).date()
+    first_sale = min(date.fromisoformat(pt["date"]) for series in per_drug.values() for pt in series)
+    range_start = max(first_sale, today - timedelta(days=history_days))
+    items = {str(did): {"series": series} for did, series in per_drug.items()}
+    fingerprint = hashlib.md5(
+        json.dumps({"period": period, "today": today.isoformat(), "items": items}, sort_keys=True).encode()
+    ).hexdigest()
+    cache_file = Path(__file__).resolve().parent.parent / "cache" / "prophet_reorder_cache.json"
+    if cache_file.exists():
+        try:
+            cached = json.loads(cache_file.read_text(encoding="utf-8"))
+            if cached.get("fingerprint") == fingerprint and isinstance(cached.get("demand"), dict):
+                return {int(k): int(v) for k, v in cached["demand"].items()}, "prophet"
+        except Exception:
+            pass
+    payload = json.dumps({
+        "purpose": "reorder",
+        "period": period,
+        "today": today.isoformat(),
+        "range_start": range_start.isoformat(),
+        "daily_sales": [],
+        "items": items,
+    })
+    script = Path(__file__).resolve().parent.parent / "python" / "forecast_prophet.py"
+    decoded = None
+    if script.exists():
+        for cmd in (["python", str(script)], ["py", "-3", str(script)]):
+            try:
+                proc = subprocess.run(cmd, input=payload, capture_output=True, text=True, timeout=180)
+                if proc.returncode != 0:
+                    continue
+                decoded = json.loads(proc.stdout or "{}")
+                if decoded.get("success") and not decoded.get("insufficient_data"):
+                    break
+                decoded = None
+            except Exception:
+                decoded = None
+                continue
+    if not decoded:
+        logger.warning("Prophet reorder forecast unavailable; using the recent sales average.")
+        return {}, "recent_average"
+    demand = {}
+    for item in decoded.get("items") or []:
+        if item.get("engine") == "prophet" and item.get("predicted_qty") is not None:
+            demand[int(item["drug_id"])] = max(0, int(item["predicted_qty"]))
+    try:
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(
+            json.dumps({"fingerprint": fingerprint, "demand": {str(k): v for k, v in demand.items()}}),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+    return demand, "prophet"
+
+
 def compute_reorder_suggestions() -> dict:
     lead, target, overstock, window = LEAD_DAYS, TARGET_DAYS, OVERSTOCK_DAYS, SALES_WINDOW_DAYS
+    forecast_units, demand_engine = _prophet_units_by_drug(target)
     rows = []
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -299,30 +403,48 @@ def compute_reorder_suggestions() -> dict:
         current = int(row["current_stock"] or 0)
         minimum = int(row["minimum_stock"] or 0)
         sold = int(row["units_sold_30d"] or 0)
-        avg = sold / window
-        has_demand = sold > 0
+        drug_id = int(row["drug_id"])
+        recent_avg = sold / window
+        predicted = forecast_units.get(drug_id)
+        if predicted is not None:
+            avg = predicted / target
+            source = "prophet"
+        else:
+            avg = recent_avg
+            source = "recent_average"
+        has_demand = avg > 0
         days_of_stock = round(current / avg, 1) if has_demand else None
         reorder_point = (avg * lead) + minimum
         target_stock = (avg * target) + minimum
         procurement = str(row.get("procurement_type") or "purchase").lower()
         if procurement not in {"purchase", "consignment"}:
             procurement = "purchase"
+        shown_rate = round(avg, 1) if avg >= 1 else round(avg, 2)
+        rate_text = f"~{shown_rate}/day"
+        forecast_n = int(round(predicted)) if predicted is not None else 0
+        unit_word = "unit" if forecast_n == 1 else "units"
+        if source == "prophet":
+            signal = f"Prophet forecast: {rate_text} for the next {target} days (about {forecast_n} {unit_word})"
+        elif sold > 0:
+            signal = f"Recent {window}-day average {rate_text} (Prophet needs at least 2 sale days for this medicine)"
+        else:
+            signal = ""
         action, qty, reduce_qty, reasoning = "ok", 0, 0, ""
         if current <= minimum or (has_demand and current <= reorder_point):
             action = "increase"
             qty = max(1, int(math.ceil(target_stock - current)))
             reasoning = (
-                f"Trend: ~{round(avg, 1)}/day; {days_of_stock} days of unexpired stock left."
+                f"{signal}. Unexpired stock is {current}. Order {qty} to cover that forecast and still keep the minimum of {minimum}."
                 if has_demand
-                else f"Stock is at or below minimum ({minimum}); no recent sales - minimum-buffer refill."
+                else f"Stock is at or below minimum ({minimum}); no forecasted demand - minimum-buffer refill."
             )
         elif has_demand and days_of_stock is not None and days_of_stock > overstock:
             action = "decrease"
             qty = 0
             reduce_qty = max(0, current - max(minimum, int(math.ceil(target_stock))))
             reasoning = (
-                f"At ~{round(avg, 1)}/day this covers ~{days_of_stock} days - pause reorders"
-                + (f" (about {reduce_qty} units above the 30-day target)." if reduce_qty else ".")
+                f"{signal}. This covers ~{days_of_stock} days - pause reorders"
+                + (f" (about {reduce_qty} units above the {target}-day target)." if reduce_qty else ".")
             )
         elif not has_demand and current > minimum * 3 and minimum > 0:
             action = "decrease"
@@ -334,7 +456,7 @@ def compute_reorder_suggestions() -> dict:
             )
         else:
             reasoning = (
-                f"Trend: ~{round(avg, 1)}/day; {days_of_stock} days of stock - sufficient."
+                f"{signal}. {days_of_stock} days of stock - sufficient."
                 if has_demand
                 else "No recent sales, and stock is within a reasonable range of the minimum."
             )
@@ -349,6 +471,8 @@ def compute_reorder_suggestions() -> dict:
             "current_stock": current,
             "minimum_stock": minimum,
             "avg_daily_sales": round(avg, 2),
+            "forecast_units": int(round(predicted)) if predicted is not None else None,
+            "demand_source": source,
             "days_of_stock": days_of_stock,
             "action": action,
             "suggested_qty": qty,
@@ -371,6 +495,7 @@ def compute_reorder_suggestions() -> dict:
             "target_coverage_days": target,
             "overstock_days": overstock,
             "sales_window_days": window,
+            "demand_model": demand_engine,
             "unexpired_stock_only": True,
             "consignment": "Label only. Qty is not auto-calculated from consignment policy.",
         },
@@ -474,7 +599,7 @@ def create_auto_purchase_orders() -> dict:
         and str(s.get("procurement_type") or "purchase") != "consignment"
     ]
     notes = (
-        "AUTO: generated from 30-day sales trend. "
+        "AUTO: generated from the Facebook Prophet demand forecast for the next 30 days. "
         "Consignment items are excluded - create those POs manually. "
         "Review quantities before sending to the supplier."
     )

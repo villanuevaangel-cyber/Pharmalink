@@ -3603,7 +3603,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <h2><i class="fas fa-cart-plus"></i> Reorder Suggestions</h2>
                 <span class="close" id="closeReorderModal">&times;</span>
             </div>
-            <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">Based on average daily sales over the last 30 days vs. current unexpired stock. Select items that need reorder, then create the PO automatically (one PO per supplier). Dashboard <strong>Run auto-PO now</strong> still creates POs for every needs-reorder item.</p>
+            <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">Order quantities come from the Facebook Prophet sales forecast for the next 30 days, compared with unexpired stock on hand. A medicine with fewer than 2 sale days uses the recent 30-day average instead. Select items that need reorder, then create the PO automatically (one PO per supplier). Dashboard <strong>Run auto-PO</strong> still creates POs for every needs-reorder item.</p>
             <div style="display:flex; gap:15px; margin-bottom:16px; flex-wrap:wrap;">
                 <div class="card" data-reorder-filter="increase" style="flex:1; min-width:160px; padding:12px; border-radius:8px; background:#fff; cursor:pointer;">
                     <h3 style="color:#dc2626; margin:0; font-size:14px;">Needs Reorder</h3>
@@ -3638,7 +3638,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <th>Policy</th>
                             <th>Current Stock</th>
                             <th>Min Stock</th>
-                            <th>Avg Daily Sales</th>
+                            <th>Forecast / day</th>
                             <th>Days of Stock Left</th>
                             <th>Suggested Action</th>
                             <th>Suggested Supplier</th>
