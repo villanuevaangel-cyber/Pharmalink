@@ -1055,10 +1055,9 @@
         <p class="subtitle">See pieces sold, or the cost of medicine still in stock.</p>
     </div>
 
-    <div class="rpt-upload-card">
+    <div class="rpt-upload-card" title="Excel or CSV of past sales. Use the template, and match the medicine names already in the store. Stock on the shelf does not change.">
         <div class="rpt-drop-icon"><i class="fas fa-cloud-arrow-up"></i></div>
         <h3>Upload sales data</h3>
-        <p>Excel or CSV of past sales. Use the template, and match the medicine names already in the store. Stock on the shelf does not change.</p>
         <input type="file" id="rptSalesFile" class="rpt-file-input" accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
         <div class="rpt-upload-actions">
             <label for="rptSalesFile" class="rpt-choose"><i class="fas fa-folder-open"></i> Choose File</label>
@@ -1069,9 +1068,8 @@
         <p id="rptUploadMsg"></p>
     </div>
     <div class="report-hub">
-        <div class="report-hub-card">
+        <div class="report-hub-card" title="Monthly consumption. Check this before a bulk order.">
             <h3><i class="fas fa-calendar-days"></i> Pieces sold each month</h3>
-            <p class="hub-hint">Monthly consumption. Check this before a bulk order.</p>
             <span class="hub-value" id="hub-consumption-total" style="color:#4BAA8B;">-</span>
             <p class="hub-hint" id="hub-consumption-range">Last 6 months</p>
             <div class="hub-actions">
@@ -1080,11 +1078,9 @@
                 <button type="button" class="rpt-btn xlsx" data-rpt-kind="consumption" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
             </div>
         </div>
-        <div class="report-hub-card">
+        <div class="report-hub-card" title="Procurement cost. Medicine still in the store. Expired stock is left out. The amount is what you paid for it.">
             <h3><i class="fas fa-file-invoice-dollar"></i> Cost of stock on hand</h3>
-            <p class="hub-hint">Procurement cost. Medicine still in the store. Expired stock is left out.</p>
             <span class="hub-value" id="hub-procurement-cost" style="color:#1E3A34;">₱0</span>
-            <p class="hub-hint">What you paid for it</p>
             <div class="hub-actions">
                 <button type="button" class="rpt-btn navy" data-report-modal="procurementReportModal"><i class="fas fa-list"></i> Open</button>
                 <button type="button" class="rpt-btn pdf" data-rpt-kind="procurement" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
@@ -1104,7 +1100,7 @@
             </div>
             <span class="close" data-close-report-modal="consumptionReportModal">&times;</span>
         </div>
-        <div class="cons-filters">
+        <div class="cons-filters" title="The chart and the list use the same months.">
             <label>From
                 <input type="month" id="consumptionFrom">
             </label>
@@ -1113,9 +1109,7 @@
             </label>
             <button type="button" class="rpt-btn navy" id="consumptionApply">Apply</button>
         </div>
-        <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">The chart and the list use the same months.</p>
-
-        <div style="background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); margin-bottom:20px; height:280px;">
+        <div style="background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); margin-bottom:20px; height:280px;" title="The chart and the list use the same months.">
             <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Total pieces sold</h4>
             <div style="position:relative; height:220px;">
                 <canvas id="consumptionTrendChart"></canvas>
@@ -1150,9 +1144,7 @@
             </div>
             <span class="close" data-close-report-modal="procurementReportModal">&times;</span>
         </div>
-    <p class="pc-note">What you paid for medicine that is still in the store. Expired stock is not counted.</p>
-
-    <div style="display:flex; gap:15px; margin-bottom:16px; flex-wrap:wrap;">
+    <div style="display:flex; gap:15px; margin-bottom:16px; flex-wrap:wrap;" title="What you paid for medicine that is still in the store. Expired stock is not counted.">
         <div class="card" style="flex:1; min-width:180px; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
             <h3 style="color:#1E3A34; margin:0;">Total cost</h3>
             <p class="value" id="procurement-total-cost" style="font-size:1.5em; color:#1E3A34;">₱0</p>

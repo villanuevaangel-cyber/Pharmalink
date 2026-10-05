@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink - Customer Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=nav-drawer1">
-    <link rel="stylesheet" href="/customer/css/customer.css?v=shop-card1">
+    <link rel="stylesheet" href="/customer/css/customer.css?v=cart-fix1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -329,6 +329,11 @@
             </tbody>
         </table>
     </div>
+    <div class="mo-pagination" id="orders-pagination">
+        <button type="button" id="orders-prev" class="mo-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
+        <span id="orders-page-info">Page 1</span>
+        <button type="button" id="orders-next" class="mo-page-btn">Next <i class="fas fa-chevron-right"></i></button>
+    </div>
 </div>
 </section>
 
@@ -431,6 +436,6 @@
     </script>
     <script src="/assets/theme.js?v=nav-drawer1"></script>
     <script src="/assets/profile-validate.js?v=pv4"></script>
-    <script src="/customer/js/customer-boot.js?v=shop-card1"></script>
+    <script src="/customer/js/customer-boot.js?v=orders-page1"></script>
 </body>
 </html>
