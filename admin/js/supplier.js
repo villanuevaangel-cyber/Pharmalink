@@ -31,7 +31,7 @@
             <td class="sup-name">${escapeHtml(s.supplier_name)}</td>
             <td class="sup-contact" title="${escapeHtml(contact)}">${escapeHtml(contact)}</td>
             <td>${statusBadge(s.status)}</td>
-            <td><span class="sup-count" title="${escapeHtml(tip)}">${countLabel}</span></td>
+            <td><button type="button" class="sup-count" title="${escapeHtml(tip)}" aria-label="Show medicines">${countLabel}</button></td>
             <td>
                 <div class="sup-actions">
                     <button type="button" class="um-btn um-btn-edit edit-supplier-btn" title="Edit" aria-label="Edit"><i class="fas fa-pen"></i></button>
@@ -81,10 +81,30 @@
             });
     }
 
-    function medicineListHtml(supplier) {
+    function openMedicineList(supplier) {
         const medicines = supplier && Array.isArray(supplier.medicines_supplied) ? supplier.medicines_supplied : [];
-        if (!medicines.length) return '<li>No medicines linked yet.</li>';
-        return medicines.map(name => `<li>${escapeHtml(name)}</li>`).join('');
+        const countText = medicines.length === 1 ? '1 medicine' : medicines.length + ' medicines';
+        const items = medicines.length
+            ? medicines.map(name => `<li>${escapeHtml(name)}</li>`).join('')
+            : '<li class="is-empty">No medicines linked yet.</li>';
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay um-modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal-content um-modal-card sup-meds-modal" role="dialog" aria-modal="true">
+                <div class="sup-meds-pop-head">
+                    <div>
+                        <p class="sup-meds-pop-kicker">Medicines supplied</p>
+                        <h3>${escapeHtml(supplier.supplier_name || 'Supplier')}</h3>
+                    </div>
+                    <button type="button" class="close-modal" aria-label="Close">&times;</button>
+                </div>
+                <p class="sup-meds-pop-count">${countText}</p>
+                <ul class="sup-meds-pop-list">${items}</ul>
+            </div>`;
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.querySelector('.close-modal').onclick = close;
+        overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
     }
 
     function openSupplierModal(mode, supplier) {
@@ -122,10 +142,6 @@
                     <div id="sf-reason-wrap" ${supplier.status === 'Inactive' ? '' : 'hidden'}>
                         <label for="sf-reason">Reason for deactivation</label>
                         <input type="text" id="sf-reason" value="${escapeHtml(supplier.inactive_reason || '')}" placeholder="Example: No longer supplying">
-                    </div>
-                    <div class="sup-meds">
-                        <p class="sup-meds-label">Medicines supplied</p>
-                        <ul class="sup-meds-scroll">${medicineListHtml(supplier)}</ul>
                     </div>` : ''}
                     <button type="submit">
                         <i class="fas fa-floppy-disk"></i> ${isEdit ? 'Save changes' : 'Add supplier'}
@@ -220,7 +236,9 @@
         const supplier = allSuppliers.find(s => String(s.supplier_id) === String(row.getAttribute('data-id')));
         if (!supplier) return;
 
-        if (e.target.closest('.edit-supplier-btn')) {
+        if (e.target.closest('.sup-count')) {
+            openMedicineList(supplier);
+        } else if (e.target.closest('.edit-supplier-btn')) {
             openSupplierModal('edit', supplier);
         } else if (e.target.closest('.toggle-supplier-btn')) {
             if (supplier.status === 'Active') {
