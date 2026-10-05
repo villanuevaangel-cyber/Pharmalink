@@ -703,20 +703,57 @@ let pointsDiscountValue = 0; // authoritative peso value of points currently app
 // Declare variables that will hold the DOM elements
 let tbody, cartTable, totalDisplay, subtotalDisplay, taxDisplay, cashInput, changeDisplay, discountInput, discountApplied, confirmSale;
 let selectedCustomer = null;
+let selectedCustomerSegment = '';
+let segmentByCustomer = {};
 
 let currentOnlineOrderId = null;
 let activePromos = []; // fetched once on load; matched against drug_id first, then category
 
+function customerCanUsePromo(promo) {
+    if (!promo || !promo.segment_label) return true;
+    return !!selectedCustomerSegment && promo.segment_label === selectedCustomerSegment;
+}
+
 function findPromoForItem(drugId, category) {
-    // Priority order: exact single-drug promo > multi-product ("Specific
-    // Products") promo that includes this drug > category-wide promo >
-    // storewide promo (scope='all' in add_promo.php, which leaves drug_id,
-    // category, AND drug_ids all empty).
-    return activePromos.find(p => p.drug_id !== null && String(p.drug_id) === String(drugId))
-        || activePromos.find(p => Array.isArray(p.drug_ids) && p.drug_ids.some(id => String(id) === String(drugId)))
-        || activePromos.find(p => p.drug_id === null && p.category && p.category === category)
-        || activePromos.find(p => p.drug_id === null && !p.category && (!Array.isArray(p.drug_ids) || p.drug_ids.length === 0))
+    // Priority: exact drug, then multi-product, then category, then a promo
+    // for the selected customer's segment, then a storewide promo.
+    const eligible = activePromos.filter(customerCanUsePromo);
+    const noProducts = (p) => p.drug_id === null && !p.category && (!Array.isArray(p.drug_ids) || p.drug_ids.length === 0);
+    return eligible.find(p => p.drug_id !== null && String(p.drug_id) === String(drugId))
+        || eligible.find(p => Array.isArray(p.drug_ids) && p.drug_ids.some(id => String(id) === String(drugId)))
+        || eligible.find(p => p.drug_id === null && p.category && p.category === category)
+        || eligible.find(p => noProducts(p) && p.segment_label)
+        || eligible.find(p => noProducts(p) && !p.segment_label)
         || null;
+}
+
+function refreshCustomerSegment() {
+    if (!selectedCustomer) {
+        selectedCustomerSegment = '';
+        return;
+    }
+    selectedCustomerSegment = segmentByCustomer[String(selectedCustomer.customer_id)] || '';
+}
+
+function loadCustomerSegments() {
+    fetch('/api/cashier/segmentation', { credentials: 'same-origin' })
+        .then(res => res.json())
+        .then(data => {
+            const k = String(data.active_k || 3);
+            const variant = (data.variants || {})[k] || {};
+            const labels = variant.labels || [];
+            const members = variant.members || [];
+            const map = {};
+            members.forEach((group, i) => {
+                (group || []).forEach(member => {
+                    map[String(member.customer_id)] = labels[i] || '';
+                });
+            });
+            segmentByCustomer = map;
+            refreshCustomerSegment();
+            if (typeof updateCart === 'function') updateCart();
+        })
+        .catch(err => console.error('Failed to load customer segments:', err));
 }
 
 function computePromoDiscountPerUnit(promo, unitPrice) {
@@ -730,8 +767,12 @@ function computePromoDiscountPerUnit(promo, unitPrice) {
 
 fetch('/api/cashier/promos')
     .then(res => res.json())
-    .then(data => { activePromos = Array.isArray(data) ? data : []; })
+    .then(data => {
+        activePromos = Array.isArray(data) ? data : [];
+        if (typeof updateCart === 'function') updateCart();
+    })
     .catch(err => console.error('Failed to load active promos:', err));
+loadCustomerSegments();
 
 function formatCheckoutPercent(rate) {
     const n = Math.round(rate * 1000) / 10;
@@ -965,6 +1006,7 @@ window.clearCart = function() {
     
     document.getElementById('selectedCustomer').textContent = 'Guest';
     selectedCustomer = null;
+    selectedCustomerSegment = '';
 
     // Reset the loyalty points box back to hidden/unchecked for the next
     // customer - updateCart() (called above) will also do this once
@@ -1353,6 +1395,9 @@ function updateCart() {
     
     // 1. Loop through cart to calculate base subtotal and build cart rows
     cart.forEach((item, index) => {
+        const matchedPromo = typeof findPromoForItem === 'function' ? findPromoForItem(item.drug_id, item.category) : null;
+        item.promo_name = matchedPromo ? matchedPromo.name : null;
+        item.promo_discount_per_unit = matchedPromo ? computePromoDiscountPerUnit(matchedPromo, item.price) : 0;
         const itemGrossSubtotal = item.price * item.qty;
         const promoDiscountPerUnit = item.promo_discount_per_unit || 0;
         const itemPromoDiscount = promoDiscountPerUnit * item.qty;
@@ -1505,8 +1550,10 @@ selectedCustomer = {
     loyalty_points: parseFloat(orderData.loyalty_points || 0) // ⭐ Para makita/magamit ang points kahit online order ang pinagmulan ⭐
 };
             currentOnlineOrderId = orderData.order_id;
-            
-document.getElementById('selectedCustomer').textContent = formattedCustomerName;
+            refreshCustomerSegment();
+document.getElementById('selectedCustomer').textContent = selectedCustomerSegment
+    ? `${formattedCustomerName} · ${selectedCustomerSegment}`
+    : formattedCustomerName;
 const availablePointsSpan = document.getElementById('availablePointsDisplay');
 if (availablePointsSpan) availablePointsSpan.textContent = selectedCustomer.loyalty_points.toFixed(2);
             // 3. Add order items to the cart
@@ -1518,6 +1565,7 @@ if (availablePointsSpan) availablePointsSpan.textContent = selectedCustomer.loya
                 cart.push({
                     lot_id: lotId,
                     drug_id: item.drug_id,
+                    category: item.category || '',
                     name: item.brand_name + ' / ' + item.generic_name, 
                     price: parseFloat(item.price_per_unit), 
                     qty: orderedQty,
@@ -1970,6 +2018,7 @@ document.querySelectorAll(".add-btn").forEach(btn => {
                 price,
                 qty: 1,
                 max_stock: maxStock, // Store the maximum stock for validation
+                category,
                 promo_name: matchedPromo ? matchedPromo.name : null,
                 promo_discount_per_unit: promoDiscountPerUnit,
             });
@@ -2025,16 +2074,17 @@ function addProductFromLookup(p, statusEl) {
         const drugId = p.drug_id;
         const matchedPromo = typeof findPromoForItem === 'function' ? findPromoForItem(drugId, category) : null;
         const promoDiscountPerUnit = matchedPromo ? computePromoDiscountPerUnit(matchedPromo, price) : 0;
-        cart.push({
-            drug_id: drugId,
-            lot_id: lotId,
-            name,
-            price,
-            qty: 1,
-            max_stock: maxStock,
-            promo_name: matchedPromo ? matchedPromo.name : null,
-            promo_discount_per_unit: promoDiscountPerUnit,
-        });
+            cart.push({
+                drug_id: drugId,
+                lot_id: lotId,
+                name,
+                price,
+                qty: 1,
+                max_stock: maxStock,
+                category,
+                promo_name: matchedPromo ? matchedPromo.name : null,
+                promo_discount_per_unit: promoDiscountPerUnit,
+            });
     }
     if (typeof updateCart === 'function') updateCart();
     const btn = document.querySelector(`.add-btn[data-lot-id="${lotId}"]`);
@@ -2590,7 +2640,8 @@ navItems.forEach(item => {
             name: c.name,
             loyalty_points: parseFloat(c.loyalty_points || 0)
         };
-        selectedCustomerSpan.textContent = c.name;
+        refreshCustomerSegment();
+        selectedCustomerSpan.textContent = selectedCustomerSegment ? `${c.name} · ${selectedCustomerSegment}` : c.name;
         modal.style.display = "none";
         const availablePointsSpan = document.getElementById('availablePointsDisplay');
         if (availablePointsSpan) availablePointsSpan.textContent = selectedCustomer.loyalty_points.toFixed(2);

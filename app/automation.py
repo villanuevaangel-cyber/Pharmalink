@@ -62,6 +62,12 @@ def ensure_automation_schema(conn) -> None:
         )
         cur.execute(
             """
+            ALTER TABLE promos
+            ADD COLUMN IF NOT EXISTS segment_label VARCHAR(80)
+            """
+        )
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS system_alerts (
                 alert_id INTEGER PRIMARY KEY,
                 alert_type VARCHAR(40) NOT NULL,
