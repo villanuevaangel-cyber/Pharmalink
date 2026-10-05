@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=nav-drawer1">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=sup-meds2">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=sup-meds4">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -819,7 +819,7 @@
         <div class="um-card-head">
             <div>
                 <h3>Supplier list</h3>
-                <p>Search by name, then edit. A long medicine list does not stretch the row.</p>
+                <p>Search by supplier or medicine, such as paracetamol. A long list stays in the count popup.</p>
             </div>
             <button type="button" class="um-add-btn customer btn-add-supplier">
                 <i class="fas fa-plus"></i> Add supplier
@@ -828,7 +828,7 @@
         <div class="um-toolbar">
             <div class="um-search">
                 <i class="fas fa-search"></i>
-                <input type="text" id="supplier-search" placeholder="Search by name" autocomplete="off">
+                <input type="text" id="supplier-search" placeholder="Search supplier or medicine" autocomplete="off">
             </div>
             <label for="supplier-status-filter">Status</label>
             <select id="supplier-status-filter">
@@ -3932,7 +3932,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
     <script src="/admin/js/inventory.js?v=inv-catalog-maint1"></script>
-    <script src="/admin/js/supplier.js?v=sup-meds3"></script>
+    <script src="/admin/js/supplier.js?v=sup-meds4"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     // Flag to ensure User Management events are initialized only once

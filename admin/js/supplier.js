@@ -20,9 +20,11 @@
     }
 
     function renderRow(s) {
-        const medicines = Array.isArray(s.medicines_supplied) ? s.medicines_supplied : [];
+        const medicines = supplierMedicines(s);
         const countLabel = medicines.length ? String(medicines.length) : '0';
-        const tip = medicines.length ? medicines.join(', ') : 'No medicines linked yet';
+        const tip = medicines.length
+            ? medicines.map(m => m.generic_name).join(', ')
+            : 'No medicines linked yet';
         const contact = s.contact_number || s.email || '—';
         const isActive = s.status === 'Active';
 
@@ -51,7 +53,13 @@
         const statusFilter = document.getElementById('supplier-status-filter')?.value || 'all';
 
         const filtered = allSuppliers.filter(s => {
-            if (search && !(s.supplier_name || '').toLowerCase().includes(search)) return false;
+            if (search) {
+                const nameHit = (s.supplier_name || '').toLowerCase().includes(search);
+                const medHit = supplierMedicines(s).some(m =>
+                    [m.generic_name, m.brand_name, m.dosage].join(' ').toLowerCase().includes(search)
+                );
+                if (!nameHit && !medHit) return false;
+            }
             if (statusFilter === 'active' && s.status !== 'Active') return false;
             if (statusFilter === 'inactive' && s.status !== 'Inactive') return false;
             return true;
@@ -81,12 +89,29 @@
             });
     }
 
+    function supplierMedicines(supplier) {
+        const raw = supplier && Array.isArray(supplier.medicines_supplied) ? supplier.medicines_supplied : [];
+        return raw.map(item => {
+            if (typeof item === 'string') return { generic_name: item, brand_name: '', dosage: '' };
+            return {
+                generic_name: item.generic_name || '',
+                brand_name: item.brand_name || '',
+                dosage: item.dosage || '',
+            };
+        }).filter(item => item.generic_name || item.brand_name);
+    }
+
     function openMedicineList(supplier) {
-        const medicines = supplier && Array.isArray(supplier.medicines_supplied) ? supplier.medicines_supplied : [];
+        const medicines = supplierMedicines(supplier);
         const countText = medicines.length === 1 ? '1 medicine' : medicines.length + ' medicines';
-        const items = medicines.length
-            ? medicines.map(name => `<li>${escapeHtml(name)}</li>`).join('')
-            : '<li class="is-empty">No medicines linked yet.</li>';
+        const rows = medicines.length
+            ? medicines.map(m => `
+                <tr>
+                    <td>${escapeHtml(m.generic_name || '—')}</td>
+                    <td>${escapeHtml(m.brand_name || '—')}</td>
+                    <td>${escapeHtml(m.dosage || '—')}</td>
+                </tr>`).join('')
+            : '<tr><td colspan="3" class="is-empty">No medicines linked yet.</td></tr>';
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay um-modal-overlay';
         overlay.innerHTML = `
@@ -99,7 +124,18 @@
                     <button type="button" class="close-modal" aria-label="Close">&times;</button>
                 </div>
                 <p class="sup-meds-pop-count">${countText}</p>
-                <ul class="sup-meds-pop-list">${items}</ul>
+                <div class="sup-meds-pop-table-wrap">
+                    <table class="sup-meds-pop-table">
+                        <thead>
+                            <tr>
+                                <th>Generic name</th>
+                                <th>Brand</th>
+                                <th>Dosage</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
             </div>`;
         document.body.appendChild(overlay);
         const close = () => overlay.remove();

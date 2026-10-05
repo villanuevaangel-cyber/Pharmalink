@@ -369,7 +369,7 @@
 }
 #supplier-section .sup-count:hover{ background:#FFC857; }
 .sup-meds-modal{
-  width:min(460px, 92vw);
+  width:min(560px, 94vw);
   overflow:hidden;
 }
 .sup-meds-pop-head{
@@ -413,27 +413,38 @@
   font-size:13px;
   font-weight:700;
 }
-.sup-meds-pop-list{
-  list-style:none;
-  margin:0;
-  padding:10px 18px 18px;
+.sup-meds-pop-table-wrap{
+  margin:10px 18px 18px;
   max-height:min(52vh, 360px);
   overflow:auto;
+  border:1px solid #FFE3B3;
+  border-radius:12px;
 }
-.sup-meds-pop-list li{
-  margin:0 0 8px;
-  padding:10px 12px;
-  border-radius:10px;
-  background:#FFF7E6;
-  color:#1E3A34;
+.sup-meds-pop-table{
+  width:100%;
+  border-collapse:collapse;
   font-size:14px;
-  line-height:1.4;
+  color:#1E3A34;
 }
-.sup-meds-pop-list li:last-child{ margin-bottom:0; }
-.sup-meds-pop-list li.is-empty{
-  background:transparent;
+.sup-meds-pop-table th{
+  position:sticky;
+  top:0;
+  padding:8px 10px;
+  background:#1E3A34;
+  color:#fff;
+  font-size:12px;
+  font-weight:700;
+  text-align:left;
+}
+.sup-meds-pop-table td{
+  padding:10px;
+  border-bottom:1px solid #FFF3D6;
+  background:#fff;
+}
+.sup-meds-pop-table tbody tr:last-child td{ border-bottom:0; }
+.sup-meds-pop-table td.is-empty{
   color:#6b7280;
-  padding-left:0;
+  text-align:center;
 }
 #supplier-section .sup-badge{
   display:inline-flex;
