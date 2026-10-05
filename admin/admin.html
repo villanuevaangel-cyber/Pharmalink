@@ -32,8 +32,9 @@
             padding:18px 18px 16px; box-shadow:0 2px 8px rgba(15,23,42,0.05);
         }
         .report-hub-card:hover{ border-color:#FFC857; box-shadow:0 6px 18px rgba(37,99,235,0.12); }
-        .report-hub-card h3{ margin:0 0 6px; font-size:15px; color:#1E3A34; }
-        .report-hub-card .hub-value{ display:block; margin:10px 0 8px; font-size:1.35rem; font-weight:700; }
+        .report-hub-card h3{ margin:0 0 6px; font-size:16px; color:#1E3A34; }
+        .report-hub-card .hub-hint{ margin:0; color:#6b7280; font-size:13px; line-height:1.4; }
+        .report-hub-card .hub-value{ display:block; margin:12px 0 2px; font-size:1.55rem; font-weight:700; }
         .report-hub-card .hub-actions, .rpt-export-row{
             display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; align-items:center;
         }
@@ -74,6 +75,20 @@
         .rpt-btn.xlsx{ background:#1E3A34 !important; color:#fff !important; }
         .rpt-btn.navy{ background:#1E3A34 !important; color:#fff !important; }
         .rpt-btn.ghost{ background:#f1f5f9 !important; color:#4BAA8B !important; }
+        .cons-filters{ display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; margin:0 0 12px; }
+        .cons-filters label{ display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:700; color:#1E3A34; }
+        .cons-filters input[type=month]{ height:40px; padding:0 10px; border:1px solid #d1d5db; border-radius:8px; font-size:13px; }
+        .pc-note{ color:#6b7280; font-size:13px; margin:0 0 14px; }
+        .pc-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+        .pc-panel{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px 16px; }
+        .pc-panel h4{ margin:0 0 10px; color:#1E3A34; font-size:14px; }
+        .pc-panel table{ width:100%; border-collapse:collapse; }
+        .pc-panel th, .pc-panel td{ padding:8px 6px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+        .pc-panel th:nth-child(n+2), .pc-panel td:nth-child(n+2){ text-align:right; white-space:nowrap; }
+        .pc-panel td:first-child{ color:#1E3A34; font-weight:650; line-height:1.35; }
+        .pc-meta{ color:#6b7280; font-size:12px; margin-top:2px; }
+        .pc-share{ font-weight:700; color:#047857; }
+        @media (max-width:720px){ .pc-grid{ grid-template-columns:1fr; } }
         .rpt-upload-card{
             background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px 18px; margin-bottom:16px;
             box-shadow:0 2px 8px rgba(15,23,42,0.05);
@@ -219,8 +234,6 @@
             }
             #reports .report-hub-card .hub-actions{ flex-direction:column; align-items:stretch; }
             #reports .report-hub-card .hub-actions .rpt-btn{ width:100% !important; flex:1 1 auto !important; }
-            #reports .rpt-upload-actions{ flex-direction:column; align-items:stretch; }
-            #reports .rpt-choose, #reports .rpt-upload{ width:100% !important; }
             .um-toolbar{
                 display:grid !important; grid-template-columns:1fr !important;
                 align-items:stretch; gap:8px;
@@ -1039,12 +1052,13 @@
             <section id="reports" style="display:none;">
     <div class="dashboard-header">
         <h2>Reports</h2>
-        <p class="subtitle">Upload sales data, generate operational reports on screen, then download PDF or Excel.</p>
+        <p class="subtitle">See pieces sold, or the cost of medicine still in stock.</p>
     </div>
 
-    <div class="rpt-upload-card" title="CSV or Excel. Every row is checked first. Medicine and brand must match the inventory, and quantity and price must be numbers. Nothing is saved if a row is wrong. Inventory is not deducted.">
+    <div class="rpt-upload-card">
         <div class="rpt-drop-icon"><i class="fas fa-cloud-arrow-up"></i></div>
         <h3>Upload sales data</h3>
+        <p>Excel or CSV of past sales. Use the template, and match the medicine names already in the store. Stock on the shelf does not change.</p>
         <input type="file" id="rptSalesFile" class="rpt-file-input" accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
         <div class="rpt-upload-actions">
             <label for="rptSalesFile" class="rpt-choose"><i class="fas fa-folder-open"></i> Choose File</label>
@@ -1054,34 +1068,27 @@
         <p class="rpt-filename" id="rptFileName">No file selected</p>
         <p id="rptUploadMsg"></p>
     </div>
-    <h3 style="color:#1E3A34; margin:0 0 10px; font-size:1.15rem;">Operational reports</h3>
-    <p class="subtitle" style="margin-top:0;">Generate a report on screen, then download PDF or Excel for each one.</p>
     <div class="report-hub">
-        <div class="report-hub-card" title="Units sold per drug, by month - for seasonal demand and bulk orders.">
-            <h3><i class="fas fa-calendar-days"></i> Monthly Consumption</h3>
+        <div class="report-hub-card">
+            <h3><i class="fas fa-calendar-days"></i> Pieces sold each month</h3>
+            <p class="hub-hint">Monthly consumption. Check this before a bulk order.</p>
             <span class="hub-value" id="hub-consumption-total" style="color:#4BAA8B;">-</span>
+            <p class="hub-hint" id="hub-consumption-range">Last 6 months</p>
             <div class="hub-actions">
-                <button type="button" class="rpt-btn navy" data-report-modal="consumptionReportModal"><i class="fas fa-chart-column"></i> Generate report</button>
+                <button type="button" class="rpt-btn navy" data-report-modal="consumptionReportModal"><i class="fas fa-chart-column"></i> Open</button>
                 <button type="button" class="rpt-btn pdf" data-rpt-kind="consumption" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
                 <button type="button" class="rpt-btn xlsx" data-rpt-kind="consumption" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
             </div>
         </div>
-        <div class="report-hub-card" title="On-hand inventory valued at unit cost, by supplier and category.">
-            <h3><i class="fas fa-file-invoice-dollar"></i> Procurement Cost</h3>
+        <div class="report-hub-card">
+            <h3><i class="fas fa-file-invoice-dollar"></i> Cost of stock on hand</h3>
+            <p class="hub-hint">Procurement cost. Medicine still in the store. Expired stock is left out.</p>
             <span class="hub-value" id="hub-procurement-cost" style="color:#1E3A34;">₱0</span>
+            <p class="hub-hint">What you paid for it</p>
             <div class="hub-actions">
-                <button type="button" class="rpt-btn navy" data-report-modal="procurementReportModal"><i class="fas fa-chart-column"></i> Generate report</button>
+                <button type="button" class="rpt-btn navy" data-report-modal="procurementReportModal"><i class="fas fa-list"></i> Open</button>
                 <button type="button" class="rpt-btn pdf" data-rpt-kind="procurement" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
                 <button type="button" class="rpt-btn xlsx" data-rpt-kind="procurement" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
-            </div>
-        </div>
-        <div class="report-hub-card" title="Write-offs tagged Expired / Disposed - value lost and where.">
-            <h3><i class="fas fa-triangle-exclamation"></i> Expiry &amp; Waste</h3>
-            <span class="hub-value" id="hub-expiry-value" style="color:#dc2626;">₱0</span>
-            <div class="hub-actions">
-                <button type="button" class="rpt-btn navy" data-report-modal="expiryWasteReportModal"><i class="fas fa-chart-column"></i> Generate report</button>
-                <button type="button" class="rpt-btn pdf" data-rpt-kind="expiry" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
-                <button type="button" class="rpt-btn xlsx" data-rpt-kind="expiry" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
             </div>
         </div>
     </div>
@@ -1090,41 +1097,45 @@
 <div id="consumptionReportModal" class="modal">
     <div class="modal-content modal-wide">
         <div class="modal-header">
-            <h2><i class="fas fa-calendar-days"></i> Monthly Consumption Report</h2>
+            <h2><i class="fas fa-calendar-days"></i> Pieces sold each month</h2>
             <div class="rpt-export-row" style="margin:0 12px 0 auto;">
                 <button type="button" class="rpt-btn pdf" data-rpt-kind="consumption" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
                 <button type="button" class="rpt-btn xlsx" data-rpt-kind="consumption" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
             </div>
             <span class="close" data-close-report-modal="consumptionReportModal">&times;</span>
         </div>
-        <div style="display:flex; justify-content:flex-end; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:4px;">
-        <div>
-            <label for="consumptionMonthsRange" style="font-weight:600; font-size:13px; margin-right:6px;">Range:</label>
-            <select id="consumptionMonthsRange" style="padding:6px 10px; border-radius:5px; border:1px solid #ccc; font-size:13px;">
-                <option value="3">Last 3 Months</option>
-                <option value="6" selected>Last 6 Months</option>
-                <option value="12">Last 12 Months</option>
-            </select>
+        <div class="cons-filters">
+            <label>From
+                <input type="month" id="consumptionFrom">
+            </label>
+            <label>To
+                <input type="month" id="consumptionTo">
+            </label>
+            <button type="button" class="rpt-btn navy" id="consumptionApply">Apply</button>
         </div>
-        </div>
-        <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">Units sold per drug, per month (from completed sales) - useful for spotting seasonal demand shifts and planning bulk orders.</p>
+        <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">The chart and the list use the same months.</p>
 
         <div style="background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); margin-bottom:20px; height:280px;">
-            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Total Units Consumed per Month</h4>
+            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Total pieces sold</h4>
             <div style="position:relative; height:220px;">
                 <canvas id="consumptionTrendChart"></canvas>
             </div>
         </div>
 
-        <input type="text" id="consumptionSearch" placeholder="Search drug name…" style="padding:8px 12px; border:1px solid #ccc; border-radius:5px; margin-bottom:10px; width:260px; max-width:100%;">
+        <input type="text" id="consumptionSearch" placeholder="Search medicine" style="padding:8px 12px; border:1px solid #ccc; border-radius:5px; margin-bottom:10px; width:260px; max-width:100%;">
 
         <div class="table-wrap">
             <table id="consumptionTable">
                 <thead id="consumptionTableHead">
-                    <tr><th>Drug</th><th>Category</th><!-- month columns injected by JS --><th>Total</th></tr>
+                    <tr><th>Medicine</th><th>Type</th><!-- month columns injected by JS --><th>Total</th></tr>
                 </thead>
                 <tbody id="consumptionTableBody"><tr><td colspan="4" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
             </table>
+        </div>
+        <div class="um-pagination ph-pagination" id="consumption-pagination">
+            <button type="button" id="consumption-prev" class="um-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
+            <span id="consumption-page-info">Page 1</span>
+            <button type="button" id="consumption-next" class="um-page-btn">Next <i class="fas fa-chevron-right"></i></button>
         </div>
     </div>
 </div>
@@ -1132,127 +1143,53 @@
 <div id="procurementReportModal" class="modal">
     <div class="modal-content modal-wide">
         <div class="modal-header">
-            <h2><i class="fas fa-file-invoice-dollar"></i> Procurement Cost Tracking</h2>
+            <h2><i class="fas fa-file-invoice-dollar"></i> Cost of stock on hand</h2>
             <div class="rpt-export-row" style="margin:0 12px 0 auto;">
                 <button type="button" class="rpt-btn pdf" data-rpt-kind="procurement" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
                 <button type="button" class="rpt-btn xlsx" data-rpt-kind="procurement" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
             </div>
             <span class="close" data-close-report-modal="procurementReportModal">&times;</span>
         </div>
-    <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">On-hand inventory valued at unit cost (cost_price). If a lot has no cost recorded, selling price is used and marked as estimated. Unexpired active lots only.</p>
+    <p class="pc-note">What you paid for medicine that is still in the store. Expired stock is not counted.</p>
 
     <div style="display:flex; gap:15px; margin-bottom:16px; flex-wrap:wrap;">
         <div class="card" style="flex:1; min-width:180px; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-            <h3 style="color:#1E3A34; margin:0;">Total Inventory Cost</h3>
+            <h3 style="color:#1E3A34; margin:0;">Total cost</h3>
             <p class="value" id="procurement-total-cost" style="font-size:1.5em; color:#1E3A34;">₱0</p>
         </div>
         <div class="card" style="flex:1; min-width:180px; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-            <h3 style="color:#4BAA8B; margin:0;">Total Units on Hand</h3>
+            <h3 style="color:#4BAA8B; margin:0;">Pieces in stock</h3>
             <p class="value" id="procurement-total-units" style="font-size:1.5em; color:#4BAA8B;">0</p>
         </div>
         <div class="card" style="flex:1; min-width:180px; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
-            <h3 style="color:#4BAA8B; margin:0;">Active Suppliers (with stock)</h3>
+            <h3 style="color:#4BAA8B; margin:0;">Suppliers</h3>
             <p class="value" id="procurement-supplier-count" style="font-size:1.5em; color:#4BAA8B;">0</p>
         </div>
     </div>
 
-    <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
-        <div style="flex:1; min-width:320px; background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); height:300px;">
-            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Inventory Cost by Supplier</h4>
-            <div style="position:relative; height:240px;">
-                <canvas id="procurementSupplierChart"></canvas>
+    <div class="pc-grid">
+        <div class="pc-panel">
+            <h4>By supplier</h4>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Supplier</th><th>Pieces</th><th>Cost</th><th>Share</th></tr>
+                    </thead>
+                    <tbody id="procurementSupplierList"><tr><td colspan="4" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
+                </table>
             </div>
         </div>
-        <div style="flex:1; min-width:320px; background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); height:300px;">
-            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Inventory Cost by Category</h4>
-            <div style="position:relative; height:240px;">
-                <canvas id="procurementCategoryChart"></canvas>
+        <div class="pc-panel">
+            <h4>By type of medicine</h4>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Type</th><th>Pieces</th><th>Cost</th><th>Share</th></tr>
+                    </thead>
+                    <tbody id="procurementCategoryList"><tr><td colspan="4" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
+                </table>
             </div>
         </div>
-    </div>
-
-    <h4 style="color:#1E3A34; margin:0 0 4px; font-size:14px;">💡 Price Comparison Across Suppliers</h4>
-    <p style="color:#6b7280; font-size:13px; margin:0 0 10px;">Drugs currently stocked at more than one price - worth checking if you can consolidate future orders with the cheaper supplier.</p>
-    <div class="table-wrap">
-        <table id="procurementComparisonTable">
-            <thead>
-                <tr>
-                    <th>Drug</th>
-                    <th>Cheapest</th>
-                    <th>Most Expensive</th>
-                    <th>Potential Savings</th>
-                    <th>All Offers</th>
-                </tr>
-            </thead>
-            <tbody id="procurementComparisonBody"><tr><td colspan="5" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
-        </table>
-    </div>
-    </div>
-</div>
-
-<div id="expiryWasteReportModal" class="modal">
-    <div class="modal-content modal-wide">
-        <div class="modal-header">
-            <h2><i class="fas fa-triangle-exclamation"></i> Expiry &amp; Waste Report</h2>
-            <div class="rpt-export-row" style="margin:0 12px 0 auto;">
-                <button type="button" class="rpt-btn pdf" data-rpt-kind="expiry" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
-                <button type="button" class="rpt-btn xlsx" data-rpt-kind="expiry" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
-            </div>
-            <span class="close" data-close-report-modal="expiryWasteReportModal">&times;</span>
-        </div>
-        <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">Every stock write-off logged as "Expired / Disposed" via Inventory's Adjust Stock - how much stock, and how much value, is actually being lost to expiry, and where.</p>
-
-    <div style="display:flex; gap:15px; margin-bottom:16px; flex-wrap:wrap;">
-        <div class="card" style="flex:1; min-width:180px;">
-            <h3>Total Value Lost</h3>
-            <p class="value" id="expiry-total-value" style="color:#dc2626;">₱0</p>
-        </div>
-        <div class="card" style="flex:1; min-width:180px;">
-            <h3>Total Units Lost</h3>
-            <p class="value" id="expiry-total-units" style="color:#1E3A34;">0</p>
-        </div>
-        <div class="card" style="flex:1; min-width:180px;">
-            <h3>Most-Affected Category</h3>
-            <p class="value" id="expiry-top-category" style="font-size:1.3rem;">-</p>
-        </div>
-        <div class="card" style="flex:1; min-width:180px;">
-            <h3>Write-off Records</h3>
-            <p class="value" id="expiry-record-count">0</p>
-        </div>
-    </div>
-    <p id="expiry-estimate-note" style="display:none; color:#1E3A34; font-size:12px; margin:-8px 0 14px;"><i class="fas fa-circle-info"></i> Some figures are estimated using selling price where a lot had no recorded cost price.</p>
-
-    <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
-        <div style="flex:2; min-width:320px; background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); height:300px;">
-            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">Value Lost to Expiry - Last 12 Months</h4>
-            <div style="position:relative; height:240px;">
-                <canvas id="expiryMonthlyChart"></canvas>
-            </div>
-        </div>
-        <div style="flex:1; min-width:280px; background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 16px rgba(30,58,138,0.08); height:300px;">
-            <h4 style="margin:0 0 8px; color:#1E3A34; font-size:14px;">By Category</h4>
-            <div style="position:relative; height:240px;">
-                <canvas id="expiryCategoryChart"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <h4 style="color:#1E3A34; margin:0 0 4px; font-size:14px;">Recent Write-offs</h4>
-    <div class="table-wrap">
-        <table id="expiryDetailTable">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Drug</th>
-                    <th>Lot #</th>
-                    <th>Units Lost</th>
-                    <th>Value Lost</th>
-                    <th>Adjusted By</th>
-                    <th>Notes</th>
-                </tr>
-            </thead>
-            <tbody id="expiryDetailBody"><tr><td colspan="7" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
-        </table>
     </div>
     </div>
 </div>
@@ -2066,20 +2003,48 @@
     // ==========================================================
     let consumptionData = null;
     let consumptionTrendChart = null;
+    let consumptionPage = 1;
+    const CONSUMPTION_PAGE_SIZE = 5;
+
+    function consumptionMonthValue(dateValue) {
+        return dateValue.getFullYear() + '-' + String(dateValue.getMonth() + 1).padStart(2, '0');
+    }
+
+    function ensureConsumptionDates() {
+        const fromEl = document.getElementById('consumptionFrom');
+        const toEl = document.getElementById('consumptionTo');
+        const now = new Date();
+        const current = consumptionMonthValue(now);
+        if (toEl && !toEl.value) toEl.value = current;
+        if (toEl) toEl.max = current;
+        if (fromEl && !fromEl.value) {
+            fromEl.value = consumptionMonthValue(new Date(now.getFullYear(), now.getMonth() - 5, 1));
+        }
+        if (fromEl) fromEl.max = (toEl && toEl.value) || current;
+        if (fromEl && toEl && fromEl.value > toEl.value) fromEl.value = toEl.value;
+    }
 
     function loadMonthlyConsumption() {
-        const months = document.getElementById('consumptionMonthsRange')?.value || 6;
-        fetch('/api/admin/monthly-consumption?months=' + encodeURIComponent(months))
+        ensureConsumptionDates();
+        const start = document.getElementById('consumptionFrom')?.value || '';
+        const end = document.getElementById('consumptionTo')?.value || '';
+        const params = new URLSearchParams();
+        if (start) params.set('start', start);
+        if (end) params.set('end', end);
+        fetch('/api/admin/monthly-consumption?' + params.toString())
             .then(res => res.json())
             .then(data => {
                 consumptionData = data;
+                consumptionPage = 1;
                 renderConsumptionChart();
                 renderConsumptionTable();
                 const hub = document.getElementById('hub-consumption-total');
                 if (hub) {
                     const total = Object.values(data.monthly_totals || {}).reduce((a, b) => a + Number(b || 0), 0);
-                    hub.textContent = total.toLocaleString() + ' units';
+                    hub.textContent = total.toLocaleString() + ' pieces';
                 }
+                const range = document.getElementById('hub-consumption-range');
+                if (range && start && end) range.textContent = monthLabel(start) + ' – ' + monthLabel(end);
             })
             .catch(err => {
                 console.error('Monthly consumption error:', err);
@@ -2110,7 +2075,7 @@
             type: 'bar',
             data: {
                 labels: labels,
-                datasets: [{ label: 'Units Sold', data: values, backgroundColor: PharmaChart.sales, borderRadius: 4 }],
+                datasets: [{ label: 'Pieces sold', data: values, backgroundColor: PharmaChart.sales, borderRadius: 4 }],
             },
             options: {
                 responsive: true,
@@ -2128,7 +2093,7 @@
         if (!head || !body) return;
 
         const months = consumptionData.months;
-        head.innerHTML = `<tr><th>Drug</th><th>Category</th>${months.map(m => `<th>${monthLabel(m)}</th>`).join('')}<th>Total</th></tr>`;
+        head.innerHTML = `<tr><th>Medicine</th><th>Type</th>${months.map(m => `<th>${monthLabel(m)}</th>`).join('')}<th>Total</th></tr>`;
 
         const search = (document.getElementById('consumptionSearch')?.value || '').trim().toLowerCase();
         let rows = consumptionData.rows;
@@ -2136,27 +2101,66 @@
             rows = rows.filter(r => (r.generic_name + ' ' + (r.brand_name || '')).toLowerCase().includes(search));
         }
 
-        if (!rows.length) {
-            body.innerHTML = `<tr><td colspan="${months.length + 3}" style="text-align:center;color:#6b7280;padding:15px;">No sales recorded in this range.</td></tr>`;
+        const pages = Math.max(1, Math.ceil(rows.length / CONSUMPTION_PAGE_SIZE) || 1);
+        if (consumptionPage > pages) consumptionPage = pages;
+        if (consumptionPage < 1) consumptionPage = 1;
+        const start = (consumptionPage - 1) * CONSUMPTION_PAGE_SIZE;
+        const pageRows = rows.slice(start, start + CONSUMPTION_PAGE_SIZE);
+        const info = document.getElementById('consumption-page-info');
+        const prev = document.getElementById('consumption-prev');
+        const next = document.getElementById('consumption-next');
+        if (info) {
+            info.textContent = rows.length
+                ? `Page ${consumptionPage} of ${pages} · ${rows.length} medicine${rows.length === 1 ? '' : 's'}`
+                : 'No medicines';
+        }
+        if (prev) {
+            prev.disabled = consumptionPage <= 1;
+            prev.style.opacity = prev.disabled ? '0.5' : '1';
+        }
+        if (next) {
+            next.disabled = consumptionPage >= pages || !rows.length;
+            next.style.opacity = next.disabled ? '0.5' : '1';
+        }
+
+        if (!pageRows.length) {
+            body.innerHTML = `<tr><td colspan="${months.length + 3}" style="text-align:center;color:#6b7280;padding:15px;">No sales in these months.</td></tr>`;
             return;
         }
 
-        body.innerHTML = rows.map(r => {
-            const label = `${r.generic_name}${r.brand_name ? ' (' + r.brand_name + ')' : ''} - ${r.dosage}, ${r.form}`;
+        body.innerHTML = pageRows.map(r => {
+            const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+            const name = esc(r.generic_name) + (r.brand_name ? ' (' + esc(r.brand_name) + ')' : '');
+            const detail = [r.dosage, r.form].filter((part) => part && String(part).toUpperCase() !== 'N/A').map(esc).join(', ');
+            const label = detail ? `${name}<div class="pc-meta">${detail}</div>` : name;
             const monthCells = months.map(m => `<td>${r.monthly[m] || 0}</td>`).join('');
-            return `<tr><td>${label}</td><td>${r.category}</td>${monthCells}<td style="font-weight:600;">${r.total}</td></tr>`;
+            return `<tr><td>${label}</td><td>${esc(r.category)}</td>${monthCells}<td style="font-weight:600;">${r.total}</td></tr>`;
         }).join('');
     }
 
-    document.getElementById('consumptionMonthsRange')?.addEventListener('change', loadMonthlyConsumption);
-    document.getElementById('consumptionSearch')?.addEventListener('input', renderConsumptionTable);
+    document.getElementById('consumptionApply')?.addEventListener('click', loadMonthlyConsumption);
+    document.getElementById('consumptionFrom')?.addEventListener('change', loadMonthlyConsumption);
+    document.getElementById('consumptionTo')?.addEventListener('change', loadMonthlyConsumption);
+    document.getElementById('consumptionSearch')?.addEventListener('input', () => {
+        consumptionPage = 1;
+        renderConsumptionTable();
+    });
+    document.getElementById('consumption-prev')?.addEventListener('click', () => {
+        if (consumptionPage <= 1) return;
+        consumptionPage -= 1;
+        renderConsumptionTable();
+    });
+    document.getElementById('consumption-next')?.addEventListener('click', () => {
+        consumptionPage += 1;
+        renderConsumptionTable();
+    });
     loadMonthlyConsumption();
 
     // ==========================================================
     // Procurement Cost Tracking
     // ==========================================================
-    let procurementSupplierChart = null;
-    let procurementCategoryChart = null;
     const peso = v => '₱' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     function loadProcurementCosts() {
@@ -2168,170 +2172,45 @@
                 setText('procurement-total-units', data.summary.total_units.toLocaleString());
                 setText('procurement-supplier-count', data.summary.supplier_count);
                 setText('hub-procurement-cost', peso(data.summary.total_inventory_cost));
-
-                renderProcurementCharts(data.by_supplier, data.by_category);
-                renderProcurementComparison(data.price_comparison);
+                renderProcurementLists(data.by_supplier, data.by_category, data.summary.total_inventory_cost);
             })
             .catch(err => console.error('Procurement cost error:', err));
     }
 
-    function renderProcurementCharts(bySupplier, byCategory) {
-        const supplierCtx = document.getElementById('procurementSupplierChart')?.getContext('2d');
-        if (supplierCtx) {
-            const labels = bySupplier.map(s => s.supplier_name);
-            const values = bySupplier.map(s => s.total_cost);
-            if (procurementSupplierChart) {
-                procurementSupplierChart.data.labels = labels;
-                procurementSupplierChart.data.datasets[0].data = values;
-                procurementSupplierChart.update();
-            } else if (labels.length) {
-                procurementSupplierChart = new Chart(supplierCtx, {
-                    type: 'bar',
-                    data: { labels, datasets: [{ label: 'Inventory Cost', data: values, backgroundColor: PharmaChart.cost, borderRadius: 4 }] },
-                    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
-                });
+    function renderProcurementLists(bySupplier, byCategory, totalCost) {
+        const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+        const shareOf = (cost) => {
+            const total = Number(totalCost) || 0;
+            if (total <= 0) return '0%';
+            const pct = Number(cost) / total * 100;
+            return pct > 0 && pct < 1 ? '<1%' : Math.round(pct) + '%';
+        };
+        const fill = (id, rows, nameKey) => {
+            const host = document.getElementById(id);
+            if (!host) return;
+            if (!rows.length) {
+                host.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#6b7280;padding:15px;">Nothing in stock.</td></tr>';
+                return;
             }
-        }
-
-        const categoryCtx = document.getElementById('procurementCategoryChart')?.getContext('2d');
-        if (categoryCtx) {
-            const labels = byCategory.map(c => c.category);
-            const values = byCategory.map(c => c.total_cost);
-            if (procurementCategoryChart) {
-                procurementCategoryChart.data.labels = labels;
-                procurementCategoryChart.data.datasets[0].data = values;
-                procurementCategoryChart.data.datasets[0].backgroundColor = PharmaChart.slices('cost', labels.length);
-                procurementCategoryChart.update();
-            } else if (labels.length) {
-                procurementCategoryChart = new Chart(categoryCtx, {
-                    type: 'doughnut',
-                    data: { labels, datasets: [{ data: values, backgroundColor: PharmaChart.slices('cost', labels.length) }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } },
-                });
-            }
-        }
-    }
-
-    function renderProcurementComparison(rows) {
-        const body = document.getElementById('procurementComparisonBody');
-        if (!body) return;
-        if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#6b7280;padding:15px;">No price variance found - every drug currently in stock has a single consistent price across suppliers.</td></tr>';
-            return;
-        }
-        body.innerHTML = rows.map(r => {
-            const label = `${r.generic_name}${r.brand_name ? ' (' + r.brand_name + ')' : ''} - ${r.dosage}, ${r.form}`;
-            const cheapest = r.offers.filter(o => o.price === r.min_price).map(o => o.supplier_name).join(', ');
-            const priciest = r.offers.filter(o => o.price === r.max_price).map(o => o.supplier_name).join(', ');
-            const offersText = r.offers.map(o => `${o.supplier_name}: ${peso(o.price)} (${o.current_stock} on hand)`).join(' · ');
-            return `
-            <tr>
-                <td>${label}</td>
-                <td style="color:#4BAA8B;font-weight:600;">${peso(r.min_price)} - ${cheapest}</td>
-                <td style="color:#dc2626;">${peso(r.max_price)} - ${priciest}</td>
-                <td style="font-weight:600;">${r.savings_pct}%</td>
-                <td style="color:#6b7280;font-size:12px;">${offersText}</td>
-            </tr>`;
-        }).join('');
+            host.innerHTML = rows.map((row) => `
+                <tr>
+                    <td>${esc(row[nameKey] || 'No type')}</td>
+                    <td>${Number(row.total_units || 0).toLocaleString()}</td>
+                    <td>${peso(row.total_cost)}</td>
+                    <td class="pc-share">${shareOf(row.total_cost)}</td>
+                </tr>`).join('');
+        };
+        fill('procurementSupplierList', bySupplier || [], 'supplier_name');
+        fill('procurementCategoryList', byCategory || [], 'category');
     }
 
     loadProcurementCosts();
 
-    // ==========================================================
-    // Expiry & Waste Report
-    // ==========================================================
-    let expiryMonthlyChart = null;
-    let expiryCategoryChart = null;
-
-    function loadExpiryWasteReport() {
-        fetch('/api/admin/expiry-waste')
-            .then(res => res.json())
-            .then(data => {
-                const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-                setText('expiry-total-value', peso(data.summary.total_value));
-                setText('expiry-total-units', data.summary.total_units.toLocaleString());
-                setText('expiry-top-category', data.summary.top_category || '-');
-                setText('expiry-record-count', data.summary.record_count.toLocaleString());
-                setText('hub-expiry-value', peso(data.summary.total_value));
-
-                const noteEl = document.getElementById('expiry-estimate-note');
-                if (noteEl) noteEl.style.display = data.summary.has_estimated_values ? 'block' : 'none';
-
-                renderExpiryCharts(data.monthly, data.by_category);
-                renderExpiryDetailTable(data.details);
-            })
-            .catch(err => console.error('Expiry waste report error:', err));
-    }
-
-    function renderExpiryCharts(monthly, byCategory) {
-        const monthlyCtx = document.getElementById('expiryMonthlyChart')?.getContext('2d');
-        if (monthlyCtx) {
-            const labels = monthly.map(m => m.month);
-            const values = monthly.map(m => m.value);
-            if (expiryMonthlyChart) {
-                expiryMonthlyChart.data.labels = labels;
-                expiryMonthlyChart.data.datasets[0].data = values;
-                expiryMonthlyChart.update();
-            } else {
-                expiryMonthlyChart = new Chart(monthlyCtx, {
-                    type: 'bar',
-                    data: { labels, datasets: [{ label: 'Value Lost (₱)', data: values, backgroundColor: PharmaChart.loss, borderRadius: 4 }] },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: { y: { beginAtZero: true, ticks: { callback: v => '₱' + v } } },
-                    },
-                });
-            }
-        }
-
-        const categoryCtx = document.getElementById('expiryCategoryChart')?.getContext('2d');
-        if (categoryCtx) {
-            const labels = byCategory.map(c => c.category);
-            const values = byCategory.map(c => c.value);
-            if (expiryCategoryChart) {
-                expiryCategoryChart.data.labels = labels;
-                expiryCategoryChart.data.datasets[0].data = values;
-                expiryCategoryChart.data.datasets[0].backgroundColor = PharmaChart.slices('loss', labels.length);
-                expiryCategoryChart.update();
-            } else if (labels.length) {
-                expiryCategoryChart = new Chart(categoryCtx, {
-                    type: 'doughnut',
-                    data: { labels, datasets: [{ data: values, backgroundColor: PharmaChart.slices('loss', labels.length) }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } },
-                });
-            }
-        }
-    }
-
-    function renderExpiryDetailTable(rows) {
-        const body = document.getElementById('expiryDetailBody');
-        if (!body) return;
-        if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#4BAA8B;padding:15px;"><i class="fas fa-circle-check"></i> No expiry write-offs logged yet.</td></tr>';
-            return;
-        }
-        body.innerHTML = rows.map(r => `
-            <tr>
-                <td>${r.date}</td>
-                <td>${r.label}</td>
-                <td>${r.lot_number || '-'}</td>
-                <td>${r.units}</td>
-                <td>${peso(r.value)}${r.is_estimate ? ' <span style="color:#1E3A34;font-size:11px;" title="Estimated using selling price - this lot had no recorded cost price">(est.)</span>' : ''}</td>
-                <td>${r.admin_name || '-'}</td>
-                <td style="color:#6b7280;font-size:12px;">${r.notes || '-'}</td>
-            </tr>`).join('');
-    }
-
-    loadExpiryWasteReport();
-
     function resizeReportCharts() {
         requestAnimationFrame(() => {
             if (consumptionTrendChart) consumptionTrendChart.resize();
-            if (procurementSupplierChart) procurementSupplierChart.resize();
-            if (procurementCategoryChart) procurementCategoryChart.resize();
-            if (expiryMonthlyChart) expiryMonthlyChart.resize();
-            if (expiryCategoryChart) expiryCategoryChart.resize();
         });
     }
     function openReportModal(id) {
@@ -2349,7 +2228,6 @@
             const id = btn.getAttribute('data-report-modal');
             if (id === 'consumptionReportModal' && typeof loadMonthlyConsumption === 'function') loadMonthlyConsumption();
             if (id === 'procurementReportModal' && typeof loadProcurementCosts === 'function') loadProcurementCosts();
-            if (id === 'expiryWasteReportModal' && typeof loadExpiryWasteReport === 'function') loadExpiryWasteReport();
             openReportModal(id);
         });
     });
@@ -2361,7 +2239,10 @@
         url.searchParams.set('kind', kind);
         url.searchParams.set('format', format);
         if (kind === 'forecast') url.searchParams.set('period', document.getElementById('forecastPeriod')?.value || '30');
-        if (kind === 'consumption') url.searchParams.set('months', document.getElementById('consumptionMonthsRange')?.value || '6');
+        if (kind === 'consumption') {
+            url.searchParams.set('start', document.getElementById('consumptionFrom')?.value || '');
+            url.searchParams.set('end', document.getElementById('consumptionTo')?.value || '');
+        }
         try {
             const res = await fetch(url.toString(), { credentials: 'same-origin' });
             const ctype = res.headers.get('content-type') || '';
@@ -2437,7 +2318,7 @@
             }
         });
     }
-    ['consumptionReportModal', 'procurementReportModal', 'expiryWasteReportModal'].forEach(id => {
+    ['consumptionReportModal', 'procurementReportModal'].forEach(id => {
         document.getElementById(id)?.addEventListener('click', (e) => {
             if (e.target.id === id) closeReportModal(id);
         });
