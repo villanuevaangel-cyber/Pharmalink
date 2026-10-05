@@ -1334,7 +1334,7 @@
             <div class="um-card-head">
                 <div>
                     <h3>Promos</h3>
-                    <p>Percent-off or fixed peso discounts for a drug, a category, or storewide. They apply at Cashier within the date range you set.</p>
+                    <p>Percent-off or fixed peso discounts for a drug, a category, the whole store, or one customer segment. They apply at Cashier within the date range you set.</p>
                 </div>
                 <button type="button" id="addPromoBtn" class="add-btn" style="background:#4BAA8B;"><i class="fas fa-plus"></i> Create Promo</button>
             </div>
@@ -2700,6 +2700,26 @@
             .catch(err => console.error('Failed to load drugs for promo form:', err));
     }
 
+    function populatePromoSegmentSelect() {
+        const sel = document.getElementById('promo_segment');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">Loading segments...</option>';
+        fetch('/api/cashier/segmentation', { credentials: 'same-origin' })
+            .then(res => res.json())
+            .then(data => {
+                const k = String(data.active_k || 3);
+                const labels = ((data.variants || {})[k] || {}).labels || [];
+                if (!labels.length) {
+                    sel.innerHTML = '<option value="">No segments yet</option>';
+                    return;
+                }
+                sel.innerHTML = labels.map(label => `<option value="${escapeHtmlPromo(label)}">${escapeHtmlPromo(label)}</option>`).join('');
+            })
+            .catch(() => {
+                sel.innerHTML = '<option value="">Could not load segments</option>';
+            });
+    }
+
     // Renders the "Specific Products (choose multiple)" checkbox list.
     // Re-called on every keystroke in the search box (filtered), so it
     // preserves whichever checkboxes were already ticked across re-renders.
@@ -2786,6 +2806,7 @@
             card.addEventListener('click', () => applyReorderFilter(card.getAttribute('data-reorder-filter')));
         });
         document.getElementById('promo_scope')?.addEventListener('change', function () {
+            document.getElementById('promo_segment_field').style.display = this.value === 'segment' ? 'block' : 'none';
             document.getElementById('promo_category_field').style.display = this.value === 'category' ? 'block' : 'none';
             document.getElementById('promo_drug_field').style.display = this.value === 'drug' ? 'block' : 'none';
             document.getElementById('promo_drugs_field').style.display = this.value === 'drugs' ? 'block' : 'none';
@@ -2804,6 +2825,8 @@
         document.getElementById('addPromoBtn')?.addEventListener('click', () => {
             populatePromoCategoryAndDrugSelects();
             document.getElementById('addPromoForm')?.reset();
+            populatePromoSegmentSelect();
+            document.getElementById('promo_segment_field').style.display = 'none';
             document.getElementById('promo_category_field').style.display = 'none';
             document.getElementById('promo_drug_field').style.display = 'none';
             document.getElementById('promo_drugs_field').style.display = 'none';
@@ -2833,6 +2856,10 @@
                 alert('Please select at least one product.');
                 return;
             }
+            if (scope === 'segment' && !document.getElementById('promo_segment').value) {
+                alert('Please select a customer segment. Open Customer Segmentation first if the list is empty.');
+                return;
+            }
             const today = manilaTodayYmd();
             const startDate = document.getElementById('promo_start_date')?.value || '';
             const endDate = document.getElementById('promo_end_date')?.value || '';
@@ -2849,6 +2876,7 @@
                 category: scope === 'category' ? document.getElementById('promo_category').value : null,
                 drug_id: scope === 'drug' ? document.getElementById('promo_drug_id').value : null,
                 drug_ids: scope === 'drugs' ? Array.from(promoSelectedDrugIds).map(Number) : [],
+                segment_label: scope === 'segment' ? document.getElementById('promo_segment').value : null,
                 start_date: document.getElementById('promo_start_date').value,
                 end_date: document.getElementById('promo_end_date').value,
             };
@@ -3776,10 +3804,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 <label for="promo_scope">Applies To:</label>
                 <select id="promo_scope">
                     <option value="all">Storewide (all products)</option>
+                    <option value="segment">A customer segment</option>
                     <option value="category">A Specific Category</option>
                     <option value="drug">A Specific Drug</option>
                     <option value="drugs">Specific Products (choose multiple)</option>
                 </select>
+
+                <div id="promo_segment_field" style="display:none;">
+                    <label for="promo_segment">Segment:</label>
+                    <select id="promo_segment"></select>
+                    <p style="font-size:12px;color:#6b7280;margin:4px 0 8px;">Everyone in this group gets the discount on all products when they are selected at the cashier.</p>
+                </div>
 
                 <div id="promo_category_field" style="display:none;">
                     <label for="promo_category">Category:</label>

@@ -57,7 +57,7 @@ def list_promos(request: Request):
     rows = fetch_all(
         """
         SELECT p.promo_id, p.name, p.discount_type, p.discount_value, p.drug_id, p.category,
-               p.start_date, p.end_date, p.is_active, p.created_by, p.created_at,
+               p.segment_label, p.start_date, p.end_date, p.is_active, p.created_by, p.created_at,
                d.generic_name, d.brand_name
         FROM promos p
         LEFT JOIN drugs_master d ON p.drug_id = d.drug_id
@@ -106,6 +106,8 @@ def list_promos(request: Request):
                 item["scope"] = f"{item.get('generic_name') or ''}" + (
                     f" ({item['brand_name']})" if item.get("brand_name") else ""
                 )
+            elif item.get("segment_label"):
+                item["scope"] = f"Segment: {item['segment_label']}"
             else:
                 item["scope"] = item.get("category") or "Storewide"
     return out
@@ -122,9 +124,13 @@ async def add_promo(request: Request):
     scope = data.get("scope") or "all"
     start_date = data.get("start_date") or ""
     end_date = data.get("end_date") or ""
-    category = drug_id = None
+    category = drug_id = segment_label = None
     drug_ids = []
-    if scope == "category":
+    if scope == "segment":
+        segment_label = str(data.get("segment_label") or "").strip()
+        if not segment_label:
+            return {"success": False, "message": "Please select a customer segment."}
+    elif scope == "category":
         category = str(data.get("category") or "").strip()
         if not category:
             return {"success": False, "message": "Please select a category."}
@@ -156,15 +162,20 @@ async def add_promo(request: Request):
             promo_id = next_id(cur, "promos", "promo_id")
             cur.execute(
                 """
-                INSERT INTO promos (promo_id, name, discount_type, discount_value, drug_id, category, start_date, end_date, is_active, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
+                INSERT INTO promos (promo_id, name, discount_type, discount_value, drug_id, category, segment_label, start_date, end_date, is_active, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
                 """,
-                (promo_id, name, discount_type, discount_value, drug_id, category, start_date, end_date, admin_name),
+                (promo_id, name, discount_type, discount_value, drug_id, category, segment_label, start_date, end_date, admin_name),
             )
             if scope == "drugs":
                 for did in drug_ids:
                     cur.execute("INSERT INTO promo_drugs (promo_id, drug_id) VALUES (%s, %s)", (promo_id, did))
-            note = f" on {len(drug_ids)} products" if scope == "drugs" else ""
+            if scope == "segment":
+                note = f" for the {segment_label} segment"
+            elif scope == "drugs":
+                note = f" on {len(drug_ids)} products"
+            else:
+                note = ""
             amount = f"{discount_value:g}% off" if discount_type == "percent" else f"₱{discount_value:g} off"
             _log(cur, request, "Create Promo", f"Created promo {name}: {amount}, {start_date} to {end_date}{note}.")
     return {"success": True, "promo_id": promo_id}

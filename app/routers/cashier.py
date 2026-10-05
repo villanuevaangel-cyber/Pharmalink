@@ -211,7 +211,7 @@ def promos(request: Request):
         return _unauthorized()
     rows = fetch_all(
         """
-        SELECT promo_id, name, discount_type, discount_value, drug_id, category
+        SELECT promo_id, name, discount_type, discount_value, drug_id, category, segment_label
         FROM promos
         WHERE is_active = 1
           AND CURRENT_DATE BETWEEN start_date AND end_date
@@ -223,6 +223,7 @@ def promos(request: Request):
         item = dict(row)
         item["discount_value"] = float(item["discount_value"] or 0)
         item["drug_id"] = int(item["drug_id"]) if item.get("drug_id") is not None else None
+        item["segment_label"] = str(item.get("segment_label") or "").strip() or None
         item["drug_ids"] = []
         out.append(item)
         promo_ids.append(int(item["promo_id"]))
@@ -283,7 +284,7 @@ def online_order_details(order_id: int, request: Request):
     items = fetch_all(
         """
         SELECT od.drug_id, od.lot_inventory_id, od.quantity AS ordered_qty, od.price_per_unit,
-               dm.brand_name, dm.generic_name, il.current_stock
+               dm.brand_name, dm.generic_name, dm.category, il.current_stock
         FROM order_details od
         JOIN drugs_master dm ON od.drug_id = dm.drug_id
         JOIN inventory_lots il ON od.lot_inventory_id = il.lot_inventory_id
