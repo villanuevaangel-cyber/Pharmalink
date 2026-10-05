@@ -1126,6 +1126,11 @@
                 <tbody id="consumptionTableBody"><tr><td colspan="4" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
             </table>
         </div>
+        <div class="um-pagination ph-pagination" id="consumption-pagination">
+            <button type="button" id="consumption-prev" class="um-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
+            <span id="consumption-page-info">Page 1</span>
+            <button type="button" id="consumption-next" class="um-page-btn">Next <i class="fas fa-chevron-right"></i></button>
+        </div>
     </div>
 </div>
 
@@ -2066,6 +2071,8 @@
     // ==========================================================
     let consumptionData = null;
     let consumptionTrendChart = null;
+    let consumptionPage = 1;
+    const CONSUMPTION_PAGE_SIZE = 5;
 
     function loadMonthlyConsumption() {
         const months = document.getElementById('consumptionMonthsRange')?.value || 6;
@@ -2073,6 +2080,7 @@
             .then(res => res.json())
             .then(data => {
                 consumptionData = data;
+                consumptionPage = 1;
                 renderConsumptionChart();
                 renderConsumptionTable();
                 const hub = document.getElementById('hub-consumption-total');
@@ -2136,12 +2144,34 @@
             rows = rows.filter(r => (r.generic_name + ' ' + (r.brand_name || '')).toLowerCase().includes(search));
         }
 
-        if (!rows.length) {
+        const pages = Math.max(1, Math.ceil(rows.length / CONSUMPTION_PAGE_SIZE) || 1);
+        if (consumptionPage > pages) consumptionPage = pages;
+        if (consumptionPage < 1) consumptionPage = 1;
+        const start = (consumptionPage - 1) * CONSUMPTION_PAGE_SIZE;
+        const pageRows = rows.slice(start, start + CONSUMPTION_PAGE_SIZE);
+        const info = document.getElementById('consumption-page-info');
+        const prev = document.getElementById('consumption-prev');
+        const next = document.getElementById('consumption-next');
+        if (info) {
+            info.textContent = rows.length
+                ? `Page ${consumptionPage} of ${pages} (${rows.length} result${rows.length === 1 ? '' : 's'})`
+                : 'Page 1 of 1 (0 results)';
+        }
+        if (prev) {
+            prev.disabled = consumptionPage <= 1;
+            prev.style.opacity = prev.disabled ? '0.5' : '1';
+        }
+        if (next) {
+            next.disabled = consumptionPage >= pages || !rows.length;
+            next.style.opacity = next.disabled ? '0.5' : '1';
+        }
+
+        if (!pageRows.length) {
             body.innerHTML = `<tr><td colspan="${months.length + 3}" style="text-align:center;color:#6b7280;padding:15px;">No sales recorded in this range.</td></tr>`;
             return;
         }
 
-        body.innerHTML = rows.map(r => {
+        body.innerHTML = pageRows.map(r => {
             const label = `${r.generic_name}${r.brand_name ? ' (' + r.brand_name + ')' : ''} - ${r.dosage}, ${r.form}`;
             const monthCells = months.map(m => `<td>${r.monthly[m] || 0}</td>`).join('');
             return `<tr><td>${label}</td><td>${r.category}</td>${monthCells}<td style="font-weight:600;">${r.total}</td></tr>`;
@@ -2149,7 +2179,19 @@
     }
 
     document.getElementById('consumptionMonthsRange')?.addEventListener('change', loadMonthlyConsumption);
-    document.getElementById('consumptionSearch')?.addEventListener('input', renderConsumptionTable);
+    document.getElementById('consumptionSearch')?.addEventListener('input', () => {
+        consumptionPage = 1;
+        renderConsumptionTable();
+    });
+    document.getElementById('consumption-prev')?.addEventListener('click', () => {
+        if (consumptionPage <= 1) return;
+        consumptionPage -= 1;
+        renderConsumptionTable();
+    });
+    document.getElementById('consumption-next')?.addEventListener('click', () => {
+        consumptionPage += 1;
+        renderConsumptionTable();
+    });
     loadMonthlyConsumption();
 
     // ==========================================================
