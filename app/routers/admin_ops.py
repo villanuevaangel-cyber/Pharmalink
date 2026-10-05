@@ -1072,30 +1072,52 @@ async def automation_run(request: Request):
     return {"success": True, "mode": mode, "result": result}
 
 
+def _shift_month(day: date, delta: int) -> date:
+    month_index = day.year * 12 + (day.month - 1) + delta
+    return date(month_index // 12, month_index % 12 + 1, 1)
+
+
+def _parse_month(value: str) -> date | None:
+    text = str(value or "").strip()
+    if len(text) < 7 or text[4] != "-":
+        return None
+    try:
+        return date(int(text[0:4]), int(text[5:7]), 1)
+    except ValueError:
+        return None
+
+
 @router.get("/monthly-consumption")
-def monthly_consumption(request: Request, months: int = 6):
+def monthly_consumption(request: Request, months: int = 6, start: str = "", end: str = ""):
     if not require_admin(request):
         return _unauthorized()
-    months_back = max(1, min(24, months))
     today = date.today().replace(day=1)
+    end_month = _parse_month(end) or today
+    if end_month > today:
+        end_month = today
+    start_month = _parse_month(start) or _shift_month(end_month, -(max(1, min(24, months)) - 1))
+    if start_month > end_month:
+        start_month = end_month
+    earliest = _shift_month(end_month, -23)
+    if start_month < earliest:
+        start_month = earliest
     labels = []
-    cursor = date(today.year, today.month, 1)
-    for i in range(months_back - 1, -1, -1):
-        y = cursor.year
-        m = cursor.month - i
-        while m <= 0:
-            m += 12
-            y -= 1
-        labels.append(f"{y:04d}-{m:02d}")
+    cursor = start_month
+    while cursor <= end_month:
+        labels.append(f"{cursor.year:04d}-{cursor.month:02d}")
+        cursor = _shift_month(cursor, 1)
+    range_end = _shift_month(end_month, 1)
     raw = fetch_all(
-        f"""
+        """
         SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
                to_char(s.date_created, 'YYYY-MM') AS month_label, SUM(si.quantity) AS qty
         FROM sales_items si JOIN sales s ON si.sale_id = s.sale_id JOIN drugs_master d ON si.drug_id = d.drug_id
         WHERE s.status = 'completed'
-          AND s.date_created >= (date_trunc('month', CURRENT_DATE) - INTERVAL '{months_back - 1} months')
+          AND s.date_created >= %s
+          AND s.date_created < %s
         GROUP BY d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category, month_label
-        """
+        """,
+        (start_month, range_end),
     )
     by_drug = {}
     for row in raw:
@@ -1160,127 +1182,23 @@ def procurement(request: Request):
         })
     summary["supplier_count"] = len(by_supplier)
     by_category = [
-        {"category": r["category"], "total_cost": round(float(r["total_cost"] or 0), 2)}
+        {
+            "category": r["category"],
+            "total_cost": round(float(r["total_cost"] or 0), 2),
+            "total_units": int(r["total_units"] or 0),
+        }
         for r in fetch_all(
             """
-            SELECT d.category, COALESCE(SUM(COALESCE(il.cost_price, il.price, 0) * il.current_stock), 0) AS total_cost
+            SELECT d.category,
+                   COALESCE(SUM(COALESCE(il.cost_price, il.price, 0) * il.current_stock), 0) AS total_cost,
+                   COALESCE(SUM(il.current_stock), 0) AS total_units
             FROM drugs_master d JOIN inventory_lots il ON il.drug_id = d.drug_id AND il.is_active = 1
               AND il.expiration_date >= CURRENT_DATE
             GROUP BY d.category HAVING COALESCE(SUM(il.current_stock), 0) > 0 ORDER BY total_cost DESC
             """
         )
     ]
-    grouped = {}
-    for row in fetch_all(
-        """
-        SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form,
-               COALESCE(il.cost_price, il.price, 0) AS unit_cost, s.supplier_name, il.current_stock, il.lot_number
-        FROM inventory_lots il JOIN drugs_master d ON il.drug_id = d.drug_id
-        LEFT JOIN suppliers s ON il.supplier = s.supplier_id
-        WHERE il.is_active = 1 AND il.expiration_date >= CURRENT_DATE
-        ORDER BY d.drug_id, unit_cost ASC
-        """
-    ):
-        did = int(row["drug_id"])
-        grouped.setdefault(did, {
-            "drug_id": did, "generic_name": row["generic_name"], "brand_name": row["brand_name"],
-            "dosage": row["dosage"], "form": row["form"], "offers": [],
-        })
-        grouped[did]["offers"].append({
-            "supplier_name": row["supplier_name"] or "Unknown",
-            "price": float(row["unit_cost"] or 0),
-            "lot_number": row["lot_number"],
-            "current_stock": int(row["current_stock"] or 0),
-        })
-    comparison = []
-    for drug in grouped.values():
-        prices = [o["price"] for o in drug["offers"]]
-        if len(set(prices)) < 2:
-            continue
-        mn, mx = min(prices), max(prices)
-        drug["min_price"] = mn
-        drug["max_price"] = mx
-        drug["savings_pct"] = round(((mx - mn) / mx) * 100, 1) if mx else 0
-        comparison.append(drug)
-    comparison.sort(key=lambda d: d["savings_pct"], reverse=True)
-    return {"summary": summary, "by_supplier": by_supplier, "by_category": by_category, "price_comparison": comparison}
-
-
-@router.get("/expiry-waste")
-def expiry_waste(request: Request):
-    if not require_admin(request):
-        return _unauthorized()
-    reason = "Expired / Disposed"
-    raw = fetch_all(
-        """
-        SELECT sa.adjustment_id, sa.created_at, sa.quantity_change, sa.admin_name, sa.notes,
-               d.drug_id, d.generic_name, d.brand_name, d.category,
-               l.lot_number, l.expiration_date, l.price, l.cost_price
-        FROM stock_adjustments sa
-        JOIN drugs_master d ON sa.drug_id = d.drug_id
-        LEFT JOIN inventory_lots l ON sa.lot_inventory_id = l.lot_inventory_id
-        WHERE sa.reason = %s AND sa.quantity_change < 0
-        ORDER BY sa.created_at DESC
-        """,
-        (reason,),
-    )
-    rows = []
-    for row in raw:
-        units = abs(int(row["quantity_change"] or 0))
-        unit_value = float(row["cost_price"]) if row["cost_price"] is not None else float(row["price"] or 0)
-        created = row["created_at"]
-        date_s = created.strftime("%Y-%m-%d") if hasattr(created, "strftime") else str(created)[:10]
-        rows.append({
-            "adjustment_id": int(row["adjustment_id"]),
-            "date": date_s,
-            "drug_id": int(row["drug_id"]),
-            "label": f"{row['generic_name']}" + (f" ({row['brand_name']})" if row.get("brand_name") else ""),
-            "category": row["category"],
-            "lot_number": row["lot_number"],
-            "expiration_date": _jsonable(row["expiration_date"]),
-            "units": units,
-            "value": round(units * unit_value, 2),
-            "is_estimate": row["cost_price"] is None,
-            "admin_name": row["admin_name"],
-            "notes": row["notes"],
-        })
-    total_units = sum(r["units"] for r in rows)
-    total_value = sum(r["value"] for r in rows)
-    any_est = any(r["is_estimate"] for r in rows)
-    cat_tot, month_tot = {}, {}
-    for r in rows:
-        cat = r["category"] or "Uncategorized"
-        cat_tot.setdefault(cat, {"units": 0, "value": 0.0})
-        cat_tot[cat]["units"] += r["units"]
-        cat_tot[cat]["value"] += r["value"]
-        month = r["date"][:7]
-        month_tot.setdefault(month, {"units": 0, "value": 0.0})
-        month_tot[month]["units"] += r["units"]
-        month_tot[month]["value"] += r["value"]
-    top_category = max(cat_tot.items(), key=lambda kv: kv[1]["value"])[0] if cat_tot else None
-    monthly = []
-    today = date.today().replace(day=1)
-    for i in range(11, -1, -1):
-        y, m = today.year, today.month - i
-        while m <= 0:
-            m += 12
-            y -= 1
-        key = f"{y:04d}-{m:02d}"
-        monthly.append({"month": key, "units": month_tot.get(key, {}).get("units", 0), "value": round(month_tot.get(key, {}).get("value", 0), 2)})
-    by_category = [{"category": c, "units": t["units"], "value": round(t["value"], 2)} for c, t in cat_tot.items()]
-    by_category.sort(key=lambda x: x["value"], reverse=True)
-    return {
-        "summary": {
-            "total_units": total_units,
-            "total_value": round(total_value, 2),
-            "record_count": len(rows),
-            "top_category": top_category,
-            "has_estimated_values": any_est,
-        },
-        "monthly": monthly,
-        "by_category": by_category,
-        "details": rows[:100],
-    }
+    return {"summary": summary, "by_supplier": by_supplier, "by_category": by_category}
 
 
 def _linreg(xs, ys):
@@ -1844,8 +1762,9 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
     }
 
 
+
 @router.get("/reports/export")
-def export_report(request: Request, kind: str = "", format: str = "xlsx", period: int = 30, months: int = 6):
+def export_report(request: Request, kind: str = "", format: str = "xlsx", period: int = 30, months: int = 6, start: str = "", end: str = ""):
     if not require_admin(request):
         return _unauthorized()
     fmt = "pdf" if str(format).lower() == "pdf" else "xlsx"
@@ -1872,9 +1791,9 @@ def export_report(request: Request, kind: str = "", format: str = "xlsx", period
         title = f"Sales Forecast ({data.get('period') or period} days)"
         filename = f"forecast-{period}d"
     elif kind == "consumption":
-        data = monthly_consumption(request, months=months)
+        data = monthly_consumption(request, months=months, start=start, end=end)
         month_labs = data.get("months") or []
-        headers = ["Drug", "Brand", "Category"] + month_labs + ["Total"]
+        headers = ["Medicine", "Brand", "Type"] + month_labs + ["Total"]
         rows = []
         for r in data.get("rows") or []:
             monthly = r.get("monthly") or {}
@@ -1885,35 +1804,22 @@ def export_report(request: Request, kind: str = "", format: str = "xlsx", period
             )
         totals = data.get("monthly_totals") or {}
         rows.append(["TOTAL", "", ""] + [totals.get(m, 0) for m in month_labs] + [sum(totals.values())])
-        title = f"Monthly Consumption ({len(month_labs)} months)"
+        title = f"Pieces sold each month ({len(month_labs)} months)"
         filename = f"consumption-{len(month_labs)}mo"
     elif kind == "procurement":
         data = procurement(request)
-        headers = ["Section", "Name", "Cost (PHP)", "Units", "Notes"]
-        rows = [["Summary", "Total inventory cost", (data.get("summary") or {}).get("total_inventory_cost"), (data.get("summary") or {}).get("total_units"), ""]]
+        headers = ["Section", "Name", "Cost (PHP)", "Pieces", "Notes"]
+        rows = [["Summary", "Total cost", (data.get("summary") or {}).get("total_inventory_cost"), (data.get("summary") or {}).get("total_units"), ""]]
         for r in data.get("by_supplier") or []:
-            rows.append(["Supplier", r.get("supplier_name"), r.get("total_cost"), r.get("total_units"), f"{r.get('distinct_drugs')} drugs"])
+            rows.append(["Supplier", r.get("supplier_name"), r.get("total_cost"), r.get("total_units"), f"{r.get('distinct_drugs')} medicines"])
         for r in data.get("by_category") or []:
-            rows.append(["Category", r.get("category"), r.get("total_cost"), "", ""])
-        for r in data.get("price_comparison") or []:
-            label = f"{r.get('generic_name')}" + (f" ({r.get('brand_name')})" if r.get("brand_name") else "")
-            rows.append(["Price gap", label, r.get("min_price"), "", f"High {r.get('max_price')} / save {r.get('savings_pct')}%"])
-        title = "Procurement Cost"
+            rows.append(["Type", r.get("category"), r.get("total_cost"), r.get("total_units"), ""])
+        title = "Cost of stock on hand"
         filename = "procurement"
-    elif kind == "expiry":
-        data = expiry_waste(request)
-        headers = ["Date", "Drug", "Category", "Lot", "Units lost", "Value (PHP)", "Adjusted by"]
-        rows = []
-        for r in data.get("details") or []:
-            rows.append([r.get("date"), r.get("label"), r.get("category"), r.get("lot_number"), r.get("units"), r.get("value"), r.get("admin_name")])
-        summary = data.get("summary") or {}
-        rows.append(["TOTAL", "", summary.get("top_category"), "", summary.get("total_units"), summary.get("total_value"), f"{summary.get('record_count')} records"])
-        title = "Expiry and Waste"
-        filename = "expiry-waste"
     else:
         return {"success": False, "message": "Unknown report type."}
 
-    kind_label = {"forecast": "Sales forecast", "consumption": "Monthly consumption", "procurement": "Procurement cost", "expiry": "Expiry and waste"}.get(kind, title)
+    kind_label = {"forecast": "Sales forecast", "consumption": "Monthly consumption", "procurement": "Procurement cost"}.get(kind, title)
     log_event("Generate Report", f"Generated the {kind_label} report as {fmt.upper()}.", request=request)
 
     if fmt == "pdf":
