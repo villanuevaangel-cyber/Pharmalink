@@ -301,6 +301,7 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
         })
         .then(data => {
             customerOrdersCache = data.orders || [];
+            ordersPage = 1;
             renderCustomerOrdersTable();
             setupOrderFilterListener();
         })
@@ -311,6 +312,21 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
 };
 
     let customerOrdersCache = [];
+    let ordersPage = 1;
+    const ORDERS_PAGE_SIZE = 10;
+
+    function paintOrdersPager(total) {
+        const pages = Math.max(1, Math.ceil(total / ORDERS_PAGE_SIZE) || 1);
+        if (ordersPage > pages) ordersPage = pages;
+        if (ordersPage < 1) ordersPage = 1;
+        const info = document.getElementById('orders-page-info');
+        const prev = document.getElementById('orders-prev');
+        const next = document.getElementById('orders-next');
+        if (info) info.textContent = `Page ${ordersPage} of ${pages} (${total} results)`;
+        if (prev) prev.disabled = ordersPage <= 1;
+        if (next) next.disabled = ordersPage >= pages || !total;
+        return (ordersPage - 1) * ORDERS_PAGE_SIZE;
+    }
 
     function orderSearchQuery() {
         return String(document.getElementById('order_search')?.value || '').trim().toLowerCase();
@@ -357,6 +373,7 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
         if (countEl) countEl.textContent = String(rows.length);
         if (openEl) openEl.textContent = String(openCount);
         if (spentEl) spentEl.textContent = '₱' + spent.toFixed(2);
+        const start = paintOrdersPager(rows.length);
         if (!rows.length) {
             const title = customerOrdersCache.length ? 'No matching orders' : 'No orders found';
             const hint = customerOrdersCache.length
@@ -369,7 +386,7 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
             </td></tr>`;
             return;
         }
-        tbody.innerHTML = rows.map(row => {
+        tbody.innerHTML = rows.slice(start, start + ORDERS_PAGE_SIZE).map(row => {
             const cls = String(row.order_status || '').toLowerCase().replace(/\s+/g, '-');
             const pay = orderPayLabel(row.payment_method || (row.kind === 'walkin' ? 'cash' : 'cash'));
             const kind = row.kind === 'walkin' ? 'walkin' : 'online';
@@ -926,9 +943,29 @@ function displayOrderDetails(data) {
             applyBtn.dataset.bound = '1';
             applyBtn.addEventListener('click', reloadOrders);
         }
+        const prevBtn = document.getElementById('orders-prev');
+        const nextBtn = document.getElementById('orders-next');
+        if (prevBtn && !prevBtn.dataset.bound) {
+            prevBtn.dataset.bound = '1';
+            prevBtn.addEventListener('click', () => {
+                if (ordersPage <= 1) return;
+                ordersPage -= 1;
+                renderCustomerOrdersTable();
+            });
+        }
+        if (nextBtn && !nextBtn.dataset.bound) {
+            nextBtn.dataset.bound = '1';
+            nextBtn.addEventListener('click', () => {
+                ordersPage += 1;
+                renderCustomerOrdersTable();
+            });
+        }
         if (searchInputEl && !searchInputEl.dataset.bound) {
             searchInputEl.dataset.bound = '1';
-            searchInputEl.addEventListener('input', renderCustomerOrdersTable);
+            searchInputEl.addEventListener('input', () => {
+                ordersPage = 1;
+                renderCustomerOrdersTable();
+            });
             searchInputEl.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();

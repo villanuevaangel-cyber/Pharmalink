@@ -161,6 +161,11 @@ def _open_pool() -> None:
             ensure_loyalty_settings(conn)
         except Exception:
             conn.rollback()
+        try:
+            from app.checkout_rates import ensure_checkout_rates
+            ensure_checkout_rates(conn)
+        except Exception:
+            conn.rollback()
     finally:
         _pool.putconn(conn)
 

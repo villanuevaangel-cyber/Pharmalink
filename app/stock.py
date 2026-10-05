@@ -62,7 +62,7 @@ def match_prescription_to_stock(cur, text: str) -> list[dict]:
                 "status": "In Stock" if int(row["total_stock"] or 0) > 0 else "Out of Stock",
                 "lot_id": None,
                 "price": 0.0,
-                "stock": 0,
+                "stock": int(row["total_stock"] or 0),
             })
     if matches:
         ids = [m["drug_id"] for m in matches]
@@ -90,6 +90,86 @@ def match_prescription_to_stock(cur, text: str) -> list[dict]:
                 continue
             match["lot_id"] = int(lot["lot_inventory_id"])
             match["price"] = float(lot["price"] or 0)
-            match["stock"] = int(lot["current_stock"] or 0)
             match["status"] = "In Stock" if match["stock"] > 0 else "Out of Stock"
     return matches
+
+
+def sellable_lots(cur, drug_id: int, lock: bool = False) -> list[dict]:
+    cur.execute(
+        f"""
+        SELECT lot_inventory_id, current_stock, price, expiration_date
+        FROM inventory_lots
+        WHERE drug_id = %s
+          AND is_active = 1
+          AND expiration_date >= CURRENT_DATE
+          AND current_stock > 0
+        ORDER BY expiration_date ASC, lot_inventory_id ASC
+        {"FOR UPDATE" if lock else ""}
+        """,
+        (drug_id,),
+    )
+    return [dict(row) if not isinstance(row, dict) else row for row in cur.fetchall()]
+
+
+def sellable_quantity(cur, drug_id: int) -> int:
+    return sum(int(lot["current_stock"] or 0) for lot in sellable_lots(cur, drug_id))
+
+
+def drug_id_for_lot(cur, lot_id: int) -> int:
+    cur.execute(
+        "SELECT drug_id FROM inventory_lots WHERE lot_inventory_id = %s",
+        (lot_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise ValueError("One of the items in the cart is no longer available.")
+    row = dict(row) if not isinstance(row, dict) else row
+    return int(row["drug_id"])
+
+
+def split_money(total: float, qty: int, part_qtys: list[int]) -> list[float]:
+    amount = round(float(total or 0), 2)
+    if not part_qtys:
+        return []
+    if qty <= 0:
+        return [0.0 for _ in part_qtys]
+    shares = []
+    used = 0.0
+    for index, part_qty in enumerate(part_qtys):
+        if index == len(part_qtys) - 1:
+            share = round(amount - used, 2)
+        else:
+            share = round(amount * part_qty / qty, 2)
+            used += share
+        shares.append(share)
+    return shares
+
+
+def allocate_expiring_first(cur, drug_id: int, qty: int) -> list[dict]:
+    """Take stock from the soonest expiration first, then the next lot."""
+    if qty <= 0:
+        raise ValueError("Quantity must be at least 1.")
+    remaining = qty
+    parts = []
+    for lot in sellable_lots(cur, drug_id, lock=True):
+        available = int(lot["current_stock"] or 0)
+        take = min(remaining, available)
+        if take <= 0:
+            continue
+        parts.append({
+            "lot_id": int(lot["lot_inventory_id"]),
+            "qty": take,
+            "price": float(lot["price"] or 0),
+        })
+        remaining -= take
+        if remaining == 0:
+            break
+    if remaining > 0:
+        on_hand = qty - remaining
+        raise ValueError(f"Not enough stock. Only {on_hand} left, but {qty} requested.")
+    for part in parts:
+        cur.execute(
+            "UPDATE inventory_lots SET current_stock = current_stock - %s WHERE lot_inventory_id = %s",
+            (part["qty"], part["lot_id"]),
+        )
+    return parts
