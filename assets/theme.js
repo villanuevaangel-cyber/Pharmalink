@@ -269,6 +269,7 @@
       if (type === 'low_stock' || type === 'low') return 'fa-box-open';
       if (type === 'out_of_stock' || type === 'out') return 'fa-circle-xmark';
       if (type === 'auto_po') return 'fa-cart-plus';
+      if (type === 'online_order') return 'fa-bag-shopping';
       if (type === 'expired') return 'fa-ban';
       return 'fa-triangle-exclamation';
     }
@@ -282,6 +283,14 @@
     var notesByKey = {};
 
     function goToStaffNotification(target, invFilter) {
+      if (target === 'orders') {
+        var posNav = document.querySelector('.nav-item[data-page="pos-page"]');
+        if (posNav) posNav.click();
+        if (typeof window.switchPOSMode === 'function') {
+          setTimeout(function () { window.switchPOSMode('orders'); }, 200);
+        }
+        return;
+      }
       var adminNav = document.querySelector('.nav-item[data-target="' + target + '"]');
       if (adminNav) {
         adminNav.click();
@@ -345,6 +354,7 @@
       if (type === 'expiring_30' || type === 'expiring') return 'Near expiry (30 days)';
       if (type === 'expiring_90') return 'Near expiry (90 days)';
       if (type === 'auto_po') return 'Automatic purchase order';
+      if (type === 'online_order') return 'New online order';
       if (raw && raw.toLowerCase() !== 'out' && raw.toLowerCase() !== 'low') return raw;
       return 'Alert';
     }

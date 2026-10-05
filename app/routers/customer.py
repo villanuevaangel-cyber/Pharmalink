@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from psycopg2.extras import RealDictCursor
 
 from app.activity import write_activity_log
+from app.automation import _upsert_alert
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import session_user_id
 from app.payments import CUSTOMER_EWALLET_KEYS, CUSTOMER_PAYMENT_KEYS, normalize_payment_method
@@ -675,6 +676,21 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
 
                 for drug_id in affected:
                     sync_stock_status_for_drug(cur, drug_id)
+
+                cur.execute(
+                    "SELECT first_name, last_name FROM customers WHERE customer_id = %s",
+                    (customer_id,),
+                )
+                person = cur.fetchone() or {}
+                who = f"{person.get('first_name') or ''} {person.get('last_name') or ''}".strip() or "A customer"
+                _upsert_alert(
+                    cur,
+                    "online_order",
+                    f"order:{order_id}",
+                    "warning",
+                    "New online order",
+                    f"New online order #{order_id} from {who}. Total ₱{server_total:.2f}.",
+                )
 
                 details = f"Online order #{order_id} placed - total ₱{server_total:.2f}."
                 if payment_reference:
