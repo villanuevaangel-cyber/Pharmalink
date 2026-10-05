@@ -439,7 +439,7 @@ def _po_email_subject(po_number: str) -> str:
     return f"Purchase order {po_number}"
 
 
-def _po_email_html(po_number, supplier_name, to_email, order_date, expected_date, notes, lines) -> str:
+def _po_email_html(po_number, supplier_name, _to_email, order_date, expected_date, notes, lines) -> str:
     """One document for the on-screen preview and the message that is sent."""
     body_rows = []
     total = 0.0
@@ -447,50 +447,39 @@ def _po_email_html(po_number, supplier_name, to_email, order_date, expected_date
     for line in lines:
         qty = int(line["quantity"])
         cost = line.get("unit_cost")
-        if cost is None:
-            cost_txt = "—"
-            amount_txt = "—"
-        else:
-            cost_val = round(float(cost), 2)
-            amount = round(qty * cost_val, 2)
-            total += amount
+        if cost is not None:
+            total += round(qty * round(float(cost), 2), 2)
             priced += 1
-            cost_txt = _peso(cost_val)
-            amount_txt = _peso(amount)
         body_rows.append(
             "<tr>"
             f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('generic_name') or '—')}</td>"
             f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('brand_name') or '—')}</td>"
             f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('dosage') or '—')}</td>"
             f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;text-align:right;\">{qty}</td>"
-            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;text-align:right;\">{cost_txt}</td>"
-            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;text-align:right;\">{amount_txt}</td>"
             "</tr>"
         )
     total_txt = _peso(round(total, 2)) if priced else "—"
-    to_txt = to_email if to_email else "No email on file"
     rows = "".join(body_rows) or (
-        "<tr><td colspan=\"6\" style=\"padding:8px;\">No items</td></tr>"
+        "<tr><td colspan=\"4\" style=\"padding:8px;\">No items</td></tr>"
     )
     th = "padding:8px;text-align:left;font-size:12px;"
     thr = "padding:8px;text-align:right;font-size:12px;"
+    greeting_name = (supplier_name or "").strip() or "Supplier"
     return (
         "<div style=\"font-family:Arial,sans-serif;color:#1E3A34;font-size:14px;line-height:1.45;\">"
-        f"<p style=\"margin:0 0 6px;\"><strong>To:</strong> {_esc(to_txt)}</p>"
-        f"<p style=\"margin:0 0 14px;\"><strong>Subject:</strong> {_esc(_po_email_subject(po_number))}</p>"
+        f"<p style=\"margin:0 0 8px;\">Good day, {_esc(greeting_name)}.</p>"
+        "<p style=\"margin:0 0 16px;\">Please see the purchase order below.</p>"
         f"<h2 style=\"margin:0 0 12px;font-size:20px;\">{_esc(po_number)}</h2>"
         f"<p style=\"margin:0 0 4px;\"><strong>Supplier:</strong> {_esc(supplier_name or '—')}</p>"
         f"<p style=\"margin:0 0 4px;\"><strong>Order date:</strong> {_esc(order_date or '—')}</p>"
         f"<p style=\"margin:0 0 4px;\"><strong>Expected date:</strong> {_esc(expected_date or '—')}</p>"
         f"<p style=\"margin:0 0 14px;\"><strong>Notes:</strong> {_esc(notes or '—')}</p>"
-        "<table style=\"width:100%;min-width:640px;border-collapse:collapse;\">"
+        "<table style=\"width:100%;border-collapse:collapse;\">"
         "<thead><tr style=\"background:#1E3A34;color:#ffffff;\">"
         f"<th style=\"{th}\">Generic name</th>"
         f"<th style=\"{th}\">Brand</th>"
         f"<th style=\"{th}\">Dosage</th>"
         f"<th style=\"{thr}\">Quantity</th>"
-        f"<th style=\"{thr}\">Unit cost</th>"
-        f"<th style=\"{thr}\">Line amount</th>"
         "</tr></thead><tbody>"
         f"{rows}</tbody></table>"
         f"<p style=\"margin:12px 0 0;text-align:right;\"><strong>Grand total:</strong> {_esc(total_txt)}</p>"
