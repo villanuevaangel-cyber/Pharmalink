@@ -1223,6 +1223,32 @@
     </div>
 
     <div id="maint-panel-pricing" class="maint-panel">
+        <div class="um-card" style="margin-bottom:16px;">
+            <div class="um-card-head">
+                <div>
+                    <h3>Checkout rates</h3>
+                    <p>Percents used at the cashier. Senior / PWD removes VAT, then takes this discount. VAT is the tax inside a regular sale.</p>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table id="checkoutRatesTable">
+                    <thead><tr><th>Rate</th><th>Percent</th><th></th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td>Senior / PWD discount</td>
+                            <td><input type="number" id="scPwdPercent" step="0.1" min="0" max="100" value="20" style="width:90px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;"> %</td>
+                            <td><button type="button" class="save-checkout-rate" data-rate="sc_pwd" style="background:#4BAA8B;color:#fff;border:none;border-radius:4px;padding:5px 12px;cursor:pointer;">Save</button></td>
+                        </tr>
+                        <tr>
+                            <td>VAT</td>
+                            <td><input type="number" id="vatPercent" step="0.1" min="0" max="100" value="12" style="width:90px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;"> %</td>
+                            <td><button type="button" class="save-checkout-rate" data-rate="vat" style="background:#4BAA8B;color:#fff;border:none;border-radius:4px;padding:5px 12px;cursor:pointer;">Save</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p id="checkoutRatesMsg" style="margin:8px 0 0;font-size:13px;min-height:1.2em;"></p>
+        </div>
         <div class="um-card">
             <div class="um-card-head">
                 <div>
@@ -1909,6 +1935,7 @@
         if (id === 'promos' && typeof window.loadLoyaltySettings === 'function') window.loadLoyaltySettings();
         if (id === 'categories' && typeof window.loadCategories === 'function') window.loadCategories();
         if (id === 'pricing' && typeof window.fetchCategoryMarkups === 'function') window.fetchCategoryMarkups();
+        if (id === 'pricing' && typeof window.loadCheckoutRates === 'function') window.loadCheckoutRates();
         if (id === 'catalog' && typeof window.fetchMasterDrugs === 'function') window.fetchMasterDrugs();
     };
     document.querySelectorAll('#maintenance .maint-tab').forEach((tab) => {
@@ -2544,6 +2571,59 @@
                 }
                 if (d.success && input) input.value = Number(d.peso_per_point).toFixed(2);
                 updateLoyaltyPreview();
+            })
+            .catch(() => {
+                if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Could not save.'; }
+            });
+    });
+
+    function showCheckoutPercent(input, value) {
+        if (!input || value == null || !Number.isFinite(Number(value))) return;
+        const n = Number(value);
+        input.value = Number.isInteger(n) ? String(n) : String(n);
+    }
+
+    window.loadCheckoutRates = function () {
+        fetch('/api/admin/checkout-rates', { credentials: 'same-origin' })
+            .then((r) => r.json())
+            .then((d) => {
+                if (!d || !d.success) return;
+                showCheckoutPercent(document.getElementById('scPwdPercent'), d.sc_pwd_percent);
+                showCheckoutPercent(document.getElementById('vatPercent'), d.vat_percent);
+            })
+            .catch(() => {});
+    };
+
+    document.getElementById('checkoutRatesTable')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.save-checkout-rate');
+        if (!btn) return;
+        const kind = btn.getAttribute('data-rate');
+        const input = document.getElementById(kind === 'vat' ? 'vatPercent' : 'scPwdPercent');
+        const msg = document.getElementById('checkoutRatesMsg');
+        const percent = parseFloat(input?.value);
+        if (!isFinite(percent) || percent < 0 || percent > 100) {
+            if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Enter a percent from 0 to 100.'; }
+            return;
+        }
+        fetch('/api/admin/checkout-rates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ kind, percent }),
+        })
+            .then((r) => r.json())
+            .then((d) => {
+                if (msg) {
+                    msg.style.color = d.success ? '#4BAA8B' : '#dc2626';
+                    const saved = kind === 'vat' ? d.vat_percent : d.sc_pwd_percent;
+                    msg.textContent = d.success
+                        ? `Saved. Cashier will use ${Number(saved)}%.`
+                        : (d.message || 'Could not save.');
+                }
+                if (d.success) {
+                    showCheckoutPercent(document.getElementById('scPwdPercent'), d.sc_pwd_percent);
+                    showCheckoutPercent(document.getElementById('vatPercent'), d.vat_percent);
+                }
             })
             .catch(() => {
                 if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Could not save.'; }

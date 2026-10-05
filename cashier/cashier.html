@@ -284,7 +284,7 @@
                 <div class="pos-scpwd">
                     <label for="scPwdToggle">
                         <input type="checkbox" id="scPwdToggle">
-                        Apply Senior Citizen/PWD Discount
+                        <span id="scPwdLabel">Apply Senior Citizen/PWD Discount (20%)</span>
                     </label>
                 </div>
 
@@ -693,7 +693,8 @@
 // 1. GLOBAL VARIABLES & CONSTANTS (Available to ALL functions)
 // =======================================================
 let cart = []; 
-const TAX_RATE = 0.12; // 12% Tax rate
+let TAX_RATE = 0.12;
+let SC_PWD_RATE = 0.20;
 const POINTS_TO_PESO_RATE_DEFAULT = 0.30;
 let POINTS_TO_PESO_RATE = POINTS_TO_PESO_RATE_DEFAULT;
 let taxLabel;
@@ -731,6 +732,26 @@ fetch('/api/cashier/promos')
     .then(res => res.json())
     .then(data => { activePromos = Array.isArray(data) ? data : []; })
     .catch(err => console.error('Failed to load active promos:', err));
+
+function formatCheckoutPercent(rate) {
+    const n = Math.round(rate * 1000) / 10;
+    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function applyCheckoutRates(data) {
+    if (data && Number.isFinite(Number(data.vat_percent))) TAX_RATE = Number(data.vat_percent) / 100;
+    if (data && Number.isFinite(Number(data.sc_pwd_percent))) SC_PWD_RATE = Number(data.sc_pwd_percent) / 100;
+    const scLabel = document.getElementById('scPwdLabel');
+    if (scLabel) scLabel.textContent = `Apply Senior Citizen/PWD Discount (${formatCheckoutPercent(SC_PWD_RATE)}%)`;
+    const label = document.getElementById('taxLabel');
+    if (label) label.textContent = `Tax (${formatCheckoutPercent(TAX_RATE)}%):`;
+    if (typeof updateCart === 'function') updateCart();
+}
+
+fetch('/api/cashier/checkout-rates', { credentials: 'same-origin' })
+    .then(res => res.json())
+    .then(data => { if (data && data.success) applyCheckoutRates(data); })
+    .catch(err => console.error('Failed to load checkout rates:', err));
 
 fetch('/api/cashier/loyalty-settings', { credentials: 'same-origin' })
     .then(res => res.json())
@@ -1379,7 +1400,7 @@ cartTable.innerHTML += row;
         vatExemptSale = subtotalBeforeDiscount / (1 + TAX_RATE);
 
         // Step 2: Compute 20% SC/PWD discount
-        scDiscount = vatExemptSale * 0.20;
+        scDiscount = vatExemptSale * SC_PWD_RATE;
 
         // Step 3: Amount collectible after SC discount
         totalAfterDiscount = vatExemptSale - scDiscount;
@@ -1867,7 +1888,7 @@ console.log("Dashboard Inputs Found. Setting defaults...");
         if (e.target.id === 'srDetailModal') closeSalesReportDetail();
     });
 
-const calculatedTaxRate = (TAX_RATE * 100).toFixed(0); // e.g., 12
+const calculatedTaxRate = formatCheckoutPercent(TAX_RATE);
     taxLabel.textContent = `Tax (${calculatedTaxRate}%):`;
 
 // ===== LOAD PRODUCTS =====

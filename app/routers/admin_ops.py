@@ -24,6 +24,7 @@ from app.automation import (
 )
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin
+from app.checkout_rates import get_checkout_rates, save_checkout_rate
 from app.loyalty import get_loyalty_settings, save_loyalty_peso
 from app.mailer import send_mail
 from app.report_files import pdf_bytes, workbook_bytes
@@ -196,6 +197,31 @@ async def update_loyalty_settings(request: Request):
                 "Update Loyalty Points",
                 f"Set loyalty discount to ₱{settings['peso_per_point']:.2f} off per point.",
             )
+    return {"success": True, **settings}
+
+
+@router.get("/checkout-rates")
+def get_checkout_rates_admin(request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    return {"success": True, **get_checkout_rates()}
+
+
+@router.post("/checkout-rates")
+async def update_checkout_rates(request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    data = await request.json()
+    kind = str(data.get("kind") or "").strip()
+    try:
+        settings = save_checkout_rate(kind, data.get("percent"))
+    except (TypeError, ValueError) as exc:
+        return {"success": False, "message": str(exc) if str(exc) else "Enter a percent from 0 to 100."}
+    label = "Senior / PWD discount" if kind == "sc_pwd" else "VAT"
+    saved = settings["sc_pwd_percent"] if kind == "sc_pwd" else settings["vat_percent"]
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            _log(cur, request, "Update Checkout Rate", f"Set {label} to {saved:.2f}%.")
     return {"success": True, **settings}
 
 

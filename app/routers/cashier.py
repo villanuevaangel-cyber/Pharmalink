@@ -13,6 +13,7 @@ from psycopg2.extras import RealDictCursor
 from app.activity import log_event, write_activity_log
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin, require_staff
+from app.checkout_rates import get_checkout_rates
 from app.loyalty import get_loyalty_settings, get_peso_per_point
 from app.payments import CASHIER_PAYMENT_KEYS
 from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
@@ -162,6 +163,13 @@ def customers(request: Request):
         "phone_number": r["phone_number"] or "",
         "loyalty_points": float(r["loyalty_points"] or 0),
     } for r in rows]
+
+
+@router.get("/checkout-rates")
+def cashier_checkout_rates(request: Request):
+    if not require_staff(request):
+        return _unauthorized()
+    return {"success": True, **get_checkout_rates()}
 
 
 @router.get("/loyalty-settings")
