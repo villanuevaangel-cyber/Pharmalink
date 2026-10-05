@@ -15,7 +15,7 @@ from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import session_user_id
 from app.payments import CUSTOMER_EWALLET_KEYS, CUSTOMER_PAYMENT_KEYS, normalize_payment_method
 from app.paymongo import PayMongoError, create_checkout_session, require_paid_checkout
-from app.stock import match_prescription_to_stock, sync_stock_status_for_drug
+from app.stock import allocate_expiring_first, drug_id_for_lot, match_prescription_to_stock, sellable_quantity, sync_stock_status_for_drug
 from app.profile_photos import (
     ALLOWED_EXT,
     customer_photo_url,
@@ -473,14 +473,30 @@ def _quote_online_total(items) -> float:
         if lot_id <= 0 or qty <= 0:
             raise ValueError("Invalid item in cart.")
         lot = fetch_one(
-            "SELECT current_stock, price FROM inventory_lots WHERE lot_inventory_id = %s AND is_active = 1",
+            """
+            SELECT drug_id, price
+            FROM inventory_lots
+            WHERE lot_inventory_id = %s AND is_active = 1
+            """,
             (lot_id,),
         )
         if not lot:
             raise ValueError("One of the items in your cart is no longer available.")
-        if int(lot["current_stock"]) < qty:
+        on_hand = fetch_one(
+            """
+            SELECT COALESCE(SUM(current_stock), 0) AS on_hand
+            FROM inventory_lots
+            WHERE drug_id = %s
+              AND is_active = 1
+              AND expiration_date >= CURRENT_DATE
+              AND current_stock > 0
+            """,
+            (lot["drug_id"],),
+        )
+        available = int((on_hand or {}).get("on_hand") or 0)
+        if available < qty:
             raise ValueError(
-                f"Not enough stock left for one of your items (only {lot['current_stock']} available). Please update your cart."
+                f"Not enough stock left for one of your items (only {available} available). Please update your cart."
             )
         server_total += float(lot["price"] or item.get("price_per_unit") or 0) * qty
     return round(server_total, 2)
@@ -598,17 +614,16 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
                     qty = int(item.get("quantity") or 0)
                     if lot_id <= 0 or qty <= 0:
                         raise ValueError("Invalid item in cart.")
-                    cur.execute(
-                        "SELECT current_stock, price FROM inventory_lots WHERE lot_inventory_id = %s AND is_active = 1 FOR UPDATE",
-                        (lot_id,),
-                    )
+                    drug_id = drug_id_for_lot(cur, lot_id)
+                    if sellable_quantity(cur, drug_id) < qty:
+                        available = sellable_quantity(cur, drug_id)
+                        raise ValueError(
+                            f"Not enough stock left for one of your items (only {available} available). Please update your cart."
+                        )
+                    cur.execute("SELECT price FROM inventory_lots WHERE lot_inventory_id = %s", (lot_id,))
                     lot = cur.fetchone()
                     if not lot:
                         raise ValueError("One of the items in your cart is no longer available.")
-                    if int(lot["current_stock"]) < qty:
-                        raise ValueError(
-                            f"Not enough stock left for one of your items (only {lot['current_stock']} available). Please update your cart."
-                        )
                     unit_price = float(lot["price"] or item.get("price_per_unit") or 0)
                     server_total += unit_price * qty
 
@@ -640,26 +655,23 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
                     )
 
                 for item in items:
-                    drug_id = int(item.get("drug_id") or 0)
                     lot_id = int(item.get("lot_id") or 0)
                     qty = int(item.get("quantity") or 0)
+                    drug_id = drug_id_for_lot(cur, lot_id)
                     cur.execute("SELECT price FROM inventory_lots WHERE lot_inventory_id = %s", (lot_id,))
                     row = cur.fetchone()
                     unit_price = float(row["price"] if row else item.get("price_per_unit") or 0)
-                    detail_id = next_id(cur, "order_details", "detail_id")
-                    cur.execute(
-                        """
-                        INSERT INTO order_details (detail_id, order_id, drug_id, lot_inventory_id, quantity, price_per_unit)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                        """,
-                        (detail_id, order_id, drug_id, lot_id, qty, unit_price),
-                    )
-                    cur.execute(
-                        "UPDATE inventory_lots SET current_stock = current_stock - %s WHERE lot_inventory_id = %s",
-                        (qty, lot_id),
-                    )
-                    if drug_id > 0:
-                        affected.add(drug_id)
+                    parts = allocate_expiring_first(cur, drug_id, qty)
+                    for part in parts:
+                        detail_id = next_id(cur, "order_details", "detail_id")
+                        cur.execute(
+                            """
+                            INSERT INTO order_details (detail_id, order_id, drug_id, lot_inventory_id, quantity, price_per_unit)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            """,
+                            (detail_id, order_id, drug_id, part["lot_id"], part["qty"], unit_price),
+                        )
+                    affected.add(drug_id)
 
                 for drug_id in affected:
                     sync_stock_status_for_drug(cur, drug_id)
@@ -966,14 +978,28 @@ def products(request: Request):
     rows = fetch_all(
         """
         SELECT dm.drug_id, dm.category, dm.brand_name, dm.generic_name,
-               dm.dosage, dm.form, il.price, il.lot_inventory_id, il.current_stock
+               dm.dosage, dm.form, il.price, il.lot_inventory_id, stock.on_hand AS current_stock
         FROM drugs_master dm
-        JOIN inventory_lots il ON dm.drug_id = il.drug_id
-        WHERE il.current_stock > 0
-          AND il.is_active = 1
-          AND il.expiration_date >= CURRENT_DATE
-          AND dm.is_active = 1
-        ORDER BY il.expiration_date ASC
+        JOIN LATERAL (
+            SELECT lot_inventory_id, price
+            FROM inventory_lots
+            WHERE drug_id = dm.drug_id
+              AND is_active = 1
+              AND expiration_date >= CURRENT_DATE
+              AND current_stock > 0
+            ORDER BY expiration_date ASC, lot_inventory_id ASC
+            LIMIT 1
+        ) il ON TRUE
+        JOIN LATERAL (
+            SELECT COALESCE(SUM(current_stock), 0) AS on_hand
+            FROM inventory_lots
+            WHERE drug_id = dm.drug_id
+              AND is_active = 1
+              AND expiration_date >= CURRENT_DATE
+              AND current_stock > 0
+        ) stock ON stock.on_hand > 0
+        WHERE dm.is_active = 1
+        ORDER BY dm.generic_name ASC, dm.brand_name ASC
         """
     )
     products = []

@@ -18,7 +18,7 @@ from app.loyalty import get_loyalty_settings, get_peso_per_point
 from app.payments import CASHIER_PAYMENT_KEYS
 from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
 from app.profile_photos import resolve_photo_url, staff_photo_url
-from app.stock import sync_stock_status_for_drug
+from app.stock import allocate_expiring_first, drug_id_for_lot, sellable_quantity, split_money, sync_stock_status_for_drug
 from app.validation import prepare_profile_fields
 
 router = APIRouter(prefix="/api/cashier", tags=["cashier"])
@@ -53,14 +53,28 @@ def products(request: Request):
     rows = fetch_all(
         """
         SELECT dm.drug_id, dm.category, dm.brand_name, dm.generic_name,
-               dm.dosage, dm.form, il.price, il.lot_inventory_id, il.current_stock
+               dm.dosage, dm.form, il.price, il.lot_inventory_id, stock.on_hand AS current_stock
         FROM drugs_master dm
-        JOIN inventory_lots il ON dm.drug_id = il.drug_id
-        WHERE il.current_stock > 0
-          AND il.is_active = 1
-          AND il.expiration_date >= CURRENT_DATE
-          AND dm.is_active = 1
-        ORDER BY il.expiration_date ASC
+        JOIN LATERAL (
+            SELECT lot_inventory_id, price
+            FROM inventory_lots
+            WHERE drug_id = dm.drug_id
+              AND is_active = 1
+              AND expiration_date >= CURRENT_DATE
+              AND current_stock > 0
+            ORDER BY expiration_date ASC, lot_inventory_id ASC
+            LIMIT 1
+        ) il ON TRUE
+        JOIN LATERAL (
+            SELECT COALESCE(SUM(current_stock), 0) AS on_hand
+            FROM inventory_lots
+            WHERE drug_id = dm.drug_id
+              AND is_active = 1
+              AND expiration_date >= CURRENT_DATE
+              AND current_stock > 0
+        ) stock ON stock.on_hand > 0
+        WHERE dm.is_active = 1
+        ORDER BY dm.generic_name ASC, dm.brand_name ASC
         """
     )
     products = []
@@ -119,7 +133,19 @@ def product_by_barcode(request: Request, barcode: str = ""):
             "generic_name": drug["generic_name"],
             "brand_name": drug["brand_name"],
         }
+    on_hand = fetch_one(
+        """
+        SELECT COALESCE(SUM(current_stock), 0) AS on_hand
+        FROM inventory_lots
+        WHERE drug_id = %s
+          AND is_active = 1
+          AND expiration_date >= CURRENT_DATE
+          AND current_stock > 0
+        """,
+        (drug["drug_id"],),
+    )
     product = {**dict(drug), **dict(row)}
+    product["current_stock"] = int((on_hand or {}).get("on_hand") or 0)
     product["category"] = _title(product.get("category"))
     product["generic_name"] = _title(product.get("generic_name"))
     product["brand_name"] = _title(product.get("brand_name"))
@@ -771,17 +797,9 @@ async def create_sale(request: Request):
                     qty = int(item.get("qty") or 0)
                     if lot_id <= 0 or qty <= 0:
                         raise ValueError(f"Invalid item in cart (lot #{lot_id}, qty {qty}).")
-                    cur.execute(
-                        "SELECT current_stock FROM inventory_lots WHERE lot_inventory_id = %s AND is_active = 1 FOR UPDATE",
-                        (lot_id,),
-                    )
-                    lot = cur.fetchone()
-                    if not lot:
-                        raise ValueError(f"Item (lot #{lot_id}) no longer exists or is inactive.")
-                    if int(lot["current_stock"]) < qty:
-                        raise ValueError(
-                            f"Not enough stock for lot #{lot_id} - only {lot['current_stock']} left, but {qty} requested. Please refresh and try again."
-                        )
+                    drug_id = drug_id_for_lot(cur, lot_id)
+                    if sellable_quantity(cur, drug_id) < qty:
+                        raise ValueError(f"Not enough stock. Only {sellable_quantity(cur, drug_id)} left, but {qty} requested.")
 
                 points_redeemed = 0.0
                 points_discount_value = 0.0
@@ -847,29 +865,30 @@ async def create_sale(request: Request):
                         ),
                     )
                 for item in items:
-                    drug_id = int(item.get("drug_id") or 0)
-                    lot_id = int(item.get("lot_id") or 0)
+                    drug_id = drug_id_for_lot(cur, int(item.get("lot_id") or 0))
                     qty = int(item.get("qty") or 0)
                     price = float(item.get("price") or 0)
                     line_subtotal = float(item.get("subtotal") or (price * qty))
                     discount_amount = float(item.get("discount_amount") or 0)
                     promo_name = item.get("promo_name")
                     vat_exempt = int(item.get("vat_exempt") or 0)
-                    item_id = next_id(cur, "sales_items", "id")
-                    cur.execute(
-                        """
-                        INSERT INTO sales_items
-                            (id, sale_id, drug_id, lot_id, quantity, price, subtotal, discount_amount, promo_name, vat_exempt)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (item_id, sale_id, drug_id, lot_id, qty, price, line_subtotal, discount_amount, promo_name, vat_exempt),
-                    )
-                    cur.execute(
-                        "UPDATE inventory_lots SET current_stock = current_stock - %s WHERE lot_inventory_id = %s",
-                        (qty, lot_id),
-                    )
-                    if drug_id > 0:
-                        affected.add(drug_id)
+                    parts = allocate_expiring_first(cur, drug_id, qty)
+                    subtotals = split_money(line_subtotal, qty, [part["qty"] for part in parts])
+                    discounts = split_money(discount_amount, qty, [part["qty"] for part in parts])
+                    for part, part_subtotal, part_discount in zip(parts, subtotals, discounts):
+                        item_id = next_id(cur, "sales_items", "id")
+                        cur.execute(
+                            """
+                            INSERT INTO sales_items
+                                (id, sale_id, drug_id, lot_id, quantity, price, subtotal, discount_amount, promo_name, vat_exempt)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            """,
+                            (
+                                item_id, sale_id, drug_id, part["lot_id"], part["qty"], price,
+                                part_subtotal, part_discount, promo_name, vat_exempt,
+                            ),
+                        )
+                    affected.add(drug_id)
 
                 if points_redeemed > 0:
                     cur.execute(
