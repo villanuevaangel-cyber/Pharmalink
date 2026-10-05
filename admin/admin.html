@@ -33,7 +33,6 @@
         }
         .report-hub-card:hover{ border-color:#FFC857; box-shadow:0 6px 18px rgba(37,99,235,0.12); }
         .report-hub-card h3{ margin:0 0 6px; font-size:15px; color:#1E3A34; }
-        .report-hub-card p{ margin:0; font-size:13px; color:#6b7280; line-height:1.4; }
         .report-hub-card .hub-value{ display:block; margin:10px 0 8px; font-size:1.35rem; font-weight:700; }
         .report-hub-card .hub-actions, .rpt-export-row{
             display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; align-items:center;
@@ -1043,10 +1042,9 @@
         <p class="subtitle">Upload sales data, generate operational reports on screen, then download PDF or Excel.</p>
     </div>
 
-    <div class="rpt-upload-card">
+    <div class="rpt-upload-card" title="CSV or Excel. Every row is checked first. Medicine and brand must match the inventory, and quantity and price must be numbers. Nothing is saved if a row is wrong. Inventory is not deducted.">
         <div class="rpt-drop-icon"><i class="fas fa-cloud-arrow-up"></i></div>
         <h3>Upload sales data</h3>
-        <p>CSV or Excel. Every row is checked first. Medicine and brand must match the inventory, and quantity and price must be numbers. Nothing is saved if a row is wrong. Inventory is not deducted.</p>
         <input type="file" id="rptSalesFile" class="rpt-file-input" accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
         <div class="rpt-upload-actions">
             <label for="rptSalesFile" class="rpt-choose"><i class="fas fa-folder-open"></i> Choose File</label>
@@ -1059,9 +1057,8 @@
     <h3 style="color:#1E3A34; margin:0 0 10px; font-size:1.15rem;">Operational reports</h3>
     <p class="subtitle" style="margin-top:0;">Generate a report on screen, then download PDF or Excel for each one.</p>
     <div class="report-hub">
-        <div class="report-hub-card">
+        <div class="report-hub-card" title="Units sold per drug, by month - for seasonal demand and bulk orders.">
             <h3><i class="fas fa-calendar-days"></i> Monthly Consumption</h3>
-            <p>Units sold per drug, by month - for seasonal demand and bulk orders.</p>
             <span class="hub-value" id="hub-consumption-total" style="color:#4BAA8B;">-</span>
             <div class="hub-actions">
                 <button type="button" class="rpt-btn navy" data-report-modal="consumptionReportModal"><i class="fas fa-chart-column"></i> Generate report</button>
@@ -1069,9 +1066,8 @@
                 <button type="button" class="rpt-btn xlsx" data-rpt-kind="consumption" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
             </div>
         </div>
-        <div class="report-hub-card">
+        <div class="report-hub-card" title="On-hand inventory valued at unit cost, by supplier and category.">
             <h3><i class="fas fa-file-invoice-dollar"></i> Procurement Cost</h3>
-            <p>On-hand inventory valued at unit cost, by supplier and category.</p>
             <span class="hub-value" id="hub-procurement-cost" style="color:#1E3A34;">₱0</span>
             <div class="hub-actions">
                 <button type="button" class="rpt-btn navy" data-report-modal="procurementReportModal"><i class="fas fa-chart-column"></i> Generate report</button>
@@ -1079,9 +1075,8 @@
                 <button type="button" class="rpt-btn xlsx" data-rpt-kind="procurement" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
             </div>
         </div>
-        <div class="report-hub-card">
+        <div class="report-hub-card" title="Write-offs tagged Expired / Disposed - value lost and where.">
             <h3><i class="fas fa-triangle-exclamation"></i> Expiry &amp; Waste</h3>
-            <p>Write-offs tagged Expired / Disposed - value lost and where.</p>
             <span class="hub-value" id="hub-expiry-value" style="color:#dc2626;">₱0</span>
             <div class="hub-actions">
                 <button type="button" class="rpt-btn navy" data-report-modal="expiryWasteReportModal"><i class="fas fa-chart-column"></i> Generate report</button>
