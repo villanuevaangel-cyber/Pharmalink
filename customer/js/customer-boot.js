@@ -100,7 +100,8 @@
                 return `<div class="product" data-category="${p.category}" data-name-search="${displayName}">
                     <span class="shop-cat">${p.category}</span>
                     <h4>${p.brand_name}</h4>
-                    <p class="shop-meta">${p.generic_name} · ${p.dosage} · ${p.form}</p>
+                    <p class="shop-generic">${p.generic_name}</p>
+                    <p class="shop-spec">${p.dosage} · ${p.form}</p>
                     <div class="shop-card-foot">
                         <p class="shop-price">₱${Number(p.price).toFixed(2)}</p>
                         <p class="shop-stock ${stockClass}">${stock} in stock</p>
