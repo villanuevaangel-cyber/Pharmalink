@@ -45,6 +45,12 @@ def ensure_automation_schema(conn) -> None:
         )
         cur.execute(
             """
+            ALTER TABLE drugs_master
+            ADD COLUMN IF NOT EXISTS cost_price NUMERIC(12,4)
+            """
+        )
+        cur.execute(
+            """
             CREATE UNIQUE INDEX IF NOT EXISTS uq_drugs_master_barcode
             ON drugs_master (barcode)
             WHERE barcode IS NOT NULL AND btrim(barcode) <> ''
@@ -387,12 +393,24 @@ def compute_reorder_suggestions() -> dict:
                     GROUP BY si.drug_id
                 ) recent ON recent.drug_id = d.drug_id
                 LEFT JOIN LATERAL (
-                    SELECT il.supplier AS supplier_id, s.supplier_name
-                    FROM inventory_lots il
-                    JOIN suppliers s ON il.supplier = s.supplier_id
-                    WHERE il.drug_id = d.drug_id AND il.supplier IS NOT NULL
-                    ORDER BY il.date_added DESC NULLS LAST, il.lot_inventory_id DESC
-                    LIMIT 1
+                    SELECT s.supplier_id, s.supplier_name
+                    FROM suppliers s
+                    WHERE s.supplier_id = COALESCE(
+                        (
+                            SELECT il.supplier
+                            FROM inventory_lots il
+                            WHERE il.drug_id = d.drug_id AND il.supplier IS NOT NULL
+                            ORDER BY il.date_added DESC NULLS LAST, il.lot_inventory_id DESC
+                            LIMIT 1
+                        ),
+                        (
+                            SELECT sd.supplier_id
+                            FROM supplier_drugs sd
+                            WHERE sd.drug_id = d.drug_id
+                            ORDER BY sd.id DESC
+                            LIMIT 1
+                        )
+                    )
                 ) recent_supplier ON true
                 WHERE d.is_active = 1
                 """
@@ -430,7 +448,8 @@ def compute_reorder_suggestions() -> dict:
         else:
             signal = ""
         action, qty, reduce_qty, reasoning = "ok", 0, 0, ""
-        if current <= minimum or (has_demand and current <= reorder_point):
+        below_minimum = minimum > 0 and current <= minimum
+        if below_minimum or (has_demand and current <= reorder_point):
             action = "increase"
             qty = max(1, int(math.ceil(target_stock - current)))
             reasoning = (

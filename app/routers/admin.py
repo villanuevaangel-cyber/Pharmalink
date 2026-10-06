@@ -81,6 +81,9 @@ def _sync_all_stock(cur):
         """
         UPDATE drugs_master dm
         SET stock_status = CASE
+            WHEN COALESCE(dm.minimum_stock, 0) = 0
+             AND NOT EXISTS (SELECT 1 FROM inventory_lots WHERE drug_id = dm.drug_id)
+            THEN 'ok'
             WHEN COALESCE((SELECT SUM(current_stock) FROM inventory_lots WHERE is_active = 1 AND expiration_date >= CURRENT_DATE AND drug_id = dm.drug_id), 0) <= 0 THEN 'out'
             WHEN COALESCE((SELECT SUM(current_stock) FROM inventory_lots WHERE is_active = 1 AND expiration_date >= CURRENT_DATE AND drug_id = dm.drug_id), 0) <= dm.minimum_stock THEN 'low'
             ELSE 'ok'
@@ -269,16 +272,34 @@ async def update_profile(request: Request):
 def list_drugs(request: Request, status: str = "active"):
     if not require_admin(request):
         return _unauthorized()
-    sql = "SELECT drug_id, generic_name, brand_name, dosage, form, category, minimum_stock, COALESCE(procurement_type, 'purchase') AS procurement_type, is_active, barcode FROM drugs_master "
+    sql = """
+        SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
+               d.minimum_stock, d.cost_price,
+               COALESCE(d.procurement_type, 'purchase') AS procurement_type,
+               d.is_active, d.barcode, cm.markup_percent
+        FROM drugs_master d
+        LEFT JOIN category_markup cm
+            ON LOWER(TRIM(cm.category)) = LOWER(TRIM(d.category))
+    """
     if status == "active":
-        sql += "WHERE is_active = 1 "
-    sql += "ORDER BY generic_name ASC"
+        sql += "WHERE d.is_active = 1 "
+    sql += "ORDER BY d.generic_name ASC"
     rows = fetch_all(sql)
     out = []
     for row in rows:
         item = _row(row)
         item["minimum_stock"] = int(item.get("minimum_stock") or 0)
         item["is_active"] = int(item.get("is_active") or 0)
+        cost = item.get("cost_price")
+        markup = item.get("markup_percent")
+        markup_pct = float(markup) if markup is not None else 30.0
+        if cost is not None and float(cost) > 0:
+            item["cost_price"] = float(cost)
+            item["selling_price"] = round(float(cost) * (1 + markup_pct / 100.0), 2)
+        else:
+            item["cost_price"] = None
+            item["selling_price"] = None
+        item.pop("markup_percent", None)
         out.append(item)
     return out
 
@@ -830,11 +851,18 @@ def list_suppliers(request: Request):
     )
     med_rows = fetch_all(
         """
-        SELECT DISTINCT i.supplier AS supplier_id, d.generic_name, d.brand_name, d.dosage
-        FROM inventory_lots i
-        JOIN drugs_master d ON d.drug_id = i.drug_id
-        WHERE i.supplier IS NOT NULL
-        ORDER BY d.generic_name, d.brand_name, d.dosage
+        SELECT DISTINCT supplier_id, generic_name, brand_name, dosage
+        FROM (
+            SELECT i.supplier AS supplier_id, d.generic_name, d.brand_name, d.dosage
+            FROM inventory_lots i
+            JOIN drugs_master d ON d.drug_id = i.drug_id
+            WHERE i.supplier IS NOT NULL
+            UNION
+            SELECT sd.supplier_id, d.generic_name, d.brand_name, d.dosage
+            FROM supplier_drugs sd
+            JOIN drugs_master d ON d.drug_id = sd.drug_id
+        ) linked
+        ORDER BY generic_name, brand_name, dosage
         """
     )
     by_supplier = {}
@@ -854,7 +882,7 @@ def list_suppliers(request: Request):
 
 
 def supplier_offered_drug_ids(supplier_id: int) -> list[int]:
-    """Drugs this supplier has sold or been ordered for (PO lines + stock lots)."""
+    """Drugs linked to this supplier by a purchase order, a stock lot, or the catalog link."""
     rows = fetch_all(
         """
         SELECT DISTINCT drug_id FROM (
@@ -866,9 +894,13 @@ def supplier_offered_drug_ids(supplier_id: int) -> list[int]:
             SELECT il.drug_id
             FROM inventory_lots il
             WHERE il.supplier = %s AND il.drug_id IS NOT NULL
+            UNION
+            SELECT sd.drug_id
+            FROM supplier_drugs sd
+            WHERE sd.supplier_id = %s
         ) x
         """,
-        (supplier_id, supplier_id),
+        (supplier_id, supplier_id, supplier_id),
     )
     return [int(r["drug_id"]) for r in rows if r.get("drug_id")]
 

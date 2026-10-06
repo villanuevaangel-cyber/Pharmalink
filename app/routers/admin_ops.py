@@ -322,7 +322,7 @@ def po_details(po_id: int, request: Request):
     for row in fetch_all(
         """
         SELECT poi.po_item_id, poi.drug_id, poi.quantity_ordered, poi.quantity_received, poi.unit_cost,
-               d.generic_name, d.brand_name, d.dosage, d.form, d.category, d.barcode
+               d.generic_name, d.brand_name, d.dosage, d.form, d.category, d.barcode, d.cost_price AS catalog_cost
         FROM purchase_order_items poi JOIN drugs_master d ON poi.drug_id = d.drug_id
         WHERE poi.po_id = %s ORDER BY poi.po_item_id ASC
         """,
@@ -360,6 +360,8 @@ def po_details(po_id: int, request: Request):
             cost = last.get("price")
         if cost is None:
             cost = item.get("unit_cost")
+        if cost is None:
+            cost = item.get("catalog_cost")
         item["last_cost_price"] = float(cost) if cost not in (None, "") else None
     deliveries = []
     delivery_ids = []

@@ -683,6 +683,9 @@ def dashboard(request: Request, startDate: str = "", endDate: str = ""):
                 """
                 UPDATE drugs_master dm
                 SET stock_status = CASE
+                    WHEN COALESCE(dm.minimum_stock, 0) = 0
+                     AND NOT EXISTS (SELECT 1 FROM inventory_lots WHERE drug_id = dm.drug_id)
+                    THEN 'ok'
                     WHEN COALESCE((SELECT SUM(current_stock) FROM inventory_lots WHERE is_active = 1 AND drug_id = dm.drug_id), 0) <= 0 THEN 'out'
                     WHEN COALESCE((SELECT SUM(current_stock) FROM inventory_lots WHERE is_active = 1 AND drug_id = dm.drug_id), 0) <= dm.minimum_stock THEN 'low'
                     ELSE 'ok'
