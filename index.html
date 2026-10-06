@@ -57,7 +57,7 @@
         </div>
     </div>
 
-    <!-- Forgot Password: Admin/Cashier = staff ID, user ID, or username + email. Customer = account ID + email. -->
+    <!-- Forgot Password: username, account ID, or the account email, plus the email on file. -->
     <div class="signup-modal-overlay" id="forgotPasswordModalOverlay">
         <div class="login-card signup-modal-card">
             <span class="signup-modal-close" id="closeForgotPasswordModal">&times;</span>
@@ -66,14 +66,14 @@
                 <i class="fa-solid fa-key"></i>
             </div>
             <h2>Forgot Password</h2>
-            <p>Admin or cashier: enter your staff ID, user ID, or username plus the email on your account. Customer: account ID plus email. We'll send a reset link.</p>
+            <p>Enter your username, account ID, or the email on your account, then enter that same email again. We'll send a reset link to the email saved on the account.</p>
 
             <div id="forgotPasswordMessage"></div>
 
             <form id="forgotPasswordForm">
                 <div class="input-group">
                     <i class="fa-solid fa-id-badge"></i>
-                    <input type="text" name="employee_id" placeholder="Staff / Admin ID or username" required autocomplete="username">
+                    <input type="text" name="employee_id" placeholder="Username, account ID, or email" required autocomplete="username">
                 </div>
                 <div class="input-group">
                     <i class="fa-solid fa-envelope"></i>

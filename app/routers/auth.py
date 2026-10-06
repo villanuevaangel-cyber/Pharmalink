@@ -309,19 +309,26 @@ def forgot_password(body: ForgotBody, request: Request):
                 s.staff_id = %s
              OR u.user_id = %s
              OR LOWER(u.username) = LOWER(%s)
+             OR LOWER(COALESCE(s.email, '')) = LOWER(%s)
           )
         LIMIT 1
         """,
-        (email, account_id, account_id, employee_id),
+        (email, account_id, account_id, employee_id, employee_id),
     )
     customer = None if staff else fetch_one(
         """
         SELECT customer_id, first_name, email
         FROM customers
-        WHERE customer_id = %s AND LOWER(COALESCE(email, '')) = LOWER(%s) AND is_active = 1
+        WHERE is_active = 1
+          AND LOWER(COALESCE(email, '')) = LOWER(%s)
+          AND (
+                customer_id = %s
+             OR LOWER(COALESCE(username, '')) = LOWER(%s)
+             OR LOWER(COALESCE(email, '')) = LOWER(%s)
+          )
         LIMIT 1
         """,
-        (account_id, email),
+        (email, account_id, employee_id, employee_id),
     )
 
     target_email = None
