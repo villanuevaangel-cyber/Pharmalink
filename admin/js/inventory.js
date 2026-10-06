@@ -154,27 +154,141 @@
         return sel.value;
     }
 
-    function refreshGenericDatalist() {
-        const list = document.getElementById('genericNameSuggestions');
-        if (!list) return;
-        const names = [...new Set(masterDrugs.map(d => d.generic_name).filter(Boolean))].sort();
-        list.innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
-        refreshCopyFromSelect();
-    }
-
-    function refreshCopyFromSelect() {
-        const sel = document.getElementById('new_copy_from');
-        if (!sel) return;
-        const prev = sel.value;
-        const active = masterDrugs.filter(d => Number(d.is_active) === 1).slice().sort((a, b) =>
+    function catalogDrugs() {
+        return masterDrugs.filter(d => Number(d.is_active) === 1).slice().sort((a, b) =>
             String(a.generic_name || '').localeCompare(String(b.generic_name || ''), undefined, { sensitivity: 'base' })
         );
-        sel.innerHTML = '<option value="">Start blank - or pick a catalog drug to copy</option>' +
-            active.map(d => {
-                const brand = d.brand_name ? ` (${d.brand_name})` : '';
-                return `<option value="${d.drug_id}">${escapeHtml(d.generic_name)}${escapeHtml(brand)} - ${escapeHtml(d.dosage)}, ${escapeHtml(d.form)}</option>`;
-            }).join('');
-        if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+    }
+
+    function hidePickList(id) {
+        const list = document.getElementById(id);
+        if (!list) return;
+        list.hidden = true;
+        list.innerHTML = '';
+    }
+
+    function showPickList(id, items, onPick) {
+        const list = document.getElementById(id);
+        if (!list) return;
+        if (!items.length) {
+            hidePickList(id);
+            return;
+        }
+        list.hidden = false;
+        list.innerHTML = items.map((item, i) =>
+            `<button type="button" class="drug-pick-item" data-i="${i}">` +
+            `<strong>${escapeHtml(item.title)}</strong>` +
+            (item.meta ? `<span>${escapeHtml(item.meta)}</span>` : '') +
+            `</button>`
+        ).join('');
+        list.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                onPick(items[Number(btn.dataset.i)]);
+            });
+        });
+    }
+
+    function renderCopyMatches(query) {
+        const q = String(query || '').trim().toLowerCase();
+        const list = document.getElementById('new_copy_list');
+        if (!list) return;
+        if (q.length < 1) {
+            hidePickList('new_copy_list');
+            return;
+        }
+        const matches = catalogDrugs().filter(d =>
+            [d.generic_name, d.brand_name, d.dosage, d.form, d.category].join(' ').toLowerCase().includes(q)
+        ).slice(0, 12);
+        if (!matches.length) {
+            list.hidden = false;
+            list.innerHTML = '<p class="drug-pick-empty">No catalog drug matches.</p>';
+            return;
+        }
+        showPickList('new_copy_list', matches.map(d => ({
+            title: d.generic_name,
+            meta: [d.brand_name, d.dosage, d.form].filter(Boolean).join(' · '),
+            drug: d,
+        })), (item) => {
+            const search = document.getElementById('new_copy_search');
+            if (search) search.value = item.drug.generic_name;
+            hidePickList('new_copy_list');
+            fillNewDrugFromRecord(item.drug, true);
+            const barcode = document.getElementById('new_barcode');
+            if (barcode) barcode.value = '';
+        });
+    }
+
+    function renderGenericMatches(query) {
+        const q = String(query || '').trim().toLowerCase();
+        if (q.length < 1) {
+            hidePickList('new_generic_list');
+            return;
+        }
+        const names = [...new Set(catalogDrugs().map(d => String(d.generic_name || '').trim()).filter(Boolean))];
+        const matches = names
+            .filter(n => n.toLowerCase().includes(q))
+            .sort((a, b) => {
+                const as = a.toLowerCase().startsWith(q) ? 0 : 1;
+                const bs = b.toLowerCase().startsWith(q) ? 0 : 1;
+                return as - bs || a.localeCompare(b, undefined, { sensitivity: 'base' });
+            })
+            .slice(0, 12);
+        showPickList('new_generic_list', matches.map(n => {
+            const count = catalogDrugs().filter(d => String(d.generic_name || '').toLowerCase() === n.toLowerCase()).length;
+            return {
+                title: n,
+                meta: count === 1 ? '1 catalog item' : `${count} catalog items`,
+                name: n,
+            };
+        }), (item) => {
+            const input = document.getElementById('new_generic_name');
+            if (input) input.value = item.name;
+            hidePickList('new_generic_list');
+            suggestFromGeneric(item.name, 'new');
+        });
+    }
+
+    function bindPickInput(inputId, listId, render, blockEnter) {
+        const input = document.getElementById(inputId);
+        if (!input || input.dataset.pickBound) return;
+        input.dataset.pickBound = '1';
+        input.addEventListener('input', () => render(input.value));
+        input.addEventListener('focus', () => render(input.value));
+        input.addEventListener('blur', () => setTimeout(() => hidePickList(listId), 150));
+        input.addEventListener('keydown', (e) => {
+            const list = document.getElementById(listId);
+            const open = list && !list.hidden;
+            const buttons = open ? [...list.querySelectorAll('button')] : [];
+            if (e.key === 'Escape' && open) {
+                hidePickList(listId);
+                return;
+            }
+            if (!buttons.length) {
+                if (blockEnter && e.key === 'Enter') e.preventDefault();
+                return;
+            }
+            const current = buttons.findIndex(b => b.classList.contains('is-active'));
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const next = e.key === 'ArrowDown'
+                    ? (current + 1) % buttons.length
+                    : (current <= 0 ? buttons.length - 1 : current - 1);
+                buttons.forEach(b => b.classList.remove('is-active'));
+                buttons[next].classList.add('is-active');
+                buttons[next].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                (buttons[current >= 0 ? current : 0]).dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            }
+        });
+    }
+
+    function refreshGenericDatalist() {
+        const copy = document.getElementById('new_copy_search');
+        if (copy && document.activeElement === copy) renderCopyMatches(copy.value);
+        const generic = document.getElementById('new_generic_name');
+        if (generic && document.activeElement === generic) renderGenericMatches(generic.value);
     }
 
     function refreshBrandDatalist(genericName) {
@@ -239,8 +353,16 @@
             const valEl = document.getElementById('new_dosage_value');
             const unitEl = document.getElementById('new_dosage_unit');
             if (valEl) valEl.value = dose.unit === 'N/A' ? '' : dose.value;
-            if (unitEl) unitEl.value = DOSAGE_UNITS.includes(dose.unit) ? dose.unit : (dose.unit ? dose.unit : 'mg');
-            if (unitEl && dose.unit === 'N/A') unitEl.value = 'N/A';
+            if (unitEl) {
+                const wanted = dose.unit || 'mg';
+                if (![...unitEl.options].some(o => o.value === wanted)) {
+                    const opt = document.createElement('option');
+                    opt.value = wanted;
+                    opt.textContent = wanted;
+                    unitEl.appendChild(opt);
+                }
+                unitEl.value = wanted;
+            }
             if (valEl) valEl.required = unitEl?.value !== 'N/A';
         }
         setSelectValue(document.getElementById('new_form'), drug.form, 'new_form_custom', '__other__');
@@ -349,8 +471,10 @@
             if (minEl) minEl.value = '20';
             const procEl = document.getElementById('new_procurement_type');
             if (procEl) procEl.value = 'purchase';
-            const copyEl = document.getElementById('new_copy_from');
+            const copyEl = document.getElementById('new_copy_search');
             if (copyEl) copyEl.value = '';
+            hidePickList('new_copy_list');
+            hidePickList('new_generic_list');
             const hint = document.getElementById('new_autofill_hint');
             if (hint) hint.textContent = 'Type a known generic, or pick a drug above, to auto-fill form, category, and min stock.';
             toggleCustomField('new_form', 'new_form_custom', '__other__');
@@ -1222,13 +1346,8 @@
             clearTimeout(genericSuggestTimer);
             genericSuggestTimer = setTimeout(() => suggestFromGeneric(e.target.value, 'new'), 200);
         });
-        document.getElementById('new_copy_from')?.addEventListener('change', (e) => {
-            const drug = masterDrugs.find(d => String(d.drug_id) === String(e.target.value));
-            if (!drug) return;
-            fillNewDrugFromRecord(drug, true);
-            const barcode = document.getElementById('new_barcode');
-            if (barcode) barcode.value = '';
-        });
+        bindPickInput('new_copy_search', 'new_copy_list', renderCopyMatches, true);
+        bindPickInput('new_generic_name', 'new_generic_list', renderGenericMatches, false);
         const syncDoseReq = (prefix) => {
             const unit = document.getElementById(prefix + '_dosage_unit')?.value;
             const val = document.getElementById(prefix + '_dosage_value');

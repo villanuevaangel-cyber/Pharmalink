@@ -133,6 +133,7 @@ body {
   margin: 10px 0;
   font-size: 26px;
   font-weight: 700;
+  color: #FFF7E6;
 }
 
 .login-card p {
@@ -176,16 +177,31 @@ body {
   color: #FFE3B3;
 }
 
-.ph-signup-phone input { padding-left: 92px; }
+/* Country code sits in the row with the icon, so it cannot cover the number. */
+.input-group.ph-signup-phone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid #4BAA8B;
+  border-radius: 8px;
+  background: #1E3A34;
+}
+.input-group.ph-signup-phone i,
+.input-group.ph-signup-phone .ph-signup-cc {
+  position: static;
+  top: auto;
+  left: auto;
+  right: auto;
+  transform: none;
+  flex: 0 0 auto;
+}
 .ph-signup-cc {
-  position: absolute;
-  left: 38px;
-  top: 50%;
-  transform: translateY(-50%);
   z-index: 6;
   font-weight: 800;
   color: #FFE3B3;
   font-size: 14px;
+  line-height: 1;
 }
 
 /* Toggle password eye icon */
@@ -326,6 +342,15 @@ button.login-btn:hover {
 .input-group input {
     font-size: 14px; 
     padding: 10px 40px 10px 40px; /* Bawasan ang padding kung sobrang laki */
+}
+.input-group.ph-signup-phone input {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    padding: 10px 0;
+    border-radius: 0;
 }
 
 /* 6. I-hide ang demo credentials sa registration page */

@@ -23,7 +23,7 @@
 
             const fullName = [me.firstName, me.lastName].filter(Boolean).join(' ').trim() || 'Customer';
             const welcome = document.getElementById('headerWelcomeName');
-            if (welcome) welcome.textContent = 'Welcome, ' + fullName;
+            if (welcome) welcome.textContent = 'Welcome, ' + (String(me.firstName || '').trim() || 'Customer');
             const homeName = document.getElementById('homeFirstName');
             if (homeName) homeName.textContent = me.firstName || fullName;
             if (me.profile_image) applyAvatar(me.profile_image);
@@ -142,7 +142,7 @@
         const nameEl = document.getElementById('profileCardName');
         if (nameEl) nameEl.textContent = `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Customer';
         const welcome = document.getElementById('headerWelcomeName');
-        if (welcome) welcome.textContent = 'Welcome, ' + (`${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Customer');
+        if (welcome) welcome.textContent = 'Welcome, ' + (String(c.first_name || '').trim() || 'Customer');
         const userEl = document.getElementById('profileUsername');
         if (userEl) userEl.textContent = c.username || 'customer';
         const typeEl = document.getElementById('profileType');
@@ -280,7 +280,7 @@
                     const cardName = document.getElementById('profileCardName');
                     if (cardName) cardName.textContent = fullName;
                     const headerWelcome = document.getElementById('headerWelcomeName');
-                    if (headerWelcome) headerWelcome.textContent = 'Welcome, ' + fullName;
+                    if (headerWelcome) headerWelcome.textContent = 'Welcome, ' + (String(form.first_name.value || '').trim() || 'Customer');
                     const homeName = document.getElementById('homeFirstName');
                     if (homeName) homeName.textContent = form.first_name.value || 'Customer';
                     if (data.profile_image) originalPreview = applyAvatar(data.profile_image + '?t=' + Date.now());

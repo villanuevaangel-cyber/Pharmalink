@@ -326,6 +326,27 @@ a{ color:var(--ph-primary-600); }
 .staff-notif-dropdown.open,
 #notification-dropdown.open{ display:block; }
 
+/* On a phone the bell sits beside the menu, so a 320px panel anchored to
+   the bell runs off the left edge. Pin it to the screen instead. */
+@media (max-width: 900px) {
+  .staff-notif-dropdown,
+  #notification-dropdown {
+    position: fixed;
+    top: 80px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: calc(100vw - 24px);
+    z-index: 1200;
+  }
+}
+@media (max-width: 720px) {
+  .staff-notif-dropdown,
+  #notification-dropdown {
+    top: 64px;
+  }
+}
+
 .staff-notif-item{
   display:flex;
   gap:10px;

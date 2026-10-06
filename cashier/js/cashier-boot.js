@@ -57,8 +57,9 @@
 
     function applyProfile(staff, firstName, lastName, profileImage) {
         const name = personName(staff, firstName, lastName, 'Cashier');
+        const first = String(staff.first_name || firstName || '').replace(/\s+/g, ' ').trim() || 'Cashier';
         const welcome = document.getElementById('headerWelcomeName');
-        if (welcome) welcome.textContent = 'Welcome, ' + name;
+        if (welcome) welcome.textContent = 'Welcome, ' + first;
         const fields = ['first_name', 'middle_name', 'last_name', 'email', 'phone_number', 'address'];
         fields.forEach((id) => {
             const el = document.getElementById(id);

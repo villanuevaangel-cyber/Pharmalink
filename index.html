@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pharmacy Login</title>
     <link rel="stylesheet" href="assets/theme.css?v=palette-w4" />
-    <link rel="stylesheet" href="shared/css/login.css?v=palette-w3" />
+    <link rel="stylesheet" href="shared/css/login.css?v=signup2" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 </head>
 <body>
@@ -57,7 +57,7 @@
         </div>
     </div>
 
-    <!-- Forgot Password: Admin/Cashier = staff ID, user ID, or username + email. Customer = account ID + email. -->
+    <!-- Forgot Password: username, account ID, or the account email, plus the email on file. -->
     <div class="signup-modal-overlay" id="forgotPasswordModalOverlay">
         <div class="login-card signup-modal-card">
             <span class="signup-modal-close" id="closeForgotPasswordModal">&times;</span>
@@ -66,14 +66,14 @@
                 <i class="fa-solid fa-key"></i>
             </div>
             <h2>Forgot Password</h2>
-            <p>Admin or cashier: enter your staff ID, user ID, or username plus the email on your account. Customer: account ID plus email. We'll send a reset link.</p>
+            <p>Enter your username, account ID, or the email on your account, then enter that same email again. We'll send a reset link to the email saved on the account.</p>
 
             <div id="forgotPasswordMessage"></div>
 
             <form id="forgotPasswordForm">
                 <div class="input-group">
                     <i class="fa-solid fa-id-badge"></i>
-                    <input type="text" name="employee_id" placeholder="Staff / Admin ID or username" required autocomplete="username">
+                    <input type="text" name="employee_id" placeholder="Username, account ID, or email" required autocomplete="username">
                 </div>
                 <div class="input-group">
                     <i class="fa-solid fa-envelope"></i>
@@ -128,6 +128,7 @@
                     <i class="fa-solid fa-lock"></i>
                     <input type="password" name="password" placeholder="Password" required>
                 </div>
+                <div class="pw-hints" id="signupPwHints"></div>
                 <div class="input-group">
                     <i class="fa-solid fa-lock"></i>
                     <input type="password" name="confirm_password" placeholder="Confirm Password" required>
@@ -152,7 +153,7 @@
     </div>
     
     <script src="assets/theme.js?v=spa-hash1"></script>
-    <script src="assets/profile-validate.js?v=pv3"></script>
+    <script src="assets/profile-validate.js?v=pv6"></script>
     <script src="shared/js/login.js?v=guest-shop3"></script>
     <script>
     (function () {
@@ -168,6 +169,7 @@
         if (window.phProfileValidate) {
             window.phProfileValidate.bindNameCaps(signupForm);
             window.phProfileValidate.bindPhoneDigits(signupForm.phone_number);
+            window.phProfileValidate.bindHints(signupForm.password, document.getElementById('signupPwHints'));
         }
 
         function openModal() {
