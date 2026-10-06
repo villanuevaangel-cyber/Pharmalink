@@ -79,6 +79,8 @@
         document.querySelectorAll('.inv-panel').forEach(el => {
             el.classList.toggle('active', el.id === 'inv-panel-' + panel);
         });
+        if (panel === 'history') fetchStockAdjustments();
+        if (panel === 'reorder' && typeof window.loadReorderSuggestions === 'function') window.loadReorderSuggestions();
     }
 
     function allCategories() {
@@ -349,21 +351,7 @@
             toggleCustomField('new_category', 'new_category_custom', '__new__');
             showModal('addDrugModal');
         });
-        document.getElementById('openAdjustHistoryBtn')?.addEventListener('click', () => {
-            fetchStockAdjustments();
-            showModal('adjustHistoryModal');
-        });
-        document.getElementById('openReorderModalBtn')?.addEventListener('click', () => {
-            if (typeof window.loadReorderSuggestions === 'function') window.loadReorderSuggestions();
-            showModal('reorderModal');
-        });
-
-        document.getElementById('closeDrugModal')?.addEventListener('click', () => hideModal('addDrugModal'));
-        document.getElementById('closeEditDrugMasterModal')?.addEventListener('click', () => hideModal('editDrugMasterModal'));
-        document.getElementById('closeEditModal')?.addEventListener('click', () => hideModal('editLotModal'));
         document.getElementById('closeAdjustStockModal')?.addEventListener('click', () => hideModal('adjustStockModal'));
-        document.getElementById('closeAdjustHistoryModal')?.addEventListener('click', () => hideModal('adjustHistoryModal'));
-        document.getElementById('closeReorderModal')?.addEventListener('click', () => hideModal('reorderModal'));
         document.getElementById('runConsignmentCheckBtn')?.addEventListener('click', () => {
             fetch('/api/admin/lots/consignment-cross-check', { method: 'POST' })
                 .then(res => res.json())
@@ -388,7 +376,7 @@
         });
 
         window.addEventListener('click', e => {
-            ['addDrugModal', 'editDrugMasterModal', 'editLotModal', 'adjustStockModal', 'adjustHistoryModal', 'reorderModal', 'addCategoryModal'].forEach(id => {
+            ['addDrugModal', 'editDrugMasterModal', 'editLotModal', 'adjustStockModal', 'addCategoryModal'].forEach(id => {
                 const modal = document.getElementById(id);
                 if (modal && e.target === modal) modal.style.display = 'none';
             });
@@ -1031,7 +1019,7 @@
             .then(data => {
                 const rows = Array.isArray(data) ? data : [];
                 if (!rows.length) {
-                    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#6b7280;padding:15px;">No stock adjustments recorded yet.</td></tr>';
+                    body.innerHTML = '<tr><td colspan="7" class="inv-empty">No stock adjustments recorded yet.</td></tr>';
                     return;
                 }
                 body.innerHTML = rows.map(r => {
