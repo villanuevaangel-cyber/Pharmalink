@@ -13,7 +13,7 @@ DRUG_FORMS = (
 DOSAGE_UNITS = (
     "mg", "mcg", "g", "mL", "%", "IU", "mg/5mL", "mg/mL", "mcg/mL", "puff", "N/A",
 )
-DRUG_NAME_RE = re.compile(r"^[A-Za-z0-9Ññ][A-Za-z0-9Ññ\s.'/()+\-]{1,79}$")
+DRUG_NAME_RE = re.compile(r"^[A-Za-z0-9Ññ][A-Za-z0-9Ññ\s.'/()+\-,]{1,254}$")
 BARCODE_RE = re.compile(r"^[A-Za-z0-9\-._]{4,64}$")
 CATEGORY_RE = re.compile(r"^[A-Za-z0-9Ññ][A-Za-z0-9Ññ\s/&\-]{1,59}$")
 PASSWORD_HINT = (
@@ -162,9 +162,9 @@ def validate_drug_fields(
     if not generic_name:
         return "Generic name is required."
     if not DRUG_NAME_RE.match(generic_name):
-        return "Generic name must be 2-80 characters (letters, numbers, spaces, and . ' / ( ) - +)."
+        return "Generic name must be 2-255 characters (letters, numbers, spaces, and . ' / ( ) - + ,)."
     if brand_name and not DRUG_NAME_RE.match(brand_name):
-        return "Brand name must be 2-80 characters (letters, numbers, spaces, and . ' / ( ) - +)."
+        return "Brand name must be 2-255 characters (letters, numbers, spaces, and . ' / ( ) - + ,)."
     if not dosage:
         return "Dosage is required."
     if len(dosage) > 40:

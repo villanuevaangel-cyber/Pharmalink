@@ -48,6 +48,12 @@
         return '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    function formatCatalogPrice(n) {
+        const v = Number(n);
+        if (!Number.isFinite(v) || v <= 0) return '—';
+        return money(v);
+    }
+
     function daysUntil(dateStr) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -287,10 +293,10 @@
     }
 
     function clientDrugError(payload) {
-        const nameRe = /^[A-Za-z0-9Ññ][A-Za-z0-9Ññ\s.'/()+\-]{1,79}$/;
+        const nameRe = /^[A-Za-z0-9Ññ][A-Za-z0-9Ññ\s.'/()+\-,]{1,254}$/;
         if (!payload.generic_name) return 'Generic name is required.';
-        if (!nameRe.test(payload.generic_name)) return 'Generic name: 2-80 characters, letters/numbers only (plus . \' / ( ) - +).';
-        if (payload.brand_name && !nameRe.test(payload.brand_name)) return 'Brand name: 2-80 characters, letters/numbers only (plus . \' / ( ) - +).';
+        if (!nameRe.test(payload.generic_name)) return 'Generic name: 2-255 characters, letters/numbers only (plus . \' / ( ) - + ,).';
+        if (payload.brand_name && !nameRe.test(payload.brand_name)) return 'Brand name: 2-255 characters, letters/numbers only (plus . \' / ( ) - + ,).';
         if (!payload.dosage) return 'Dosage is required.';
         if (!payload.form) return 'Form is required.';
         if (!payload.category) return 'Category is required.';
@@ -475,6 +481,7 @@
                 <td>${escapeHtml(d.form)}</td>
                 <td>${escapeHtml(d.category)}${String(d.procurement_type || '') === 'consignment' ? ' <span class="inv-chip">Consignment</span>' : ''}</td>
                 <td>${d.minimum_stock}</td>
+                <td>${formatCatalogPrice(d.selling_price)}</td>
                 <td class="inv-mono">${escapeHtml(d.barcode) || '-'}</td>
                 ${statusCell}
                 <td class="action-btn-group">
