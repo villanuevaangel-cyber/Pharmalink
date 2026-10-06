@@ -487,8 +487,8 @@
 
                 <div class="inv-subnav">
                     <button type="button" class="inv-tab-btn active" data-inv-panel="lots"><i class="fas fa-boxes"></i> Stock Lots</button>
-                    <button type="button" id="openAdjustHistoryBtn"><i class="fas fa-clock-rotate-left"></i> Adjustment History</button>
-                    <button type="button" id="openReorderModalBtn"><i class="fas fa-cart-plus"></i> Reorder Suggestions</button>
+                    <button type="button" class="inv-tab-btn" data-inv-panel="history"><i class="fas fa-clock-rotate-left"></i> Adjustment History</button>
+                    <button type="button" class="inv-tab-btn" data-inv-panel="reorder"><i class="fas fa-cart-plus"></i> Reorder Suggestions</button>
                     <button type="button" id="runConsignmentCheckBtn"><i class="fas fa-rotate"></i> Run consignment cross-check</button>
                 </div>
 
@@ -566,6 +566,91 @@
                             <button type="button" id="lots-prev-btn" class="um-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
                             <span id="lots-page-info">Page 1</span>
                             <button type="button" id="lots-next-btn" class="um-page-btn">Next <i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="inv-panel" id="inv-panel-history">
+                    <div class="um-card">
+                        <div class="um-card-head">
+                            <div>
+                                <h3>Stock Adjustment History</h3>
+                                <p>Audit trail of manual stock corrections. Use Adjust Stock on a lot to add a new entry.</p>
+                            </div>
+                        </div>
+                        <div class="table-wrap">
+                            <table id="stockAdjustmentsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Date/Time</th>
+                                        <th>Drug</th>
+                                        <th>Lot #</th>
+                                        <th>Change</th>
+                                        <th>Reason</th>
+                                        <th>Notes</th>
+                                        <th>By</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stockAdjustmentsBody"><tr><td colspan="7" class="inv-empty">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="inv-panel" id="inv-panel-reorder">
+                    <div class="um-card">
+                        <div class="um-card-head">
+                            <div>
+                                <h3>Reorder Suggestions</h3>
+                                <p>Prophet forecast for the next 30 days. Select items, then create a purchase order.</p>
+                            </div>
+                            <button type="button" id="createDraftPoBtn" class="action-btn" disabled>
+                                <i class="fas fa-file-invoice"></i> Create PO (<span id="draftPoSelectedCount">0</span>)
+                            </button>
+                        </div>
+                        <div style="display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
+                            <div class="card" data-reorder-filter="increase" style="flex:1; min-width:160px; padding:12px; border-radius:8px; background:#fff; cursor:pointer;">
+                                <h3 style="color:#dc2626; margin:0; font-size:14px;">Needs reorder</h3>
+                                <p class="value" id="reorder-increase-count" style="font-size:1.4em; color:#dc2626; margin:6px 0 0;">0</p>
+                            </div>
+                            <div class="card" data-reorder-filter="decrease" style="flex:1; min-width:160px; padding:12px; border-radius:8px; background:#fff; cursor:pointer;">
+                                <h3 style="color:#FFC857; margin:0; font-size:14px;">Too much stock</h3>
+                                <p class="value" id="reorder-decrease-count" style="font-size:1.4em; color:#FFC857; margin:6px 0 0;">0</p>
+                            </div>
+                            <div class="card" data-reorder-filter="ok" style="flex:1; min-width:160px; padding:12px; border-radius:8px; background:#fff; cursor:pointer;">
+                                <h3 style="color:#4BAA8B; margin:0; font-size:14px;">Enough stock</h3>
+                                <p class="value" id="reorder-ok-count" style="font-size:1.4em; color:#4BAA8B; margin:6px 0 0;">0</p>
+                            </div>
+                        </div>
+                        <div style="margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap;">
+                            <button type="button" class="reorder-filter-btn active" data-filter="increase" style="padding:6px 14px;border:1px solid #dc2626;border-radius:20px;background:#dc2626;color:#fff;cursor:pointer;font-size:13px;">Needs reorder</button>
+                            <button type="button" class="reorder-filter-btn" data-filter="decrease" style="padding:6px 14px;border:1px solid #FFC857;border-radius:20px;background:#fff;color:#FFC857;cursor:pointer;font-size:13px;">Too much stock</button>
+                            <button type="button" class="reorder-filter-btn" data-filter="all" style="padding:6px 14px;border:1px solid #6b7280;border-radius:20px;background:#fff;color:#6b7280;cursor:pointer;font-size:13px;">Show all</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table id="reorderSuggestionsTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width:34px;"><input type="checkbox" id="reorderSelectAll" title="Select the rows on this page"></th>
+                                        <th>Drug</th>
+                                        <th>Category</th>
+                                        <th>Type</th>
+                                        <th>Stock</th>
+                                        <th>Min</th>
+                                        <th>Per day</th>
+                                        <th>Days left</th>
+                                        <th>Action</th>
+                                        <th>Supplier</th>
+                                        <th>Note</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reorderSuggestionsBody"><tr><td colspan="11" class="inv-empty">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="um-pagination ph-pagination" id="reorderPager" style="display:none;">
+                            <button type="button" id="reorderPrevPage" class="um-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
+                            <span id="reorderPageLabel">Page 1 of 1</span>
+                            <button type="button" id="reorderNextPage" class="um-page-btn">Next <i class="fas fa-chevron-right"></i></button>
                         </div>
                     </div>
                 </div>
@@ -2393,14 +2478,20 @@
         updateReorderPager(reorderPage, totalPages);
         body.innerHTML = rows.map(r => {
             const label = `${r.generic_name}${r.brand_name ? ' (' + r.brand_name + ')' : ''} - ${r.dosage}, ${r.form}`;
-            const daysText = r.days_of_stock === null ? '-' : r.days_of_stock + ' days';
+            const daysText = r.days_of_stock === null ? '-' : String(r.days_of_stock);
             let actionBadge;
+            let note;
             if (r.action === 'increase') {
-                actionBadge = `<span class="reorder-action-badge is-up">Order +${r.suggested_qty}</span>`;
+                actionBadge = `<span class="reorder-action-badge is-up">Order ${r.suggested_qty}</span>`;
+                note = r.forecast_units != null
+                    ? `Forecast ${r.forecast_units} in 30 days.`
+                    : 'Based on recent sales.';
             } else if (r.action === 'decrease') {
-                actionBadge = `<span class="reorder-action-badge is-down">Reduce${r.suggested_reduce_qty ? ' ~' + r.suggested_reduce_qty : ''} / pause</span>`;
+                actionBadge = `<span class="reorder-action-badge is-down">Pause</span>`;
+                note = r.days_of_stock != null ? `${r.days_of_stock} days of stock.` : 'More than enough stock.';
             } else {
-                actionBadge = `<span class="reorder-action-badge is-ok">Sufficient</span>`;
+                actionBadge = `<span class="reorder-action-badge is-ok">Enough</span>`;
+                note = 'Stock is enough.';
             }
             // Only "needs reorder" rows are selectable for a draft PO -
             // overstocked/sufficient rows have nothing to order.
@@ -2409,7 +2500,7 @@
                 : '';
             const supplierText = r.suggested_supplier_name
                 ? r.suggested_supplier_name
-                : (r.action === 'increase' ? '<span style="color:#9ca3af;">No history - pick one</span>' : '-');
+                : (r.action === 'increase' ? '<span style="color:#9ca3af;">No supplier</span>' : '-');
             return `
             <tr>
                 <td>${checkboxCell}</td>
@@ -2422,7 +2513,7 @@
                 <td>${daysText}</td>
                 <td class="reorder-action-cell">${actionBadge}</td>
                 <td style="font-size:13px;">${supplierText}</td>
-                <td style="color:#6b7280;font-size:13px;">${r.reasoning}</td>
+                <td style="color:#6b7280;font-size:13px;">${note}</td>
             </tr>`;
         }).join('');
 
@@ -2480,8 +2571,8 @@
         if (items.length === 0) return;
         const btn = document.getElementById('createDraftPoBtn');
         const confirmFn = window.phConfirm
-            ? window.phConfirm(`Create purchase order(s) now for ${items.length} selected item(s)? One PO will be created per supplier. You will not fill the Create PO form.`)
-            : Promise.resolve(confirm(`Create purchase order(s) now for ${items.length} selected item(s)?`));
+            ? window.phConfirm(`Create a purchase order for ${items.length} item(s)?`)
+            : Promise.resolve(confirm(`Create a purchase order for ${items.length} item(s)?`));
         confirmFn.then(function (ok) {
             if (!ok) return;
             if (btn) btn.disabled = true;
@@ -2802,7 +2893,7 @@
             reorderPage += 1;
             renderReorderTable();
         });
-        document.querySelectorAll('#reorderModal [data-reorder-filter]').forEach(card => {
+        document.querySelectorAll('#inv-panel-reorder [data-reorder-filter]').forEach(card => {
             card.addEventListener('click', () => applyReorderFilter(card.getAttribute('data-reorder-filter')));
         });
         document.getElementById('promo_scope')?.addEventListener('change', function () {
@@ -3571,90 +3662,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-        </div></div><div id="adjustHistoryModal" class="modal">
-        <div class="modal-content modal-wide">
-            <div class="modal-header">
-                <h2><i class="fas fa-clock-rotate-left"></i> Stock Adjustment History</h2>
-                <span class="close" id="closeAdjustHistoryModal">&times;</span>
-            </div>
-            <p style="color:#6b7280;font-size:13px;margin:0 0 10px;">Audit trail of manual stock corrections. Use Adjust Stock on a lot to add a new entry.</p>
-            <div class="table-wrap">
-                <table id="stockAdjustmentsTable">
-                    <thead>
-                        <tr>
-                            <th>Date/Time</th>
-                            <th>Drug</th>
-                            <th>Lot #</th>
-                            <th>Change</th>
-                            <th>Reason</th>
-                            <th>Notes</th>
-                            <th>By</th>
-                        </tr>
-                    </thead>
-                    <tbody id="stockAdjustmentsBody"><tr><td colspan="7" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <div id="reorderModal" class="modal">
-        <div class="modal-content modal-wide">
-            <div class="modal-header">
-                <h2><i class="fas fa-cart-plus"></i> Reorder Suggestions</h2>
-                <span class="close" id="closeReorderModal">&times;</span>
-            </div>
-            <p style="color:#6b7280; font-size:13px; margin:0 0 14px;">Based on average daily sales over the last 30 days vs. current unexpired stock. Select items that need reorder, then create the PO automatically (one PO per supplier). Dashboard <strong>Run auto-PO now</strong> still creates POs for every needs-reorder item.</p>
-            <div style="display:flex; gap:15px; margin-bottom:16px; flex-wrap:wrap;">
-                <div class="card" data-reorder-filter="increase" style="flex:1; min-width:160px; padding:12px; border-radius:8px; background:#fff; cursor:pointer;">
-                    <h3 style="color:#dc2626; margin:0; font-size:14px;">Needs Reorder</h3>
-                    <p class="value" id="reorder-increase-count" style="font-size:1.4em; color:#dc2626; margin:6px 0 0;">0</p>
-                </div>
-                <div class="card" data-reorder-filter="decrease" style="flex:1; min-width:160px; padding:12px; border-radius:8px; background:#fff; cursor:pointer;">
-                    <h3 style="color:#FFC857; margin:0; font-size:14px;">Overstocked</h3>
-                    <p class="value" id="reorder-decrease-count" style="font-size:1.4em; color:#FFC857; margin:6px 0 0;">0</p>
-                </div>
-                <div class="card" data-reorder-filter="ok" style="flex:1; min-width:160px; padding:12px; border-radius:8px; background:#fff; cursor:pointer;">
-                    <h3 style="color:#4BAA8B; margin:0; font-size:14px;">Sufficient Stock</h3>
-                    <p class="value" id="reorder-ok-count" style="font-size:1.4em; color:#4BAA8B; margin:6px 0 0;">0</p>
-                </div>
-            </div>
-            <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                <div>
-                    <button type="button" class="reorder-filter-btn active" data-filter="increase" style="padding:6px 14px;border:1px solid #dc2626;border-radius:20px;background:#dc2626;color:#fff;cursor:pointer;font-size:13px;margin-right:6px;">Needs Reorder</button>
-                    <button type="button" class="reorder-filter-btn" data-filter="decrease" style="padding:6px 14px;border:1px solid #FFC857;border-radius:20px;background:#fff;color:#FFC857;cursor:pointer;font-size:13px;margin-right:6px;">Overstocked</button>
-                    <button type="button" class="reorder-filter-btn" data-filter="all" style="padding:6px 14px;border:1px solid #6b7280;border-radius:20px;background:#fff;color:#6b7280;cursor:pointer;font-size:13px;">Show All</button>
-                </div>
-                <button type="button" id="createDraftPoBtn" class="action-btn" disabled>
-                    <i class="fas fa-file-invoice"></i> Create PO for Selected (<span id="draftPoSelectedCount">0</span>)
-                </button>
-            </div>
-            <div class="table-wrap">
-                <table id="reorderSuggestionsTable">
-                    <thead>
-                        <tr>
-                            <th style="width:34px;"><input type="checkbox" id="reorderSelectAll" title="Select all Needs Reorder rows currently shown"></th>
-                            <th>Drug</th>
-                            <th>Category</th>
-                            <th>Policy</th>
-                            <th>Current Stock</th>
-                            <th>Min Stock</th>
-                            <th>Avg Daily Sales</th>
-                            <th>Days of Stock Left</th>
-                            <th>Suggested Action</th>
-                            <th>Suggested Supplier</th>
-                            <th>Reasoning</th>
-                        </tr>
-                    </thead>
-                    <tbody id="reorderSuggestionsBody"><tr><td colspan="11" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
-                </table>
-            </div>
-            <div id="reorderPager" style="display:none;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px;">
-                <button type="button" id="reorderPrevPage" class="action-btn" style="width:auto;padding:6px 12px;">Prev</button>
-                <span id="reorderPageLabel" style="font-size:13px;color:#6b7280;">Page 1 of 1</span>
-                <button type="button" id="reorderNextPage" class="action-btn" style="width:auto;padding:6px 12px;">Next</button>
-            </div>
-        </div>
-    </div>
+        </div></div>
 
     <div id="addDrugModal" class="modal">
         <div class="modal-content">
@@ -3914,7 +3922,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="/admin/js/inventory.js?v=inv-catalog-maint1"></script>
+    <script src="/admin/js/inventory.js?v=inv-reorder-tab1"></script>
     <script src="/admin/js/supplier.js?v=sup-meds4"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {

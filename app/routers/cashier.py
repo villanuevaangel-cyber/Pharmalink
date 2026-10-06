@@ -1,9 +1,11 @@
 import json
 import hashlib
+import logging
 import os
 import random
 import subprocess
 from datetime import datetime, timedelta
+from html import escape
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -15,12 +17,14 @@ from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin, require_staff
 from app.checkout_rates import get_checkout_rates
 from app.loyalty import get_loyalty_settings, get_peso_per_point
+from app.mailer import send_mail
 from app.payments import CASHIER_PAYMENT_KEYS
 from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
 from app.profile_photos import resolve_photo_url, staff_photo_url
 from app.stock import allocate_expiring_first, drug_id_for_lot, sellable_quantity, split_money, sync_stock_status_for_drug
 from app.validation import prepare_profile_fields
 
+logger = logging.getLogger("pharmalink.cashier")
 router = APIRouter(prefix="/api/cashier", tags=["cashier"])
 ROOT = Path(__file__).resolve().parent.parent.parent
 POINTS_TO_PESO_RATE = 0.30  # fallback if settings are missing; POS reads /loyalty-settings
@@ -303,6 +307,44 @@ def online_order_details(order_id: int, request: Request):
     }
 
 
+_ORDER_STATUS_MAIL = {
+    "Pending": "We received your order and it is waiting to be processed.",
+    "Processing": "We are preparing your order. We will email you again when it is ready for pickup.",
+    "Ready for Pickup": "Your order is ready. Please pick it up at the store.",
+    "Completed": "Your order has been completed. Thank you for shopping with us.",
+    "Cancelled": "This order was cancelled. Contact the store if you still need the medicine.",
+}
+
+
+def _order_status_email_html(first_name: str, order_id: int, status: str, total: float) -> str:
+    note = _ORDER_STATUS_MAIL.get(status, f"Your order status is now {status}.")
+    who = escape(first_name or "there")
+    return f"""
+    <div style="font-family:Arial,sans-serif;color:#1E3A34;line-height:1.5;">
+      <p>Hello {who},</p>
+      <p>Order <strong>#{order_id}</strong> is now <strong>{escape(status)}</strong>.</p>
+      <p>{escape(note)}</p>
+      <p>Order total: ₱{total:,.2f}</p>
+      <p>PharmaLink</p>
+    </div>
+    """
+
+
+def _notify_customer_order_status(order_id: int, status: str, email: str, first_name: str, total: float) -> bool:
+    address = str(email or "").strip()
+    if not address:
+        return False
+    sent = send_mail(
+        address,
+        f"PharmaLink order #{order_id} is {status}",
+        _order_status_email_html(first_name, order_id, status, total),
+    )
+    if not sent.get("success"):
+        logger.warning("Order %s status email failed: %s", order_id, sent.get("message"))
+        return False
+    return True
+
+
 @router.post("/online-orders/status")
 async def update_order_status(request: Request):
     if not require_staff(request):
@@ -313,16 +355,48 @@ async def update_order_status(request: Request):
     allowed = {"Pending", "Processing", "Ready for Pickup", "Completed", "Cancelled"}
     if order_id <= 0 or status not in allowed:
         return {"success": False, "message": "Invalid order_id or status."}
+    recipient = None
     with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE customer_orders SET order_status = %s WHERE order_id = %s", (status, order_id))
-            write_activity_log(
-                cur,
-                "Update Order",
-                f"Set order #{order_id} to {status}.",
-                request=request,
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT co.order_status, co.total_amount, c.email, c.first_name
+                FROM customer_orders co
+                JOIN customers c ON c.customer_id = co.customer_id
+                WHERE co.order_id = %s
+                """,
+                (order_id,),
             )
-    return {"success": True}
+            row = cur.fetchone()
+            if not row:
+                return {"success": False, "message": "Order not found."}
+            previous = str(row["order_status"] or "")
+            if previous != status:
+                cur.execute(
+                    "UPDATE customer_orders SET order_status = %s WHERE order_id = %s",
+                    (status, order_id),
+                )
+                write_activity_log(
+                    cur,
+                    "Update Order",
+                    f"Set order #{order_id} to {status}.",
+                    request=request,
+                )
+                recipient = {
+                    "email": row.get("email"),
+                    "first_name": row.get("first_name") or "",
+                    "total": float(row.get("total_amount") or 0),
+                }
+    emailed = False
+    if recipient:
+        emailed = _notify_customer_order_status(
+            order_id,
+            status,
+            recipient["email"],
+            recipient["first_name"],
+            recipient["total"],
+        )
+    return {"success": True, "email_sent": emailed}
 
 
 @router.get("/transactions")

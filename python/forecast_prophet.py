@@ -108,15 +108,48 @@ def main():
     range_start = payload['range_start']
     daily_sales = payload.get('daily_sales', [])
     items = payload.get('items', {})
+    # Reorder only needs each medicine's predicted units. Skip the store-wide
+    # peso model and forecast every drug that was sent, not just the top 12.
+    reorder_mode = payload.get('purpose') == 'reorder'
 
     days_with_sales = len({row['date'] for row in daily_sales})
-    if days_with_sales < MIN_DAYS_WITH_DATA:
+    if not reorder_mode and days_with_sales < MIN_DAYS_WITH_DATA:
         print(json.dumps({
             'success': True,
             'insufficient_data': True,
             'message': 'Not enough sales history yet to generate a reliable forecast. Record at least 2 days of completed sales first.',
             'history_days': days_with_sales,
             'engine': 'prophet',
+        }))
+        return
+
+    if reorder_mode:
+        item_rows = []
+        for drug_id, info in items.items():
+            series_rows = info.get('series') or []
+            days_with_item_sales = len({pt['date'] for pt in series_rows})
+            predicted_qty = None
+            item_engine = 'insufficient'
+            if days_with_item_sales >= MIN_DAYS_WITH_DATA:
+                try:
+                    item_series = zero_fill(series_rows, 'qty', range_start, today)
+                    item_forecast = fit_and_forecast(item_series, period)
+                    predicted_qty = int(round(float(item_forecast['yhat'].sum())))
+                    item_engine = 'prophet'
+                except Exception:
+                    predicted_qty = None
+                    item_engine = 'failed'
+            item_rows.append({
+                'drug_id': int(drug_id),
+                'predicted_qty': predicted_qty,
+                'engine': item_engine,
+            })
+        print(json.dumps({
+            'success': True,
+            'insufficient_data': False,
+            'period': period,
+            'engine': 'prophet',
+            'items': item_rows,
         }))
         return
 
