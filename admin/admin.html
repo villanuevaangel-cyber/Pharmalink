@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
-    <link rel="stylesheet" href="/assets/theme.css?v=nav-drawer1">
+    <link rel="stylesheet" href="/assets/theme.css?v=nav-drawer2">
     <link rel="stylesheet" href="/admin/css/admin.css?v=drug-pick1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
@@ -1687,7 +1687,7 @@
               if (nameHeader) nameHeader.textContent = `${saved.first_name} ${saved.last_name}`.trim();
 
               const headerWelcome = document.getElementById("headerWelcomeName");
-              if (headerWelcome) headerWelcome.textContent = `Welcome, ${saved.first_name} ${saved.last_name || ''}`.replace(/\s+/g, ' ').trim();
+              if (headerWelcome) headerWelcome.textContent = `Welcome, ${(saved.first_name || '').trim() || 'Admin'}`;
           } else {
               msg.style.color = "#e74c3c";
               msg.textContent = response.message || "Update failed.";
@@ -1776,7 +1776,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>window.SEGMENTATION_MANAGE = true;</script>
 <script src="/shared/js/segmentation.js?v=chart-colors1"></script>
-<script src="/admin/js/admin-boot.js?v=session-stay1"></script>
+<script src="/admin/js/admin-boot.js?v=header-first1"></script>
 <script>
 (function () {
     const topItemsCtx = document.getElementById('topItemsChart').getContext('2d');

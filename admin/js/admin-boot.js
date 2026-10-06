@@ -60,8 +60,9 @@
 
     function applyProfile(staff, firstName, lastName, profileImage) {
         const name = personName(staff, firstName, lastName, "Admin");
+        const first = String(staff.first_name || firstName || "").replace(/\s+/g, " ").trim() || "Admin";
         const welcome = document.getElementById("headerWelcomeName");
-        if (welcome) welcome.textContent = "Welcome, " + name;
+        if (welcome) welcome.textContent = "Welcome, " + first;
         ["first_name", "middle_name", "last_name", "email", "phone_number", "address"].forEach((id) => {
             const el = document.getElementById(id);
             if (!el || staff[id] == null) return;
