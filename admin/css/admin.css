@@ -809,6 +809,64 @@
   display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; padding:4px 0 8px;
 }
 
+.drug-pick{ min-width:0; width:100%; }
+.drug-pick-list{
+  max-height:220px;
+  overflow:auto;
+  margin-top:6px;
+  border:1px solid var(--ph-border);
+  border-radius:10px;
+  background:#fff;
+}
+.drug-pick-list[hidden]{ display:none !important; }
+.drug-pick-empty{
+  margin:0;
+  padding:10px 12px;
+  color:var(--ph-text-soft);
+  font-size:13px;
+}
+button.drug-pick-item{
+  display:block;
+  width:100%;
+  margin:0;
+  padding:8px 10px;
+  background:#fff;
+  color:var(--ph-text);
+  border:0;
+  border-bottom:1px solid var(--ph-border-soft);
+  border-radius:0;
+  box-shadow:none;
+  text-align:left;
+  font-weight:500;
+  font-size:13px;
+  line-height:1.35;
+  white-space:normal;
+  transform:none;
+}
+button.drug-pick-item:last-child{ border-bottom:0; }
+button.drug-pick-item strong{
+  display:block;
+  font-weight:650;
+  color:var(--ph-text);
+  word-break:break-word;
+}
+button.drug-pick-item span{
+  display:block;
+  margin-top:2px;
+  font-size:12px;
+  font-weight:500;
+  color:var(--ph-text-soft);
+  word-break:break-word;
+}
+button.drug-pick-item:hover,
+button.drug-pick-item.is-active{
+  background:var(--ph-primary-50);
+  color:var(--ph-text);
+  transform:none;
+  box-shadow:none;
+  filter:none;
+}
+
 @media (max-width: 900px){
   #forecast .forecast-cards{ display:grid; grid-template-columns:1fr; }
   #forecast .forecast-main{ flex-direction:column; }

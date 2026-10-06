@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=nav-drawer1">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=sup-meds4">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=drug-pick1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -3672,17 +3672,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span class="close" id="closeDrugModal">&times;</span>
             </div>
             <form id="addDrugForm">
-                <label for="new_copy_from">Fill from existing drug:</label>
-                <select id="new_copy_from">
-                    <option value="">Start blank - or pick a catalog drug to copy</option>
-                </select>
+                <label for="new_copy_search">Fill from existing drug:</label>
+                <div class="drug-pick">
+                    <input type="text" id="new_copy_search" placeholder="Search generic, brand, or dosage" autocomplete="off">
+                    <div class="drug-pick-list" id="new_copy_list" hidden></div>
+                </div>
                 <p class="barcode-hint">Copies the fields below. Change dosage if this is a new strength. Barcode stays blank so it can auto-generate.</p>
                 <label for="new_generic_name">Generic Name:</label>
-                <input type="text" id="new_generic_name" list="genericNameSuggestions" placeholder="Start typing - existing names appear" maxlength="80" required autocomplete="off">
-                <datalist id="genericNameSuggestions"></datalist>
+                <div class="drug-pick">
+                    <input type="text" id="new_generic_name" placeholder="Type a name. Matching catalog names appear below." maxlength="255" required autocomplete="off">
+                    <div class="drug-pick-list" id="new_generic_list" hidden></div>
+                </div>
                 <p id="new_autofill_hint" class="barcode-hint" style="min-height:16px;"></p>
                 <label for="new_brand_name">Brand Name (optional):</label>
-                <input type="text" id="new_brand_name" list="brandNameSuggestions" placeholder="e.g. Biogesic" maxlength="80" autocomplete="off">
+                <input type="text" id="new_brand_name" list="brandNameSuggestions" placeholder="e.g. Biogesic" maxlength="255" autocomplete="off">
                 <datalist id="brandNameSuggestions"></datalist>
                 <label>Dosage:</label>
                 <div style="display:flex;gap:8px;">
@@ -3725,9 +3728,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <form id="editDrugMasterForm">
                 <input type="hidden" id="edit_master_drug_id">
                 <label for="edit_generic_name">Generic Name:</label>
-                <input type="text" id="edit_generic_name" list="genericNameSuggestions" maxlength="80" required>
+                <input type="text" id="edit_generic_name" maxlength="255" required>
                 <label for="edit_brand_name">Brand Name (optional):</label>
-                <input type="text" id="edit_brand_name" maxlength="80">
+                <input type="text" id="edit_brand_name" maxlength="255">
                 <label>Dosage:</label>
                 <div style="display:flex;gap:8px;">
                     <input type="number" id="edit_dosage_value" min="0" step="any" required style="flex:1;">
@@ -3923,7 +3926,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="/admin/js/inventory.js?v=inv-price1"></script>
+    <script src="/admin/js/inventory.js?v=inv-pick1"></script>
     <script src="/admin/js/supplier.js?v=sup-meds4"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
