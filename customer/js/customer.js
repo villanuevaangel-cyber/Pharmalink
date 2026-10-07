@@ -69,6 +69,7 @@ onCustomerReady(function() {
     // ⭐ Close Listener para sa Order Details Modal
     if (closeOrderDetailsModal) {
         closeOrderDetailsModal.addEventListener('click', () => {
+            stopOrderPayPoll();
             if (orderDetailsModal) {
                 orderDetailsModal.style.display = 'none';
             }
@@ -332,6 +333,13 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
         return String(document.getElementById('order_search')?.value || '').trim().toLowerCase();
     }
 
+    function orderPayText(row) {
+        const label = orderPayLabel(row.payment_method || (row.kind === 'walkin' ? 'cash' : 'cash'));
+        const method = String(row.payment_method || '').toLowerCase();
+        if (row.kind === 'walkin' || (method !== 'gcash' && method !== 'maya')) return label;
+        return label + (String(row.payment_status || '').toLowerCase() === 'paid' ? ' · Paid' : ' · Unpaid');
+    }
+
     function orderPayLabel(method) {
         const p = String(method || 'cash').toLowerCase();
         if (p === 'gcash') return 'GCash';
@@ -388,7 +396,7 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
         }
         tbody.innerHTML = rows.slice(start, start + ORDERS_PAGE_SIZE).map(row => {
             const cls = String(row.order_status || '').toLowerCase().replace(/\s+/g, '-');
-            const pay = orderPayLabel(row.payment_method || (row.kind === 'walkin' ? 'cash' : 'cash'));
+            const pay = orderPayText(row);
             const kind = row.kind === 'walkin' ? 'walkin' : 'online';
             return `<tr>
                 <td><strong>#${row.order_id}</strong></td>
@@ -508,12 +516,87 @@ function displayOrderDetails(data) {
                 <span>Total</span>
                 <span>₱${calculatedTotal.toFixed(2)}</span>
             </div>
-            <p class="mo-detail-note">${data.kind === 'walkin'
-                ? 'Paid at the cashier (walk-in sale).'
-                : (String(data.payment_method || '').toLowerCase() === 'gcash' || String(data.payment_method || '').toLowerCase() === 'maya'
-                    ? 'Paid online with GCash or Maya. Pickup after payment.'
-                    : 'Cash will be collected at pickup.')}</p>
+            <p class="mo-detail-note">${orderPaymentNote(data)}</p>
+            <div class="mo-pay-qr" id="orderPayBox"></div>
         `;
+        startOrderPayment(data);
+    }
+
+    let orderPayTimer = null;
+
+    function stopOrderPayPoll() {
+        if (orderPayTimer) {
+            clearInterval(orderPayTimer);
+            orderPayTimer = null;
+        }
+    }
+
+    function orderPaymentNote(data) {
+        const method = String(data.payment_method || 'cash').toLowerCase();
+        const paid = String(data.payment_status || '').toLowerCase() === 'paid';
+        const ready = String(data.status || '').toLowerCase().includes('ready');
+        if (data.kind === 'walkin') return 'Paid at the cashier (walk-in sale).';
+        if (method !== 'gcash' && method !== 'maya') return 'Cash will be collected at pickup.';
+        if (paid) return 'Paid with ' + orderPayLabel(method) + '. Pick up the order at the store.';
+        if (ready) return 'Scan the QR code to pay. You can do this from home.';
+        return orderPayLabel(method) + ' payment opens after the cashier marks this Ready for Pickup.';
+    }
+
+    function paintOrderQr(box, method, payload) {
+        if (!box) return;
+        box.textContent = '';
+        const note = document.createElement('p');
+        if (payload.paid || payload.payment_status === 'paid') {
+            stopOrderPayPoll();
+            note.textContent = 'Payment received. You can pick this up at the store.';
+            box.appendChild(note);
+            return;
+        }
+        if (payload.qr_image) {
+            const img = document.createElement('img');
+            img.alt = 'Scan to pay';
+            img.src = payload.qr_image;
+            const amount = Number(payload.amount || 0).toFixed(2);
+            note.textContent = 'Scan with ' + orderPayLabel(method) + ' to pay ₱' + amount + '.';
+            box.appendChild(img);
+            box.appendChild(note);
+            return;
+        }
+        note.textContent = payload.message || 'QR code is not ready yet.';
+        box.appendChild(note);
+    }
+
+    function startOrderPayment(data) {
+        stopOrderPayPoll();
+        const method = String(data.payment_method || '').toLowerCase();
+        const box = document.getElementById('orderPayBox');
+        if (!box) return;
+        if (data.kind === 'walkin' || (method !== 'gcash' && method !== 'maya')) return;
+        if (String(data.payment_status || '').toLowerCase() === 'paid') return;
+        if (!String(data.status || '').toLowerCase().includes('ready')) return;
+        box.innerHTML = '<p>Preparing your QR code...</p>';
+        const issue = () => fetch('/api/customer/orders/' + data.order_id + '/payment', {
+            method: 'POST',
+            credentials: 'same-origin',
+        })
+            .then((response) => response.json())
+            .then((payload) => paintOrderQr(box, method, payload))
+            .catch(() => {
+                box.innerHTML = '<p>Could not load the QR code. Close this and open the order again.</p>';
+            });
+        issue();
+        orderPayTimer = setInterval(() => {
+            fetch('/api/customer/orders/' + data.order_id + '/payment', { credentials: 'same-origin' })
+                .then((response) => response.json())
+                .then((payload) => {
+                    if (payload.paid || payload.payment_status === 'paid') {
+                        paintOrderQr(box, method, payload);
+                        return;
+                    }
+                    if (payload.expired) issue();
+                })
+                .catch(() => {});
+        }, 4000);
     }
 
     // Helper function para sa kulay ng status
@@ -722,16 +805,14 @@ function displayOrderDetails(data) {
     }
 
     function checkoutCta(totalItems, finalTotal) {
-        const base = isEwalletPay(currentPayMethod()) ? 'Pay and Place Order' : 'Submit Order for Pickup';
+        const base = 'Submit Order for Pickup';
         return totalItems > 0 ? `${base} (₱${finalTotal.toFixed(2)})` : base;
     }
 
     function syncPayHint() {
         const hint = document.getElementById('shopPayHint');
         if (!hint) return;
-        hint.textContent = isEwalletPay(currentPayMethod())
-            ? 'Pay now with GCash or Maya through PayMongo. Pickup is after payment.'
-            : 'Cash is collected at pickup. GCash and Maya are paid now through PayMongo.';
+        hint.textContent = 'Cash, GCash, and Maya all go to the cashier first. For GCash or Maya, a QR code appears once the order is Ready for Pickup so you can pay from home.';
     }
 
 
@@ -784,30 +865,7 @@ function displayOrderDetails(data) {
 
         if (checkoutBtn) {
             checkoutBtn.disabled = true;
-            checkoutBtn.innerText = isEwalletPay(payMethod) ? 'Opening PayMongo...' : 'Processing...';
-        }
-
-        if (isEwalletPay(payMethod)) {
-            fetch('/api/customer/ewallet/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify(orderData),
-            })
-            .then((response) => response.json())
-            .then((data) => {
-                if (data.success && data.checkout_url) {
-                    window.location.href = data.checkout_url;
-                    return;
-                }
-                throw new Error(data.message || 'Could not start GCash/Maya checkout.');
-            })
-            .catch((err) => {
-                alert(err.message || 'Could not start e-wallet payment.');
-                resetCheckoutBtn();
-                updateCartPanel();
-            });
-            return;
+            checkoutBtn.innerText = 'Processing...';
         }
 
         fetch('/api/customer/orders', {
@@ -914,7 +972,7 @@ function displayOrderDetails(data) {
             <hr style="border-top: 1px dashed #ccc; margin-top: 20px;">
             
             <p style="margin-top: 15px; font-weight: bold; color: orange; text-align: center;">Current Status: Pending ⏱️</p>
-            <p style="font-size: 0.9em; text-align: center;">We will notify you when your order is **'Ready for Pickup'**.</p>
+            <p style="font-size: 0.9em; text-align: center;">We will notify you when your order is Ready for Pickup. GCash and Maya can be paid from home with the QR code after that.</p>
         `;
         
         receiptModal.style.display = 'flex';

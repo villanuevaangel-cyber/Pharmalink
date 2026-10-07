@@ -18,7 +18,7 @@ from app.deps import require_admin, require_staff
 from app.checkout_rates import get_checkout_rates
 from app.loyalty import get_loyalty_settings, get_peso_per_point
 from app.mailer import send_mail
-from app.payments import CASHIER_PAYMENT_KEYS
+from app.payments import CASHIER_PAYMENT_KEYS, CUSTOMER_EWALLET_KEYS
 from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
 from app.profile_photos import resolve_photo_url, staff_photo_url
 from app.stock import allocate_expiring_first, drug_id_for_lot, sellable_quantity, split_money, sync_stock_status_for_drug
@@ -250,7 +250,8 @@ def online_orders(request: Request):
         return _unauthorized()
     rows = fetch_all(
         """
-        SELECT co.order_id, co.order_date, co.order_status, c.first_name, c.last_name
+        SELECT co.order_id, co.order_date, co.order_status, co.payment_method, co.payment_status,
+               c.first_name, c.last_name
         FROM customer_orders co
         JOIN customers c ON co.customer_id = c.customer_id
         WHERE co.order_status IN ('Pending', 'Processing', 'Ready for Pickup')
@@ -266,6 +267,8 @@ def online_orders(request: Request):
             "customer_name": f"{row['first_name']} {row['last_name']}",
             "status": status,
             "status_class": str(status).lower().replace(" ", "-"),
+            "payment_method": row.get("payment_method") or "cash",
+            "payment_status": row.get("payment_status") or "unpaid",
             "date": _fmt_dt(row["order_date"], "%b %d, %Y %I:%M %p"),
         })
     return {"success": True, "orders": orders}
@@ -275,7 +278,13 @@ def online_orders(request: Request):
 def online_order_details(order_id: int, request: Request):
     if not require_staff(request):
         return _unauthorized()
-    header = fetch_one("SELECT customer_id, order_status FROM customer_orders WHERE order_id = %s", (order_id,))
+    header = fetch_one(
+        """
+        SELECT customer_id, order_status, payment_method, payment_status, payment_reference
+        FROM customer_orders WHERE order_id = %s
+        """,
+        (order_id,),
+    )
     if not header:
         return JSONResponse({"success": False, "message": "Order not found."}, status_code=404)
     customer = fetch_one(
@@ -303,6 +312,9 @@ def online_order_details(order_id: int, request: Request):
         "customer_id": header["customer_id"],
         "loyalty_points": float(customer["loyalty_points"]) if customer else 0,
         "status": header["order_status"],
+        "payment_method": header.get("payment_method") or "cash",
+        "payment_status": header.get("payment_status") or "unpaid",
+        "payment_reference": header.get("payment_reference") or "",
         "items": [dict(i) for i in items],
     }
 
@@ -316,8 +328,13 @@ _ORDER_STATUS_MAIL = {
 }
 
 
-def _order_status_email_html(first_name: str, order_id: int, status: str, total: float) -> str:
+def _order_status_email_html(first_name: str, order_id: int, status: str, total: float, payment_method: str = "") -> str:
     note = _ORDER_STATUS_MAIL.get(status, f"Your order status is now {status}.")
+    if status == "Ready for Pickup" and str(payment_method or "").lower() in CUSTOMER_EWALLET_KEYS:
+        note = (
+            "Your order is ready. Open My Orders and scan the QR code to pay with GCash or Maya. "
+            "You can pay from home before you pick it up."
+        )
     who = escape(first_name or "there")
     return f"""
     <div style="font-family:Arial,sans-serif;color:#1E3A34;line-height:1.5;">
@@ -330,14 +347,14 @@ def _order_status_email_html(first_name: str, order_id: int, status: str, total:
     """
 
 
-def _notify_customer_order_status(order_id: int, status: str, email: str, first_name: str, total: float) -> bool:
+def _notify_customer_order_status(order_id: int, status: str, email: str, first_name: str, total: float, payment_method: str = "") -> bool:
     address = str(email or "").strip()
     if not address:
         return False
     sent = send_mail(
         address,
         f"PharmaLink order #{order_id} is {status}",
-        _order_status_email_html(first_name, order_id, status, total),
+        _order_status_email_html(first_name, order_id, status, total, payment_method),
     )
     if not sent.get("success"):
         logger.warning("Order %s status email failed: %s", order_id, sent.get("message"))
@@ -360,7 +377,7 @@ async def update_order_status(request: Request):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT co.order_status, co.total_amount, c.email, c.first_name
+                SELECT co.order_status, co.total_amount, co.payment_method, c.email, c.first_name
                 FROM customer_orders co
                 JOIN customers c ON c.customer_id = co.customer_id
                 WHERE co.order_id = %s
@@ -386,6 +403,7 @@ async def update_order_status(request: Request):
                     "email": row.get("email"),
                     "first_name": row.get("first_name") or "",
                     "total": float(row.get("total_amount") or 0),
+                    "payment_method": row.get("payment_method") or "cash",
                 }
     emailed = False
     if recipient:
@@ -395,6 +413,7 @@ async def update_order_status(request: Request):
             recipient["email"],
             recipient["first_name"],
             recipient["total"],
+            recipient["payment_method"],
         )
     return {"success": True, "email_sent": emailed}
 
@@ -837,9 +856,33 @@ async def create_sale(request: Request):
     total_amount = float(payload.get("total_amount") or 0)
     cash_received = float(payload.get("cash_received") or 0)
     change_amount = float(payload.get("change_amount") or 0)
-    payment_method = payload.get("payment_method") or "cash"
+    payment_method = str(payload.get("payment_method") or "cash").strip().lower()
     payment_reference = str(payload.get("payment_reference") or "").strip() or None
     points_requested = float(payload.get("points_redeemed") or 0)
+    online_order_id = payload.get("online_order_id")
+    try:
+        online_order_id = int(online_order_id) if online_order_id not in (None, "") else None
+    except (TypeError, ValueError):
+        online_order_id = None
+    if online_order_id is not None and online_order_id <= 0:
+        online_order_id = None
+    linked_order = None
+    if online_order_id:
+        linked_order = fetch_one(
+            """
+            SELECT payment_method, payment_status, payment_reference
+            FROM customer_orders WHERE order_id = %s
+            """,
+            (online_order_id,),
+        )
+        if linked_order:
+            order_method = str(linked_order.get("payment_method") or "").strip().lower()
+            if order_method in CASHIER_PAYMENT_KEYS:
+                payment_method = order_method
+            if order_method in ("gcash", "maya"):
+                payment_reference = str(linked_order.get("payment_reference") or payment_reference or "").strip() or None
+                cash_received = total_amount
+                change_amount = 0.0
 
     if payment_method not in CASHIER_PAYMENT_KEYS:
         return JSONResponse({"status": "error", "message": "Invalid payment method."}, status_code=400)
@@ -847,9 +890,15 @@ async def create_sale(request: Request):
         return JSONResponse({"status": "error", "message": "Invalid transaction total."}, status_code=400)
     if total_amount == 0 and points_requested <= 0:
         return JSONResponse({"status": "error", "message": "Invalid transaction total."}, status_code=400)
+    settle_online_ewallet = bool(
+        linked_order and payment_method in ("gcash", "maya")
+    )
     if payment_method == "cash":
         if cash_received < total_amount:
             return JSONResponse({"status": "error", "message": "Insufficient cash received."}, status_code=400)
+    elif settle_online_ewallet:
+        cash_received = total_amount
+        change_amount = 0.0
     else:
         checkout_id = str(payload.get("paymongo_checkout_id") or "").strip()
         try:
@@ -875,6 +924,8 @@ async def create_sale(request: Request):
                     qty = int(item.get("qty") or 0)
                     if lot_id <= 0 or qty <= 0:
                         raise ValueError(f"Invalid item in cart (lot #{lot_id}, qty {qty}).")
+                    if linked_order:
+                        continue
                     drug_id = drug_id_for_lot(cur, lot_id)
                     if sellable_quantity(cur, drug_id) < qty:
                         raise ValueError(f"Not enough stock. Only {sellable_quantity(cur, drug_id)} left, but {qty} requested.")
@@ -912,7 +963,7 @@ async def create_sale(request: Request):
                 sale_params = (
                     sale_id, transaction_id, customer_id, user_id, subtotal, discount_amount_with_points,
                     tax_total, total_amount, cash_received, change_amount, payment_method, payment_reference,
-                    points_redeemed, points_discount_value,
+                    points_redeemed, points_discount_value, online_order_id,
                 )
                 cur.execute("SAVEPOINT sale_header")
                 try:
@@ -921,8 +972,8 @@ async def create_sale(request: Request):
                         INSERT INTO sales
                             (sale_id, transaction_id, customer_id, user_id, subtotal, discount_amount, tax_amount,
                              total_amount, cash_received, change_amount, payment_method, payment_reference,
-                             points_redeemed, points_discount_value, status, date_created)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'completed', NOW())
+                             points_redeemed, points_discount_value, online_order_id, status, date_created)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'completed', NOW())
                         """,
                         sale_params,
                     )
@@ -950,7 +1001,10 @@ async def create_sale(request: Request):
                     discount_amount = float(item.get("discount_amount") or 0)
                     promo_name = item.get("promo_name")
                     vat_exempt = int(item.get("vat_exempt") or 0)
-                    parts = allocate_expiring_first(cur, drug_id, qty)
+                    if linked_order:
+                        parts = [{"lot_id": int(item.get("lot_id") or 0), "qty": qty}]
+                    else:
+                        parts = allocate_expiring_first(cur, drug_id, qty)
                     subtotals = split_money(line_subtotal, qty, [part["qty"] for part in parts])
                     discounts = split_money(discount_amount, qty, [part["qty"] for part in parts])
                     for part, part_subtotal, part_discount in zip(parts, subtotals, discounts):

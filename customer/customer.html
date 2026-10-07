@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink - Customer Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=nav-drawer2">
-    <link rel="stylesheet" href="/customer/css/customer.css?v=cart-fix1">
+    <link rel="stylesheet" href="/customer/css/customer.css?v=pickup-qr1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -162,11 +162,11 @@
         <label for="checkoutPaymentMethod">Payment</label>
         <select id="checkoutPaymentMethod">
             <option value="cash" selected>Cash (pay at pickup)</option>
-            <option value="gcash">GCash</option>
-            <option value="maya">Maya</option>
+            <option value="gcash">GCash (QR when ready)</option>
+            <option value="maya">Maya (QR when ready)</option>
         </select>
         <button type="button" id="checkout-btn" disabled>Submit Order for Pickup</button>
-        <p class="shop-pay-hint" id="shopPayHint">Cash is collected at pickup. GCash and Maya are paid now through PayMongo.</p>
+        <p class="shop-pay-hint" id="shopPayHint">Cash, GCash, and Maya all go to the cashier first. For GCash or Maya, a QR code appears once the order is Ready for Pickup so you can pay from home.</p>
     </aside>
 </div>
 <button type="button" id="cartMobileBar" class="cart-mobile-bar" hidden>
@@ -436,6 +436,6 @@
     </script>
     <script src="/assets/theme.js?v=nav-drawer1"></script>
     <script src="/assets/profile-validate.js?v=pv4"></script>
-    <script src="/customer/js/customer-boot.js?v=header-first1"></script>
+    <script src="/customer/js/customer-boot.js?v=pickup-qr1"></script>
 </body>
 </html>
