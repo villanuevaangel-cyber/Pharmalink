@@ -110,6 +110,18 @@
     text-align:center; color:#4BAA8B; padding:22px 8px;
 }
 #dashboard-page .cs-order-id{ color:#6b7280; font-size:11px; margin-top:2px; }
+#dashboard-page .cs-pager{
+    display:flex; justify-content:flex-end; align-items:center; gap:10px;
+    margin-top:12px; font-size:13px; color:#4b5563;
+}
+#dashboard-page .cs-page-btn{
+    width:auto !important; margin:0 !important; padding:7px 12px !important;
+    border:1px solid #d1d5db !important; background:#fff !important; color:#1E3A34 !important;
+    border-radius:8px !important; font-weight:600 !important; font-size:13px !important;
+    box-shadow:none !important; transform:none !important;
+}
+#dashboard-page .cs-page-btn:hover{ background:#FFF7E6 !important; transform:none !important; box-shadow:none !important; }
+#dashboard-page .cs-page-btn:disabled{ opacity:0.5; cursor:default; }
 @media (max-width: 900px){
     #dashboard-page .cs-dash-stats{ grid-template-columns:1fr 1fr; }
     #dashboard-page .cs-dash-grid{ grid-template-columns:1fr; }

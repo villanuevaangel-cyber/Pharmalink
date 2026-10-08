@@ -549,7 +549,7 @@ def recent_transactions(request: Request, startDate: str = "", endDate: str = ""
         LEFT JOIN customers c ON s.customer_id = c.customer_id
         WHERE s.date_created::date BETWEEN %s AND %s
         ORDER BY s.date_created DESC
-        LIMIT 5
+        LIMIT 100
         """,
         (start, end),
     )

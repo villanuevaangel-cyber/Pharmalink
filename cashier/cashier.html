@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
     <link rel="stylesheet" href="/assets/theme.css?v=push3">
-    <link rel="stylesheet" href="/cashier/css/cashier.css?v=dash-orders1">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=dash-pager1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -153,6 +153,11 @@
             </tbody>
         </table>
     </div>
+    <div class="cs-pager">
+        <button type="button" id="recentTxPrev" class="cs-page-btn" onclick="dashRecentGo(-1)"><i class="fas fa-chevron-left"></i> Prev</button>
+        <span id="recentTxPageInfo">Page 1 of 1</span>
+        <button type="button" id="recentTxNext" class="cs-page-btn" onclick="dashRecentGo(1)">Next <i class="fas fa-chevron-right"></i></button>
+    </div>
 </div>
 
         <div class="table-card">
@@ -166,6 +171,11 @@
                         <tr><td colspan="4" class="cs-empty">Loading orders...</td></tr>
                     </tbody>
                 </table>
+            </div>
+            <div class="cs-pager">
+                <button type="button" id="dashOrdersPrev" class="cs-page-btn" onclick="dashOrdersGo(-1)"><i class="fas fa-chevron-left"></i> Prev</button>
+                <span id="dashOrdersPageInfo">Page 1 of 1</span>
+                <button type="button" id="dashOrdersNext" class="cs-page-btn" onclick="dashOrdersGo(1)">Next <i class="fas fa-chevron-right"></i></button>
             </div>
         </div>
         </div>
@@ -886,14 +896,38 @@ function dashEsc(value) {
     }[c]));
 }
 
+const DASH_PAGE_SIZE = 5;
+let dashRecentPage = 1;
+let dashRecentRows = [];
+let dashRecentRange = '';
+let dashOrdersPage = 1;
+let dashOrdersRows = [];
+
+function paintDashPager(infoId, prevId, nextId, page, total) {
+    const pages = Math.max(1, Math.ceil(total / DASH_PAGE_SIZE) || 1);
+    if (page > pages) page = pages;
+    if (page < 1) page = 1;
+    const info = document.getElementById(infoId);
+    const prev = document.getElementById(prevId);
+    const next = document.getElementById(nextId);
+    if (info) info.textContent = 'Page ' + page + ' of ' + pages;
+    if (prev) prev.disabled = page <= 1 || !total;
+    if (next) next.disabled = page >= pages || !total;
+    return page;
+}
+
 function renderDashPendingOrders(orders) {
     const body = document.getElementById('dashPendingOrdersBody');
     if (!body) return;
-    if (!orders || !orders.length) {
+    if (Array.isArray(orders)) dashOrdersRows = orders;
+    const total = dashOrdersRows.length;
+    dashOrdersPage = paintDashPager('dashOrdersPageInfo', 'dashOrdersPrev', 'dashOrdersNext', dashOrdersPage, total);
+    if (!total) {
         body.innerHTML = '<tr><td colspan="4" class="cs-empty">No pending online orders.</td></tr>';
         return;
     }
-    body.innerHTML = orders.map((order) => {
+    const start = (dashOrdersPage - 1) * DASH_PAGE_SIZE;
+    body.innerHTML = dashOrdersRows.slice(start, start + DASH_PAGE_SIZE).map((order) => {
         const statusClass = String(order.status_class || '');
         const ready = statusClass.includes('ready');
         const orderId = Number(order.order_id);
@@ -908,6 +942,11 @@ function renderDashPendingOrders(orders) {
         </tr>`;
     }).join('');
 }
+
+window.dashOrdersGo = function(delta) {
+    dashOrdersPage += delta;
+    renderDashPendingOrders();
+};
 
 window.completeDashOrder = function(orderId) {
     const nav = document.querySelector('.nav-item[data-page="pos-page"]');
@@ -938,7 +977,7 @@ function fetchOnlineOrders() {
         onlineOrdersBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">' +
                                      '<i class="fas fa-spinner fa-spin"></i> Loading online orders...</td></tr>';
     }
-    if (dashBody) {
+    if (dashBody && !dashOrdersRows.length) {
         dashBody.innerHTML = '<tr><td colspan="4" class="cs-empty">Loading orders...</td></tr>';
     }
 
@@ -3071,12 +3110,53 @@ function updateDashboardStats(start, end) {
 }
 
 /**
- * Fetches and renders the 5 most recent transactions.
- * Gumagamit ng start at end date mula sa filter.
+ * Fetches sales in the dashboard date range and shows five per page.
  */
-function loadRecentTransactions(start, end) {
-    const tableBody = document.getElementById('recentTransactionsBody'); // Titingnan natin ito mamaya
+function recentTxRow(t) {
+    const statusClass = String(t.status || '').toLowerCase().replace(/\s+/g, '-');
+    const transactionDate = new Date(t.date_created).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
+    return `<tr>
+        <td>${dashEsc(transactionDate)}</td>
+        <td>${dashEsc(t.time_display)}</td>
+        <td>${dashEsc(t.customer_name)}</td>
+        <td>₱${dashEsc(t.total_amount)}</td>
+        <td><span class="status ${dashEsc(statusClass)}">${dashEsc(t.status)}</span></td>
+    </tr>`;
+}
+
+function renderRecentTransactions() {
+    const tableBody = document.getElementById('recentTransactionsBody');
     if (!tableBody) return;
+    const total = dashRecentRows.length;
+    dashRecentPage = paintDashPager('recentTxPageInfo', 'recentTxPrev', 'recentTxNext', dashRecentPage, total);
+    if (!total) {
+        tableBody.innerHTML = '<tr><td colspan="5" class="cs-empty">No transactions found for this period.</td></tr>';
+        return;
+    }
+    const start = (dashRecentPage - 1) * DASH_PAGE_SIZE;
+    tableBody.innerHTML = dashRecentRows.slice(start, start + DASH_PAGE_SIZE).map(recentTxRow).join('');
+}
+
+window.dashRecentGo = function(delta) {
+    dashRecentPage += delta;
+    renderRecentTransactions();
+};
+
+function loadRecentTransactions(start, end) {
+    const tableBody = document.getElementById('recentTransactionsBody');
+    if (!tableBody) return;
+    const range = String(start || '') + '|' + String(end || '');
+    if (range !== dashRecentRange) {
+        dashRecentRange = range;
+        dashRecentPage = 1;
+    }
+    if (!dashRecentRows.length) {
+        tableBody.innerHTML = '<tr><td colspan="5" class="cs-empty">Loading transactions...</td></tr>';
+    }
 
     const apiEndpoint = `/api/cashier/recent-transactions?startDate=${start}&endDate=${end}`;
 
@@ -3086,36 +3166,13 @@ function loadRecentTransactions(start, end) {
             return response.json();
         })
         .then(transactions => {
-            let html = '';
-            
-if (transactions.length === 0) {
-                html = '<tr><td colspan="5" class="cs-empty">No transactions found for this period.</td></tr>';
-            } else {
-                transactions.forEach(t => {
-                    const statusClass = t.status.toLowerCase().replace(' ', '-');
-
-const transactionDate = new Date(t.date_created).toLocaleDateString('en-US', {
-                        month: 'short', 
-                        day: 'numeric', 
-                        year: 'numeric' // O '2-digit' kung gusto mo 25
-                    });
-
-                    html += `
-                        <tr>
-                            <td>${transactionDate}</td> 
-                            <td>${t.time_display}</td>
-                            <td>${t.customer_name}</td>
-                            <td>₱${t.total_amount}</td>
-                            <td><span class="status ${statusClass}">${t.status}</span></td>
-                        </tr>
-                    `;
-                });
-            }
-            tableBody.innerHTML = html;
+            dashRecentRows = Array.isArray(transactions) ? transactions : [];
+            renderRecentTransactions();
         })
         .catch(error => {
             console.error('Error loading recent transactions:', error);
-tableBody.innerHTML = '<tr><td colspan="5" style="color: red;">Failed to load data.</td></tr>';        });
+            tableBody.innerHTML = '<tr><td colspan="5" style="color: red;">Failed to load data.</td></tr>';
+        });
 }
 
 // SA LOOB NG IYONG JS CODE
