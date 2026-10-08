@@ -40,7 +40,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=orders-page1';
+        script.src = '/customer/js/customer.js?v=pickup-qr1';
         document.body.appendChild(script);
     });
 

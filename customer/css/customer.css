@@ -666,6 +666,12 @@ html, body {
     font-weight:800; color:#1E3A34;
 }
 .mo-detail-note{ text-align:center; color:#4BAA8B; font-size:.8rem; margin:12px 0 0; }
+.mo-pay-qr{ text-align:center; margin-top:14px; }
+.mo-pay-qr img{
+    width:220px; max-width:100%; height:auto; background:#fff;
+    border:1px solid #FFE3B3; border-radius:12px; padding:8px;
+}
+.mo-pay-qr p{ margin:8px 0 0; color:#1E3A34; font-size:.85rem; line-height:1.4; }
 @media (max-width: 960px){
     #orders .mo-filters{ grid-template-columns:1fr 1fr; }
     #orders .mo-search, #orders .mo-filter-btn{ grid-column:1 / -1; }

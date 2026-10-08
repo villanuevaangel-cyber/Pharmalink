@@ -71,6 +71,55 @@ def ensure_automation_schema(conn) -> None:
         )
         cur.execute(
             """
+            ALTER TABLE customer_orders
+            ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE customer_orders
+            ADD COLUMN IF NOT EXISTS payment_reference VARCHAR(120)
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE sales
+            ADD COLUMN IF NOT EXISTS online_order_id INTEGER
+            """
+        )
+        cur.execute(
+            """
+            UPDATE sales s
+            SET online_order_id = co.order_id,
+                payment_method = CASE
+                    WHEN LOWER(COALESCE(co.payment_method, '')) IN ('gcash', 'maya', 'cash')
+                    THEN LOWER(co.payment_method)
+                    ELSE s.payment_method
+                END
+            FROM customer_orders co
+            WHERE s.online_order_id IS NULL
+              AND s.customer_id = co.customer_id
+              AND LOWER(TRIM(co.order_status)) = 'completed'
+              AND ABS(s.total_amount - co.total_amount) < 0.05
+              AND s.date_created >= co.order_date - INTERVAL '1 minute'
+              AND s.date_created <= COALESCE(co.updated_at, co.order_date) + INTERVAL '2 days'
+              AND NOT EXISTS (
+                    SELECT 1 FROM sales s2 WHERE s2.online_order_id = co.order_id
+              )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM customer_orders other
+                    WHERE other.customer_id = co.customer_id
+                      AND other.order_id <> co.order_id
+                      AND LOWER(TRIM(other.order_status)) = 'completed'
+                      AND ABS(other.total_amount - co.total_amount) < 0.05
+                      AND s.date_created >= other.order_date - INTERVAL '1 minute'
+                      AND s.date_created <= COALESCE(other.updated_at, other.order_date) + INTERVAL '2 days'
+              )
+            """
+        )
+        cur.execute(
+            """
             ALTER TABLE promos
             ADD COLUMN IF NOT EXISTS segment_label VARCHAR(80)
             """

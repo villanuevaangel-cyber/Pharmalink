@@ -226,6 +226,7 @@
                                 <th>Order ID</th>
                                 <th>Customer</th>
                                 <th>Status</th>
+                                <th>Payment</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -650,6 +651,7 @@
         </div>
         <p>Customer: <strong id="reviewCustomerName"></strong></p>
         <p>Status: <span id="reviewOrderStatus"></span></p>
+        <p>Payment: <strong id="reviewPayment"></strong></p>
         
         <hr>
         
@@ -707,6 +709,7 @@ let selectedCustomerSegment = '';
 let segmentByCustomer = {};
 
 let currentOnlineOrderId = null;
+let currentOnlineOrderPay = null;
 let activePromos = []; // fetched once on load; matched against drug_id first, then category
 
 function customerCanUsePromo(promo) {
@@ -855,6 +858,13 @@ window.updateCartQty = function(inputElement) {
 /**
  * Fetches and renders the list of pending online orders to the onlineOrdersBody table.
  */
+function onlinePayLabel(order) {
+    const method = String(order.payment_method || 'cash').toLowerCase();
+    const name = method === 'gcash' ? 'GCash' : (method === 'maya' ? 'Maya' : 'Cash');
+    if (method !== 'gcash' && method !== 'maya') return name;
+    return name + (String(order.payment_status || '').toLowerCase() === 'paid' ? ' · Paid' : ' · Unpaid');
+}
+
 function fetchOnlineOrders() {
     const onlineOrdersBody = document.getElementById('onlineOrdersBody');
     const pendingOrdersBadge = document.getElementById('pendingOrdersBadge');
@@ -862,7 +872,7 @@ function fetchOnlineOrders() {
     if (!onlineOrdersBody || !pendingOrdersBadge) return; 
 
     // Display loading message
-    onlineOrdersBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">' + 
+    onlineOrdersBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">' + 
                                  '<i class="fas fa-spinner fa-spin"></i> Loading online orders...</td></tr>';
     
     // Tiyakin na tama ang path papunta sa PHP file
@@ -899,6 +909,7 @@ function fetchOnlineOrders() {
                             <td>${order.display_id}</td>
                             <td>${order.customer_name}</td>
                             <td><span class="status ${statusClass}" style="padding: 2px 8px; border-radius: 5px; font-size: 0.9em; background: #f4f4ff;">${order.status}</span></td>
+                            <td>${onlinePayLabel(order)}</td>
                             <td>${actionButton}</td>
                         </tr>
                     `;
@@ -914,13 +925,13 @@ function fetchOnlineOrders() {
                 }
 
             } else {
-                onlineOrdersBody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px;">No online orders currently pending or ready.</td></tr>`;
+                onlineOrdersBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px;">No online orders currently pending or ready.</td></tr>`;
                 pendingOrdersBadge.style.display = 'none';
             }
         })
         .catch(err => {
             console.error("Error fetching online orders:", err);
-            onlineOrdersBody.innerHTML = `<tr><td colspan="4" style="color:red; text-align: center;">Failed to load online orders.</td></tr>`;
+            onlineOrdersBody.innerHTML = `<tr><td colspan="5" style="color:red; text-align: center;">Failed to load online orders.</td></tr>`;
             pendingOrdersBadge.style.display = 'none';
         });
 }
@@ -1550,6 +1561,16 @@ selectedCustomer = {
     loyalty_points: parseFloat(orderData.loyalty_points || 0) // ⭐ Para makita/magamit ang points kahit online order ang pinagmulan ⭐
 };
             currentOnlineOrderId = orderData.order_id;
+            currentOnlineOrderPay = {
+                method: String(orderData.payment_method || 'cash').toLowerCase(),
+                status: String(orderData.payment_status || 'unpaid').toLowerCase(),
+                reference: orderData.payment_reference || ''
+            };
+            const loadedPay = document.getElementById('paymentMethodSelect');
+            if (loadedPay && ['cash', 'gcash', 'maya'].includes(currentOnlineOrderPay.method)) {
+                loadedPay.value = currentOnlineOrderPay.method;
+                if (typeof togglePaymentMethodFields === 'function') togglePaymentMethodFields();
+            }
             refreshCustomerSegment();
 document.getElementById('selectedCustomer').textContent = selectedCustomerSegment
     ? `${formattedCustomerName} · ${selectedCustomerSegment}`
@@ -1649,6 +1670,8 @@ window.reviewOrder = function(orderId) {
 
             document.getElementById('reviewCustomerName').textContent = data.customer_name;
             document.getElementById('reviewOrderStatus').textContent = data.status;
+            const reviewPay = document.getElementById('reviewPayment');
+            if (reviewPay) reviewPay.textContent = onlinePayLabel(data);
             
             // Handle Prescription Display
             const prescContainer = document.getElementById('prescriptionContainer');
@@ -2315,8 +2338,13 @@ confirmSale.addEventListener("click", () => {
     // Card payments are for the exact total - there's no physical change to
     // hand back - so cash_received is just set equal to the total, and we
     // capture an optional reference/transaction number instead.
-    const paymentMethod = document.getElementById('paymentMethodSelect')?.value || 'cash';
+    let paymentMethod = document.getElementById('paymentMethodSelect')?.value || 'cash';
+    const settlingOnline = currentOnlineOrderId !== null && currentOnlineOrderPay;
+    if (settlingOnline && ['cash', 'gcash', 'maya'].includes(currentOnlineOrderPay.method)) {
+        paymentMethod = currentOnlineOrderPay.method;
+    }
     const isCashPayment = paymentMethod === 'cash';
+    const onlineEwallet = settlingOnline && (paymentMethod === 'gcash' || paymentMethod === 'maya');
 
     let cash, change, paymentReference = null;
     if (isCashPayment) {
@@ -2331,9 +2359,10 @@ confirmSale.addEventListener("click", () => {
             alert("Insufficient cash. Required: ₱" + total.toFixed(2));
             return;
         }
-    } else if (total === 0) {
-        cash = 0;
+    } else if (total === 0 || onlineEwallet) {
+        cash = total;
         change = 0;
+        paymentReference = onlineEwallet ? (currentOnlineOrderPay.reference || null) : null;
     } else {
         cash = total;
         change = 0;
@@ -2373,6 +2402,7 @@ confirmSale.addEventListener("click", () => {
         change_amount: change, 
         payment_method: paymentMethod,
         payment_reference: paymentReference,
+        online_order_id: currentOnlineOrderId,
         paymongo_checkout_id: posEwallet.checkoutId,
         points_redeemed: pointsRedeemed,
         points_discount_value: pointsDiscountValue,
@@ -2476,7 +2506,8 @@ function postCashierSale(saleData, printWindow, isCashPayment, change, paymentMe
                         }
 
                         // I-reset ang global variable
-                        currentOnlineOrderId = null; 
+                        currentOnlineOrderId = null;
+                        currentOnlineOrderPay = null; 
                         
                     } else {
                         console.error("Failed to update Online Order status:", updateData.message);
