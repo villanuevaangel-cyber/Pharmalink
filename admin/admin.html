@@ -493,7 +493,7 @@
                     <button type="button" class="inv-tab-btn active" data-inv-panel="lots"><i class="fas fa-boxes"></i> Stock Lots</button>
                     <button type="button" class="inv-tab-btn" data-inv-panel="history"><i class="fas fa-clock-rotate-left"></i> Adjustment History</button>
                     <button type="button" class="inv-tab-btn" data-inv-panel="reorder"><i class="fas fa-cart-plus"></i> Reorder Suggestions</button>
-                    <button type="button" id="runConsignmentCheckBtn"><i class="fas fa-rotate"></i> Run consignment cross-check</button>
+                    <button type="button" id="runConsignmentCheckBtn" title="This also runs every hour with the stock and expiry check. Use this only if you want the marks right now."><i class="fas fa-rotate"></i> Refresh consignment marks</button>
                 </div>
 
                 <div class="dashboard-cards inv-stats">
@@ -4072,7 +4072,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="/admin/js/inventory.js?v=inv-pick1"></script>
+    <script src="/admin/js/inventory.js?v=consign-auto1"></script>
     <script src="/admin/js/supplier.js?v=sup-meds4"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -5523,6 +5523,10 @@ document.getElementById('analytics-year')?.addEventListener('change', function (
                     else if (mail.error) emailNote = ' Email was not sent: ' + mail.error;
                     else emailNote = ' No new low-stock or expiry alerts to email.';
                 }
+                const consign = mode === 'daily'
+                    ? (data.result && data.result.hourly && data.result.hourly.consignment)
+                    : (data.result && data.result.consignment);
+                if (consign && consign.updated) emailNote += ' Marked ' + consign.updated + ' consignment lot(s).';
                 alert((mode === 'daily' ? 'Auto purchase-order pass finished. Check Purchasing for new Pending POs.' : 'Stock status and expiry scan finished.') + emailNote);
             })
             .catch(err => alert('Automation error: ' + err.message));

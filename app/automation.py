@@ -848,6 +848,7 @@ def run_hourly_jobs() -> dict:
             result["expired_lots"] = deactivate_expired_lots(cur)
             result["near_expiry_alerts"] = scan_near_expiry(cur)
             result["stock_alerts"] = scan_stock_alerts(cur)
+    result["consignment"] = run_consignment_cross_check()
     result["email"] = email_alert_digest(stock_and_expiry_only=True)
     _last_run["hourly"] = {"at": datetime.now(MANILA).isoformat(), **result}
     logger.info("hourly jobs: %s", result)
@@ -924,9 +925,10 @@ def normalize_consignment_policy(value) -> str:
 
 
 def run_consignment_cross_check() -> dict:
-    """Mark near-expiry lots returnable/non-returnable from the supplier policy. Manual only."""
+    """Mark near-expiry lots returnable or non-returnable from the supplier policy."""
     marked_returnable = 0
     marked_non_returnable = 0
+    cleared = 0
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
@@ -955,12 +957,32 @@ def run_consignment_cross_check() -> dict:
                     marked_returnable += 1
                 else:
                     marked_non_returnable += 1
-            total = marked_returnable + marked_non_returnable
+            cur.execute(
+                """
+                UPDATE inventory_lots l
+                SET return_status = NULL
+                WHERE l.return_status IS NOT NULL
+                  AND NOT (
+                    l.is_active = 1
+                    AND COALESCE(l.current_stock, 0) > 0
+                    AND l.expiration_date >= CURRENT_DATE
+                    AND l.expiration_date <= CURRENT_DATE + %s * INTERVAL '1 day'
+                    AND EXISTS (
+                        SELECT 1 FROM suppliers s
+                        WHERE s.supplier_id = l.supplier
+                          AND LOWER(COALESCE(s.consignment_policy, 'none')) IN ('returnable', 'non_returnable')
+                    )
+                  )
+                """,
+                (NEAR_EXPIRY_DAYS,),
+            )
+            cleared = cur.rowcount or 0
     return {
         "success": True,
         "updated": marked_returnable + marked_non_returnable,
         "returnable": marked_returnable,
         "non_returnable": marked_non_returnable,
+        "cleared": cleared,
         "window_days": NEAR_EXPIRY_DAYS,
     }
 
