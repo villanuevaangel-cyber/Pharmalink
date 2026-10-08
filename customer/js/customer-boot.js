@@ -40,7 +40,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=pickup-qr1';
+        script.src = '/customer/js/customer.js?v=cancel-pending1';
         document.body.appendChild(script);
     });
 
@@ -93,17 +93,23 @@
                 grid.innerHTML = '<p class="shop-empty">No products available right now.</p>';
                 return;
             }
+            const esc = (value) => String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;');
             grid.innerHTML = products.map((p) => {
                 const displayName = `${p.brand_name} / ${p.generic_name} ${p.dosage} ${p.form}`.trim();
+                const sortName = `${p.brand_name || ''} ${p.generic_name || ''}`.trim() || displayName;
                 const stock = parseInt(p.current_stock, 10) || 0;
+                const price = Number(p.price) || 0;
                 const stockClass = stock <= 0 ? 'shop-stock-out' : (stock <= 10 ? 'shop-stock-low' : 'shop-stock-ok');
-                return `<div class="product" data-category="${p.category}" data-name-search="${displayName}">
-                    <span class="shop-cat">${p.category}</span>
-                    <h4>${p.brand_name}</h4>
-                    <p class="shop-generic">${p.generic_name}</p>
-                    <p class="shop-spec">${p.dosage} · ${p.form}</p>
+                return `<div class="product" data-category="${esc(p.category)}" data-name-search="${esc(displayName)}" data-sort-name="${esc(sortName)}" data-price="${price}" data-stock="${stock}">
+                    <span class="shop-cat">${esc(p.category)}</span>
+                    <h4>${esc(p.brand_name)}</h4>
+                    <p class="shop-generic">${esc(p.generic_name)}</p>
+                    <p class="shop-spec">${esc(p.dosage)} · ${esc(p.form)}</p>
                     <div class="shop-card-foot">
-                        <p class="shop-price">₱${Number(p.price).toFixed(2)}</p>
+                        <p class="shop-price">₱${price.toFixed(2)}</p>
                         <p class="shop-stock ${stockClass}">${stock} in stock</p>
                     </div>
                     <button type="button" class="add-btn"

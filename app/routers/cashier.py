@@ -21,7 +21,7 @@ from app.mailer import send_mail
 from app.payments import CASHIER_PAYMENT_KEYS, CUSTOMER_EWALLET_KEYS
 from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
 from app.profile_photos import resolve_photo_url, staff_photo_url
-from app.stock import allocate_expiring_first, drug_id_for_lot, sellable_quantity, split_money, sync_stock_status_for_drug
+from app.stock import allocate_expiring_first, drug_id_for_lot, restore_order_stock, sellable_quantity, split_money, sync_stock_status_for_drug
 from app.validation import prepare_profile_fields
 
 logger = logging.getLogger("pharmalink.cashier")
@@ -387,39 +387,65 @@ async def update_order_status(request: Request):
     if order_id <= 0 or status not in allowed:
         return {"success": False, "message": "Invalid order_id or status."}
     recipient = None
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                """
-                SELECT co.order_status, co.total_amount, co.payment_method, co.customer_id, c.email, c.first_name
-                FROM customer_orders co
-                JOIN customers c ON c.customer_id = co.customer_id
-                WHERE co.order_id = %s
-                """,
-                (order_id,),
-            )
-            row = cur.fetchone()
-            if not row:
-                return {"success": False, "message": "Order not found."}
-            previous = str(row["order_status"] or "")
-            if previous != status:
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
-                    "UPDATE customer_orders SET order_status = %s, is_read = 0 WHERE order_id = %s",
-                    (status, order_id),
+                    """
+                    SELECT co.order_status, co.total_amount, co.payment_method, co.customer_id, c.email, c.first_name
+                    FROM customer_orders co
+                    JOIN customers c ON c.customer_id = co.customer_id
+                    WHERE co.order_id = %s
+                    FOR UPDATE OF co
+                    """,
+                    (order_id,),
                 )
-                write_activity_log(
-                    cur,
-                    "Update Order",
-                    f"Set order #{order_id} to {status}.",
-                    request=request,
-                )
-                recipient = {
-                    "email": row.get("email"),
-                    "first_name": row.get("first_name") or "",
-                    "total": float(row.get("total_amount") or 0),
-                    "payment_method": row.get("payment_method") or "cash",
-                    "customer_id": row.get("customer_id"),
-                }
+                row = cur.fetchone()
+                if not row:
+                    return {"success": False, "message": "Order not found."}
+                previous = str(row["order_status"] or "")
+                if previous != status:
+                    if status == "Cancelled" and previous == "Completed":
+                        return {"success": False, "message": "Completed sales stay as they are."}
+                    if status == "Cancelled":
+                        cur.execute("SAVEPOINT sold_check")
+                        sold = None
+                        try:
+                            cur.execute(
+                                """
+                                SELECT sale_id FROM sales
+                                WHERE online_order_id = %s AND LOWER(COALESCE(status, '')) = 'completed'
+                                LIMIT 1
+                                """,
+                                (order_id,),
+                            )
+                            sold = cur.fetchone()
+                        except Exception:
+                            cur.execute("ROLLBACK TO SAVEPOINT sold_check")
+                            sold = None
+                        if sold:
+                            return {"success": False, "message": "This order was already sold. Completed sales stay as they are."}
+                        if previous in ("Pending", "Processing", "Ready for Pickup"):
+                            restore_order_stock(cur, order_id)
+                    cur.execute(
+                        "UPDATE customer_orders SET order_status = %s, is_read = 0 WHERE order_id = %s",
+                        (status, order_id),
+                    )
+                    write_activity_log(
+                        cur,
+                        "Update Order",
+                        f"Set order #{order_id} to {status}.",
+                        request=request,
+                    )
+                    recipient = {
+                        "email": row.get("email"),
+                        "first_name": row.get("first_name") or "",
+                        "total": float(row.get("total_amount") or 0),
+                        "payment_method": row.get("payment_method") or "cash",
+                        "customer_id": row.get("customer_id"),
+                    }
+    except ValueError as exc:
+        return {"success": False, "message": str(exc)}
     emailed = False
     if recipient:
         emailed = _notify_customer_order_status(

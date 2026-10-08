@@ -618,6 +618,16 @@ html, body {
     background:#4BAA8B !important; box-shadow:none !important;
     display:inline-flex !important; align-items:center; gap:6px;
 }
+.mo-cancel{
+    width:auto !important; margin:0 0 0 6px !important;
+    padding:6px 12px !important; font-size:12px !important;
+    background:#fff !important; color:#b91c1c !important;
+    border:1px solid #fecaca !important; box-shadow:none !important;
+    display:inline-flex !important; align-items:center; justify-content:center;
+}
+.mo-detail-actions{ margin-top:12px; }
+.mo-detail-actions .mo-cancel{ margin:0 0 8px !important; }
+.mo-detail-actions p{ margin:0; color:#4b5563; font-size:.85rem; }
 #orders .mo-empty-cell{
     text-align:center; color:#4BAA8B; padding:48px 20px !important;
 }
@@ -713,9 +723,11 @@ body.customer-guest #customerNotificationBell{ display:none !important; }
     border:1px solid #d1d5db; border-radius:8px; font-size:14px;
 }
 #products .shop-cat-label{ font-size:13px; font-weight:700; color:#4b5563; }
-#products #categoryFilter{
+#products #categoryFilter,
+#products #productSort{
     width:auto; min-width:160px; height:40px; padding:0 10px;
 }
+#products #productSort{ min-width:190px; }
 #products .product-grid{
     display:grid;
     grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));

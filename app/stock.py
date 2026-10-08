@@ -176,3 +176,38 @@ def allocate_expiring_first(cur, drug_id: int, qty: int) -> list[dict]:
             (part["qty"], part["lot_id"]),
         )
     return parts
+
+
+def restore_order_stock(cur, order_id: int) -> None:
+    """Put reserved units back on the lots this order took."""
+    cur.execute(
+        """
+        SELECT drug_id, lot_inventory_id, quantity
+        FROM order_details
+        WHERE order_id = %s
+        FOR UPDATE
+        """,
+        (order_id,),
+    )
+    drugs = set()
+    for raw in cur.fetchall():
+        row = dict(raw) if not isinstance(raw, dict) else raw
+        qty = int(row.get("quantity") or 0)
+        lot_id = int(row.get("lot_inventory_id") or 0)
+        drug_id = int(row.get("drug_id") or 0)
+        if qty <= 0 or lot_id <= 0:
+            continue
+        cur.execute(
+            """
+            UPDATE inventory_lots
+            SET current_stock = current_stock + %s
+            WHERE lot_inventory_id = %s
+            """,
+            (qty, lot_id),
+        )
+        if cur.rowcount != 1:
+            raise ValueError("Could not return stock for one of the items.")
+        if drug_id:
+            drugs.add(drug_id)
+    for drug_id in drugs:
+        sync_stock_status_for_drug(cur, drug_id)

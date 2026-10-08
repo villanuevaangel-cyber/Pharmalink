@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink - Customer Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=push3">
-    <link rel="stylesheet" href="/customer/css/customer.css?v=pickup-qr1">
+    <link rel="stylesheet" href="/customer/css/customer.css?v=cancel-pending1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -140,6 +140,15 @@
     <label class="shop-cat-label" for="categoryFilter">Category</label>
     <select id="categoryFilter">
         <option value="">All Categories</option>
+    </select>
+    <label class="shop-cat-label" for="productSort">Sort</label>
+    <select id="productSort">
+        <option value="name-asc">Name A–Z</option>
+        <option value="name-desc">Name Z–A</option>
+        <option value="price-asc">Price: Low to high</option>
+        <option value="price-desc">Price: High to low</option>
+        <option value="stock-asc">Stock: Low to high</option>
+        <option value="stock-desc">Stock: High to low</option>
     </select>
 </div>
 <div class="products-container">
@@ -436,6 +445,6 @@
     </script>
     <script src="/assets/theme.js?v=push3"></script>
     <script src="/assets/profile-validate.js?v=pv4"></script>
-    <script src="/customer/js/customer-boot.js?v=pickup-qr1"></script>
+    <script src="/customer/js/customer-boot.js?v=cancel-pending1"></script>
 </body>
 </html>

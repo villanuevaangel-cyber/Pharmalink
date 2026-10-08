@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
     <link rel="stylesheet" href="/assets/theme.css?v=push3">
-    <link rel="stylesheet" href="/cashier/css/cashier.css?v=reprint1">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=cash-quick1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -306,6 +306,13 @@
                 <div id="cashPaymentFields">
                     <label>Cash:</label>
                     <input type="number" id="cashInput" placeholder="Enter amount" min="0" step="0.01" inputmode="decimal">
+                    <div class="pos-cash-quick" id="posCashQuick">
+                        <button type="button" data-cash="exact">Exact</button>
+                        <button type="button" data-cash="100">₱100</button>
+                        <button type="button" data-cash="200">₱200</button>
+                        <button type="button" data-cash="500">₱500</button>
+                        <button type="button" data-cash="1000">₱1000</button>
+                    </div>
                     <p class="pos-sum-line">Change: <span id="change">₱0.00</span></p>
                 </div>
                 <div id="ewalletPaymentFields" style="display:none;">
@@ -739,6 +746,12 @@ function refreshCustomerSegment() {
         return;
     }
     selectedCustomerSegment = segmentByCustomer[String(selectedCustomer.customer_id)] || '';
+    const span = document.getElementById('selectedCustomer');
+    if (span && selectedCustomer.name) {
+        span.textContent = selectedCustomerSegment
+            ? selectedCustomer.name + ' · ' + selectedCustomerSegment
+            : selectedCustomer.name;
+    }
 }
 
 function loadCustomerSegments() {
@@ -1010,6 +1023,7 @@ window.clearCart = function() {
     // Reset cash and change inputs
     if (cashInput) cashInput.value = '';
     if (changeDisplay) changeDisplay.textContent = '₱0.00';
+    clearQuickCashChoice();
 
     // Reset payment method back to Cash for the next customer.
     const paymentMethodSelectReset = document.getElementById('paymentMethodSelect');
@@ -1329,14 +1343,35 @@ function startPaymongoCheckout(forceNew) {
         .catch(() => setEwalletStatus('Could not reach PayMongo. Check internet and try again.'));
 }
 
-function sanitizeCashInput() {
+let quickCashChoice = null;
+
+function clearQuickCashChoice() {
+    quickCashChoice = null;
+    document.querySelectorAll('#posCashQuick [data-cash]').forEach((btn) => btn.classList.remove('is-active'));
+}
+
+function applyQuickCash(choice) {
+    if (!cashInput || !totalDisplay) return;
+    quickCashChoice = String(choice);
+    const total = parseFloat(String(totalDisplay.textContent).replace(/[₱,]/g, '')) || 0;
+    const value = quickCashChoice === 'exact' ? total : Number(quickCashChoice);
+    cashInput.value = (Number.isFinite(value) ? value : 0).toFixed(2);
+    document.querySelectorAll('#posCashQuick [data-cash]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-cash') === quickCashChoice);
+    });
+    sanitizeCashInput(true);
+}
+
+function sanitizeCashInput(fromQuick) {
     if (!cashInput) return;
     let raw = String(cashInput.value || '');
     if (raw.indexOf('-') !== -1) raw = raw.replace(/-/g, '');
     cashInput.value = raw;
     const n = parseFloat(cashInput.value);
     if (cashInput.value !== '' && !isNaN(n) && n < 0) cashInput.value = '0';
+    if (fromQuick !== true) clearQuickCashChoice();
     calculateChange();
+    savePosDraft();
 }
 
 // Toggles between the Cash/Change fields and the Reference-number field
@@ -1359,6 +1394,7 @@ function togglePaymentMethodFields() {
         methodLabel.textContent = labels[method] || 'e-wallet';
     }
     calculateChange();
+    savePosDraft();
 }
 
 window.removeItem = function(index) {
@@ -1514,6 +1550,7 @@ cartTable.innerHTML += row;
     discountApplied.textContent = '₱' + (scDiscount + discountAmount).toFixed(2);
     taxDisplay.textContent = '₱' + taxAmount.toFixed(2);
     totalDisplay.textContent = '₱' + finalTotal.toFixed(2);
+    if (quickCashChoice === 'exact' && cashInput) cashInput.value = finalTotal.toFixed(2);
 
     const pointsDiscountRow = document.getElementById("pointsDiscountRow");
     const pointsDiscountDisplay = document.getElementById("pointsDiscountDisplay");
@@ -1527,6 +1564,151 @@ cartTable.innerHTML += row;
     }
 
     calculateChange();
+    savePosDraft();
+}
+
+const POS_DRAFT_KEY = 'pharmalink.pos.cart';
+let posDraftReady = false;
+
+function savePosDraft() {
+    if (!posDraftReady) return;
+    try {
+        if (!cart.length) {
+            localStorage.removeItem(POS_DRAFT_KEY);
+            return;
+        }
+        const draft = {
+            items: cart.map((item) => ({
+                drug_id: item.drug_id,
+                lot_id: item.lot_id,
+                name: item.name,
+                price: item.price,
+                qty: item.qty,
+                max_stock: item.max_stock,
+                category: item.category || '',
+                promo_name: item.promo_name || null,
+                promo_discount_per_unit: item.promo_discount_per_unit || 0
+            })),
+            customer: selectedCustomer ? {
+                customer_id: selectedCustomer.customer_id,
+                name: selectedCustomer.name,
+                loyalty_points: selectedCustomer.loyalty_points
+            } : null,
+            discountPercent: discountInput ? discountInput.value : '0',
+            scPwd: !!document.getElementById('scPwdToggle')?.checked,
+            applyPoints: !!document.getElementById('applyPointsToggle')?.checked,
+            paymentMethod: document.getElementById('paymentMethodSelect')?.value || 'cash',
+            cash: cashInput ? cashInput.value : '',
+            quickCash: quickCashChoice,
+            onlineOrderId: currentOnlineOrderId,
+            onlineOrderPay: currentOnlineOrderPay
+        };
+        localStorage.setItem(POS_DRAFT_KEY, JSON.stringify(draft));
+    } catch (err) {
+        console.warn('Could not save the cart in this browser.', err);
+    }
+}
+
+function restorePosDraft() {
+    let draft = null;
+    try {
+        draft = JSON.parse(localStorage.getItem(POS_DRAFT_KEY) || 'null');
+    } catch (err) {
+        draft = null;
+    }
+    posDraftReady = true;
+    if (!draft || !Array.isArray(draft.items) || !draft.items.length) return;
+
+    cart = draft.items.filter((item) => item && item.lot_id != null && Number(item.qty) > 0).map((item) => ({
+        drug_id: item.drug_id,
+        lot_id: item.lot_id,
+        name: item.name || 'Item',
+        price: Number(item.price) || 0,
+        qty: Math.max(1, parseInt(item.qty, 10) || 1),
+        max_stock: parseInt(item.max_stock, 10) || 0,
+        category: item.category || '',
+        promo_name: item.promo_name || null,
+        promo_discount_per_unit: Number(item.promo_discount_per_unit) || 0
+    }));
+    if (!cart.length) return;
+
+    if (draft.customer && draft.customer.customer_id != null) {
+        selectedCustomer = {
+            customer_id: draft.customer.customer_id,
+            name: draft.customer.name || 'Customer',
+            loyalty_points: parseFloat(draft.customer.loyalty_points) || 0
+        };
+        refreshCustomerSegment();
+        const pointsSpan = document.getElementById('availablePointsDisplay');
+        if (pointsSpan) pointsSpan.textContent = selectedCustomer.loyalty_points.toFixed(2);
+    }
+    currentOnlineOrderId = draft.onlineOrderId != null ? draft.onlineOrderId : null;
+    currentOnlineOrderPay = draft.onlineOrderPay || null;
+
+    const scPwdToggle = document.getElementById('scPwdToggle');
+    if (scPwdToggle) scPwdToggle.checked = !!draft.scPwd;
+    if (discountInput && draft.discountPercent != null) discountInput.value = draft.discountPercent;
+    const applyPointsToggle = document.getElementById('applyPointsToggle');
+    if (applyPointsToggle) applyPointsToggle.checked = !!draft.applyPoints;
+
+    const paySelect = document.getElementById('paymentMethodSelect');
+    if (paySelect && ['cash', 'gcash', 'maya'].includes(draft.paymentMethod)) {
+        paySelect.value = draft.paymentMethod;
+    }
+    quickCashChoice = draft.quickCash || null;
+    updateCart();
+    if (quickCashChoice !== 'exact' && cashInput) cashInput.value = draft.cash || '';
+    document.querySelectorAll('#posCashQuick [data-cash]').forEach((btn) => {
+        btn.classList.toggle('is-active', !!quickCashChoice && btn.getAttribute('data-cash') === String(quickCashChoice));
+    });
+    if (typeof togglePaymentMethodFields === 'function') togglePaymentMethodFields();
+    syncCartStockVisuals();
+}
+
+function syncCartStockVisuals() {
+    if (!cart.length || !document.querySelector('.add-btn')) return;
+    let changed = false;
+    const notes = [];
+    const next = [];
+    cart.forEach((item) => {
+        const lotId = String(item.lot_id).replace(/"/g, '');
+        const btn = document.querySelector('.add-btn[data-lot-id="' + lotId + '"]');
+        if (!btn) {
+            notes.push((item.name || 'An item') + ' is no longer on the shelf and was removed.');
+            changed = true;
+            return;
+        }
+        const stock = parseInt(btn.dataset.stock, 10) || 0;
+        item.max_stock = stock;
+        const price = parseFloat(btn.dataset.price);
+        if (Number.isFinite(price) && Math.abs(price - Number(item.price)) > 0.001) {
+            item.price = price;
+            changed = true;
+        }
+        if (btn.dataset.name) item.name = btn.dataset.name;
+        if (stock <= 0) {
+            notes.push(item.name + ' is out of stock and was removed.');
+            changed = true;
+            return;
+        }
+        if (item.qty > stock) {
+            notes.push(item.name + ' was reduced to ' + stock + ' in stock.');
+            item.qty = stock;
+            changed = true;
+        }
+        next.push(item);
+        const row = btn.closest('tr');
+        if (row && row.cells.length > 5) row.cells[5].textContent = String(stock - item.qty);
+        const gone = item.qty >= stock;
+        btn.disabled = gone;
+        btn.style.opacity = gone ? '0.5' : '1';
+        btn.style.cursor = gone ? 'not-allowed' : 'pointer';
+    });
+    cart = next;
+    if (changed) {
+        updateCart();
+        if (notes.length) alert(notes.join('\n'));
+    }
 }
 
 
@@ -1884,6 +2066,11 @@ document.addEventListener("DOMContentLoaded", function() {
     // ===== INPUT EVENT BINDING =====
     discountInput.addEventListener("input", updateCart);
     cashInput.addEventListener("input", sanitizeCashInput);
+    document.getElementById('posCashQuick')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-cash]');
+        if (!btn) return;
+        applyQuickCash(btn.getAttribute('data-cash'));
+    });
     cashInput.addEventListener("keydown", function (e) {
         if (e.key === '-' || e.key === 'Minus' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
     });
@@ -1907,6 +2094,8 @@ document.addEventListener("DOMContentLoaded", function() {
     // ===== LOYALTY POINTS TOGGLE =====
     const applyPointsToggle = document.getElementById("applyPointsToggle");
     if (applyPointsToggle) applyPointsToggle.addEventListener("change", updateCart);
+
+    restorePosDraft();
 
     loadTransactionHistory();
 
@@ -2070,6 +2259,7 @@ document.querySelectorAll(".add-btn").forEach(btn => {
         }
     });
 });
+        syncCartStockVisuals();
     })
     .catch(err => console.error("Error loading products:", err));
 }

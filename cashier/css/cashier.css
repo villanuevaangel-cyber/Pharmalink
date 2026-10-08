@@ -266,6 +266,19 @@
 #pos-page .pos-sum-line{
     display:flex; justify-content:space-between; color:#4b5563; font-size:.88rem; margin:4px 0;
 }
+#pos-page .pos-cash-quick{
+    display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px;
+}
+#pos-page .pos-cash-quick button{
+    width:auto !important; flex:1 1 72px; margin:0 !important; height:34px;
+    padding:0 8px !important; font-size:12px !important; font-weight:700;
+    background:#fff !important; color:#1E3A34 !important;
+    border:1px solid #FFE3B3 !important; border-radius:8px !important;
+    box-shadow:none !important; justify-content:center;
+}
+#pos-page .pos-cash-quick button.is-active{
+    background:#4BAA8B !important; color:#fff !important; border-color:#4BAA8B !important;
+}
 #pos-page .pos-discount-line{ color:#dc2626; font-size:.88rem; margin:4px 0; }
 #pos-page #pointsDiscountRow{ color:#1E3A34; font-size:.88rem; margin:4px 0; }
 #pos-page .pos-pay-qr-box{

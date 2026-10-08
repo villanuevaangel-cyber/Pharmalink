@@ -61,6 +61,10 @@ onCustomerReady(function() {
     if (categoryFilter) {
         categoryFilter.addEventListener('change', applyProductFilters);
     }
+    const productSort = document.getElementById('productSort');
+    if (productSort) {
+        productSort.addEventListener('change', applyProductFilters);
+    }
     if (closeReceiptModal) {
         closeReceiptModal.addEventListener('click', () => {
             receiptModal.style.display = 'none';
@@ -257,8 +261,13 @@ if (target === 'orders') {
                     btn.setAttribute('data-stock', stock);
 
                     const card = btn.closest('.product');
-                    const stockLabel = card ? card.querySelector('p[style*="color:#888"]') : null;
-                    if (stockLabel) stockLabel.textContent = stock > 0 ? `${stock} in stock` : 'Out of stock';
+                    if (card) card.setAttribute('data-stock', String(stock));
+                    const stockLabel = card ? card.querySelector('.shop-stock') : null;
+                    if (stockLabel) {
+                        stockLabel.textContent = stock > 0 ? `${stock} in stock` : 'Out of stock';
+                        stockLabel.classList.remove('shop-stock-ok', 'shop-stock-low', 'shop-stock-out');
+                        stockLabel.classList.add(stock <= 0 ? 'shop-stock-out' : (stock <= 10 ? 'shop-stock-low' : 'shop-stock-ok'));
+                    }
 
                     if (stock <= 0) {
                         btn.disabled = true;
@@ -270,6 +279,7 @@ if (target === 'orders') {
                         btn.style.cursor = 'pointer';
                     }
                 });
+                applyProductFilters();
             })
             .catch(err => console.error('Product stock refresh failed:', err));
     };
@@ -398,13 +408,16 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
             const cls = String(row.order_status || '').toLowerCase().replace(/\s+/g, '-');
             const pay = orderPayText(row);
             const kind = row.kind === 'walkin' ? 'walkin' : 'online';
+            const pendingCancel = kind === 'online' && String(row.order_status || '').toLowerCase() === 'pending'
+                ? `<button type="button" class="mo-cancel" onclick="cancelPendingOrder(${Number(row.order_id)})">Cancel</button>`
+                : '';
             return `<tr>
                 <td><strong>#${row.order_id}</strong></td>
                 <td>${row.order_date || '-'}</td>
                 <td><span class="mo-pay">${pay}</span></td>
                 <td><span class="status ${cls}">${row.order_status || '-'}</span></td>
                 <td class="mo-amt-cell">₱${row.total_amount}</td>
-                <td><button type="button" class="mo-view" onclick="showOrderDetails(${row.order_id}, '${kind}')"><i class="fas fa-eye"></i> View</button></td>
+                <td><button type="button" class="mo-view" onclick="showOrderDetails(${row.order_id}, '${kind}')"><i class="fas fa-eye"></i> View</button>${pendingCancel}</td>
             </tr>`;
         }).join('');
     }
@@ -517,10 +530,42 @@ function displayOrderDetails(data) {
                 <span>₱${calculatedTotal.toFixed(2)}</span>
             </div>
             <p class="mo-detail-note">${orderPaymentNote(data)}</p>
+            ${String(data.kind || '') !== 'walkin' && String(data.status || '').toLowerCase() === 'pending'
+                ? `<div class="mo-detail-actions"><button type="button" class="mo-cancel" onclick="cancelPendingOrder(${Number(data.order_id)})">Cancel order</button><p>You can cancel while this order is still pending. The items go back in stock.</p></div>`
+                : ''}
             <div class="mo-pay-qr" id="orderPayBox"></div>
         `;
         startOrderPayment(data);
     }
+
+    window.cancelPendingOrder = function(orderId) {
+        const ask = typeof window.phConfirm === 'function'
+            ? window.phConfirm('Cancel this pending order? The items go back in stock.', 'Cancel order')
+            : Promise.resolve(window.confirm('Cancel this pending order? The items go back in stock.'));
+        Promise.resolve(ask).then((ok) => {
+            if (!ok) return;
+            fetch('/api/customer/orders/' + encodeURIComponent(orderId) + '/cancel', {
+                method: 'POST',
+                credentials: 'same-origin',
+            })
+                .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+                .then(({ ok, data }) => {
+                    if (!ok || !data.success) {
+                        alert((data && data.message) || 'Could not cancel this order.');
+                        return;
+                    }
+                    alert(data.message || 'Order cancelled. The items are back in stock.');
+                    if (orderDetailsModal) orderDetailsModal.style.display = 'none';
+                    const type = document.querySelector('.order-type-tab.active')?.dataset.type || 'all';
+                    const start = document.getElementById('order_start_date')?.value || '';
+                    const end = document.getElementById('order_end_date')?.value || '';
+                    if (typeof window.loadCustomerOrders === 'function') window.loadCustomerOrders(type, start, end);
+                    if (typeof window.loadHomeStats === 'function') window.loadHomeStats();
+                    if (typeof window.refreshProductStock === 'function') window.refreshProductStock();
+                })
+                .catch(() => alert('Could not cancel this order.'));
+        });
+    };
 
     let orderPayTimer = null;
 
@@ -1040,7 +1085,24 @@ function displayOrderDetails(data) {
         if (!searchInput || !categoryFilter || !productGrid) return;
         const search = searchInput.value.toLowerCase().trim();
         const selectedCategory = categoryFilter.value;
-        const products = productGrid.querySelectorAll('.product');
+        const sort = document.getElementById('productSort')?.value || 'name-asc';
+        const products = Array.from(productGrid.querySelectorAll('.product'));
+
+        products.sort((a, b) => {
+            const nameA = (a.getAttribute('data-sort-name') || '').toLowerCase();
+            const nameB = (b.getAttribute('data-sort-name') || '').toLowerCase();
+            const priceA = parseFloat(a.getAttribute('data-price')) || 0;
+            const priceB = parseFloat(b.getAttribute('data-price')) || 0;
+            const stockA = parseInt(a.getAttribute('data-stock'), 10) || 0;
+            const stockB = parseInt(b.getAttribute('data-stock'), 10) || 0;
+            if (sort === 'name-desc') return nameB.localeCompare(nameA);
+            if (sort === 'price-asc') return priceA - priceB || nameA.localeCompare(nameB);
+            if (sort === 'price-desc') return priceB - priceA || nameA.localeCompare(nameB);
+            if (sort === 'stock-asc') return stockA - stockB || nameA.localeCompare(nameB);
+            if (sort === 'stock-desc') return stockB - stockA || nameA.localeCompare(nameB);
+            return nameA.localeCompare(nameB);
+        });
+        products.forEach((product) => productGrid.appendChild(product));
 
         products.forEach(product => {
             const productCategory = product.getAttribute('data-category') || '';
@@ -1078,6 +1140,7 @@ function displayOrderDetails(data) {
     // Initial Load
     updateCartPanel();
     loadHomeStats();
+    applyProductFilters();
 
     // FILE: customer.js (Sa dulo ng DOMContentLoaded block)
 
