@@ -746,6 +746,12 @@ function refreshCustomerSegment() {
         return;
     }
     selectedCustomerSegment = segmentByCustomer[String(selectedCustomer.customer_id)] || '';
+    const span = document.getElementById('selectedCustomer');
+    if (span && selectedCustomer.name) {
+        span.textContent = selectedCustomerSegment
+            ? selectedCustomer.name + ' · ' + selectedCustomerSegment
+            : selectedCustomer.name;
+    }
 }
 
 function loadCustomerSegments() {
@@ -1365,6 +1371,7 @@ function sanitizeCashInput(fromQuick) {
     if (cashInput.value !== '' && !isNaN(n) && n < 0) cashInput.value = '0';
     if (fromQuick !== true) clearQuickCashChoice();
     calculateChange();
+    savePosDraft();
 }
 
 // Toggles between the Cash/Change fields and the Reference-number field
@@ -1387,6 +1394,7 @@ function togglePaymentMethodFields() {
         methodLabel.textContent = labels[method] || 'e-wallet';
     }
     calculateChange();
+    savePosDraft();
 }
 
 window.removeItem = function(index) {
@@ -1556,6 +1564,151 @@ cartTable.innerHTML += row;
     }
 
     calculateChange();
+    savePosDraft();
+}
+
+const POS_DRAFT_KEY = 'pharmalink.pos.cart';
+let posDraftReady = false;
+
+function savePosDraft() {
+    if (!posDraftReady) return;
+    try {
+        if (!cart.length) {
+            localStorage.removeItem(POS_DRAFT_KEY);
+            return;
+        }
+        const draft = {
+            items: cart.map((item) => ({
+                drug_id: item.drug_id,
+                lot_id: item.lot_id,
+                name: item.name,
+                price: item.price,
+                qty: item.qty,
+                max_stock: item.max_stock,
+                category: item.category || '',
+                promo_name: item.promo_name || null,
+                promo_discount_per_unit: item.promo_discount_per_unit || 0
+            })),
+            customer: selectedCustomer ? {
+                customer_id: selectedCustomer.customer_id,
+                name: selectedCustomer.name,
+                loyalty_points: selectedCustomer.loyalty_points
+            } : null,
+            discountPercent: discountInput ? discountInput.value : '0',
+            scPwd: !!document.getElementById('scPwdToggle')?.checked,
+            applyPoints: !!document.getElementById('applyPointsToggle')?.checked,
+            paymentMethod: document.getElementById('paymentMethodSelect')?.value || 'cash',
+            cash: cashInput ? cashInput.value : '',
+            quickCash: quickCashChoice,
+            onlineOrderId: currentOnlineOrderId,
+            onlineOrderPay: currentOnlineOrderPay
+        };
+        localStorage.setItem(POS_DRAFT_KEY, JSON.stringify(draft));
+    } catch (err) {
+        console.warn('Could not save the cart in this browser.', err);
+    }
+}
+
+function restorePosDraft() {
+    let draft = null;
+    try {
+        draft = JSON.parse(localStorage.getItem(POS_DRAFT_KEY) || 'null');
+    } catch (err) {
+        draft = null;
+    }
+    posDraftReady = true;
+    if (!draft || !Array.isArray(draft.items) || !draft.items.length) return;
+
+    cart = draft.items.filter((item) => item && item.lot_id != null && Number(item.qty) > 0).map((item) => ({
+        drug_id: item.drug_id,
+        lot_id: item.lot_id,
+        name: item.name || 'Item',
+        price: Number(item.price) || 0,
+        qty: Math.max(1, parseInt(item.qty, 10) || 1),
+        max_stock: parseInt(item.max_stock, 10) || 0,
+        category: item.category || '',
+        promo_name: item.promo_name || null,
+        promo_discount_per_unit: Number(item.promo_discount_per_unit) || 0
+    }));
+    if (!cart.length) return;
+
+    if (draft.customer && draft.customer.customer_id != null) {
+        selectedCustomer = {
+            customer_id: draft.customer.customer_id,
+            name: draft.customer.name || 'Customer',
+            loyalty_points: parseFloat(draft.customer.loyalty_points) || 0
+        };
+        refreshCustomerSegment();
+        const pointsSpan = document.getElementById('availablePointsDisplay');
+        if (pointsSpan) pointsSpan.textContent = selectedCustomer.loyalty_points.toFixed(2);
+    }
+    currentOnlineOrderId = draft.onlineOrderId != null ? draft.onlineOrderId : null;
+    currentOnlineOrderPay = draft.onlineOrderPay || null;
+
+    const scPwdToggle = document.getElementById('scPwdToggle');
+    if (scPwdToggle) scPwdToggle.checked = !!draft.scPwd;
+    if (discountInput && draft.discountPercent != null) discountInput.value = draft.discountPercent;
+    const applyPointsToggle = document.getElementById('applyPointsToggle');
+    if (applyPointsToggle) applyPointsToggle.checked = !!draft.applyPoints;
+
+    const paySelect = document.getElementById('paymentMethodSelect');
+    if (paySelect && ['cash', 'gcash', 'maya'].includes(draft.paymentMethod)) {
+        paySelect.value = draft.paymentMethod;
+    }
+    quickCashChoice = draft.quickCash || null;
+    updateCart();
+    if (quickCashChoice !== 'exact' && cashInput) cashInput.value = draft.cash || '';
+    document.querySelectorAll('#posCashQuick [data-cash]').forEach((btn) => {
+        btn.classList.toggle('is-active', !!quickCashChoice && btn.getAttribute('data-cash') === String(quickCashChoice));
+    });
+    if (typeof togglePaymentMethodFields === 'function') togglePaymentMethodFields();
+    syncCartStockVisuals();
+}
+
+function syncCartStockVisuals() {
+    if (!cart.length || !document.querySelector('.add-btn')) return;
+    let changed = false;
+    const notes = [];
+    const next = [];
+    cart.forEach((item) => {
+        const lotId = String(item.lot_id).replace(/"/g, '');
+        const btn = document.querySelector('.add-btn[data-lot-id="' + lotId + '"]');
+        if (!btn) {
+            notes.push((item.name || 'An item') + ' is no longer on the shelf and was removed.');
+            changed = true;
+            return;
+        }
+        const stock = parseInt(btn.dataset.stock, 10) || 0;
+        item.max_stock = stock;
+        const price = parseFloat(btn.dataset.price);
+        if (Number.isFinite(price) && Math.abs(price - Number(item.price)) > 0.001) {
+            item.price = price;
+            changed = true;
+        }
+        if (btn.dataset.name) item.name = btn.dataset.name;
+        if (stock <= 0) {
+            notes.push(item.name + ' is out of stock and was removed.');
+            changed = true;
+            return;
+        }
+        if (item.qty > stock) {
+            notes.push(item.name + ' was reduced to ' + stock + ' in stock.');
+            item.qty = stock;
+            changed = true;
+        }
+        next.push(item);
+        const row = btn.closest('tr');
+        if (row && row.cells.length > 5) row.cells[5].textContent = String(stock - item.qty);
+        const gone = item.qty >= stock;
+        btn.disabled = gone;
+        btn.style.opacity = gone ? '0.5' : '1';
+        btn.style.cursor = gone ? 'not-allowed' : 'pointer';
+    });
+    cart = next;
+    if (changed) {
+        updateCart();
+        if (notes.length) alert(notes.join('\n'));
+    }
 }
 
 
@@ -1942,6 +2095,8 @@ document.addEventListener("DOMContentLoaded", function() {
     const applyPointsToggle = document.getElementById("applyPointsToggle");
     if (applyPointsToggle) applyPointsToggle.addEventListener("change", updateCart);
 
+    restorePosDraft();
+
     loadTransactionHistory();
 
     // Siyasatin ang IDs:
@@ -2104,6 +2259,7 @@ document.querySelectorAll(".add-btn").forEach(btn => {
         }
     });
 });
+        syncCartStockVisuals();
     })
     .catch(err => console.error("Error loading products:", err));
 }
