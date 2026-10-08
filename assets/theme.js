@@ -204,14 +204,165 @@
       .forEach(attachRipple);
   }
 
+  function urlBase64ToUint8Array(base64String) {
+    var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    var raw = atob(base64);
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  function hidePushBanner() {
+    var banner = document.getElementById("phPushBanner");
+    if (banner) banner.remove();
+  }
+
+  function showPushBanner() {
+    if (document.getElementById("phPushBanner") || !document.querySelector(".notification")) return;
+    var bar = document.createElement("div");
+    bar.id = "phPushBanner";
+    bar.className = "ph-push-banner";
+    bar.innerHTML = "<span>Get alerts even when this tab is closed.</span>";
+    var enable = document.createElement("button");
+    enable.type = "button";
+    enable.className = "ph-push-enable";
+    enable.textContent = "Turn on notifications";
+    var later = document.createElement("button");
+    later.type = "button";
+    later.className = "ph-push-later";
+    later.textContent = "Not now";
+    bar.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+    bar.addEventListener("click", function (e) { e.stopPropagation(); });
+    later.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      hidePushBanner();
+    });
+    enable.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (enable.dataset.busy === "1") return;
+      enable.dataset.busy = "1";
+      enable.textContent = "Waiting for Allow...";
+      subscribeForPush(true).then(function (ok) {
+        enable.dataset.busy = "";
+        if (ok) {
+          hidePushBanner();
+          return;
+        }
+        enable.textContent = "Turn on notifications";
+        var note = bar.querySelector("span");
+        if (note && window.Notification && Notification.permission === "denied") {
+          note.textContent = "Notifications are blocked. Click the lock icon beside the address and set Notifications to Allow.";
+        }
+      });
+    });
+    bar.appendChild(enable);
+    bar.appendChild(later);
+    document.body.appendChild(bar);
+  }
+
+  function subscribeForPush(ask) {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      return Promise.resolve(false);
+    }
+    var permission = Notification.permission;
+    if (permission === "denied") return Promise.resolve(false);
+    if (permission !== "granted" && !ask) return Promise.resolve(false);
+    var ready = permission === "granted" ? Promise.resolve("granted") : Notification.requestPermission();
+    return ready.then(function (result) {
+      if (result !== "granted") return false;
+      return navigator.serviceWorker.register("/sw.js").then(function (reg) {
+        return fetch("/api/push/vapid", { credentials: "same-origin" })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (data) {
+            if (!data || !data.publicKey) return false;
+            return reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(data.publicKey)
+            });
+          })
+          .then(function (sub) {
+            if (!sub) return false;
+            return fetch("/api/push/subscribe", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(sub)
+            }).then(function (res) { return res.ok; });
+          });
+      });
+    }).catch(function () { return false; });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     bindAllButtons(document);
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (regs) {
-        regs.forEach(function (reg) { reg.unregister(); });
-      }).catch(function () {});
-    }
+    openPushDestination();
+    if (!("serviceWorker" in navigator) || !document.querySelector(".notification")) return;
+    navigator.serviceWorker.register("/sw.js").catch(function () {});
+    if (!("Notification" in window) || Notification.permission === "denied") return;
+    fetch("/api/push/vapid", { credentials: "same-origin" }).then(function (res) {
+      if (!res.ok) return;
+      if (Notification.permission === "granted") subscribeForPush(false);
+      else showPushBanner();
+    }).catch(function () {});
   });
+
+  function openCustomerOrder(orderId) {
+    var nav = document.querySelector('.nav-item[data-target="orders"]');
+    if (nav) nav.click();
+    if (!orderId) return;
+    var tries = 0;
+    var timer = setInterval(function () {
+      tries += 1;
+      if (typeof window.showOrderDetails === "function") {
+        clearInterval(timer);
+        window.showOrderDetails(orderId);
+      } else if (tries > 25) {
+        clearInterval(timer);
+      }
+    }, 200);
+  }
+
+  function openStaffPush(target, filter) {
+    if (target === "orders" && typeof window.switchPOSMode === "function") {
+      var posNav = document.querySelector('.nav-item[data-page="pos-page"]');
+      if (posNav) posNav.click();
+      setTimeout(function () { window.switchPOSMode("orders"); }, 200);
+      return;
+    }
+    var adminNav = document.querySelector('.nav-item[data-target="' + target + '"]');
+    if (adminNav) {
+      adminNav.click();
+      if (target === "inventory" && filter && typeof window.applyInventoryCardFilter === "function") {
+        setTimeout(function () { window.applyInventoryCardFilter(filter); }, 350);
+      }
+    }
+  }
+
+  function openPushDestination(detail) {
+    var params = new URLSearchParams(window.location.search);
+    var notice = detail && detail.target ? "" : (params.get("notice") || "");
+    var orderId = detail && detail.orderId ? Number(detail.orderId) : Number(params.get("order") || 0);
+    var target = (detail && detail.target) || "";
+    var filter = (detail && detail.filter) || params.get("filter") || "";
+    if (!target && (notice === "order" || notice === "orders")) target = "orders";
+    if (!target && filter && window.location.hash.indexOf("inventory") !== -1) target = "inventory";
+    if (document.querySelector('.nav-item[data-target="orders"]') && (notice === "order" || orderId)) {
+      openCustomerOrder(orderId);
+      return;
+    }
+    if (target) openStaffPush(target, filter);
+  }
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", function (event) {
+      var data = event.data || {};
+      if (data.type !== "pharmalink-push") return;
+      openPushDestination(data);
+    });
+  }
 
   // Re-bind when the app injects new DOM (common in these SPA-style pages)
   const observer = new MutationObserver((mutations) => {
@@ -270,6 +421,7 @@
       if (type === 'out_of_stock' || type === 'out') return 'fa-circle-xmark';
       if (type === 'auto_po') return 'fa-cart-plus';
       if (type === 'online_order') return 'fa-bag-shopping';
+      if (type === 'order_paid') return 'fa-circle-check';
       if (type === 'expired') return 'fa-ban';
       return 'fa-triangle-exclamation';
     }
@@ -355,6 +507,7 @@
       if (type === 'expiring_90') return 'Near expiry (90 days)';
       if (type === 'auto_po') return 'Automatic purchase order';
       if (type === 'online_order') return 'New online order';
+      if (type === 'order_paid') return 'Payment received';
       if (raw && raw.toLowerCase() !== 'out' && raw.toLowerCase() !== 'low') return raw;
       return 'Alert';
     }

@@ -166,6 +166,11 @@ def _open_pool() -> None:
             ensure_checkout_rates(conn)
         except Exception:
             conn.rollback()
+        try:
+            from app.push import ensure_push_schema
+            ensure_push_schema(conn)
+        except Exception:
+            conn.rollback()
     finally:
         _pool.putconn(conn)
 

@@ -194,6 +194,7 @@ def _upsert_alert(cur, alert_type: str, ref_key: str, severity: str, title: str,
             """,
             (severity, title, message, existing["alert_id"]),
         )
+        _push_staff_alert(alert_type, title, message)
         return True
     alert_id = next_id(cur, "system_alerts", "alert_id")
     cur.execute(
@@ -203,7 +204,33 @@ def _upsert_alert(cur, alert_type: str, ref_key: str, severity: str, title: str,
         """,
         (alert_id, alert_type, severity, title, message, ref_key),
     )
+    _push_staff_alert(alert_type, title, message)
     return True
+
+
+_PUSH_TITLES = {
+    "expired": "Expired lot",
+    "expiring": "Near expiry",
+    "expiring_30": "Near expiry (30 days)",
+    "expiring_90": "Near expiry (90 days)",
+    "low": "Low stock",
+    "low_stock": "Low stock",
+    "out": "Out of stock",
+    "out_of_stock": "Out of stock",
+    "auto_po": "Automatic purchase order",
+    "online_order": "New online order",
+    "order_paid": "Payment received",
+}
+
+
+def _push_staff_alert(alert_type: str, title: str, message: str) -> None:
+    friendly = _PUSH_TITLES.get((alert_type or "").lower())
+    shown = friendly or title or "PharmaLink"
+    try:
+        from app.push import queue_staff_push
+        queue_staff_push(shown, message, alert_type)
+    except Exception:
+        pass
 
 
 def sync_all_stock_status(cur) -> None:
@@ -308,7 +335,8 @@ def scan_stock_alerts(cur) -> int:
                 f"(min {int(row['minimum_stock'] or 0)})."
             )
             severity = "warning"
-        if _upsert_alert(cur, status, f"drug:{row['drug_id']}", severity, status.replace("_", " ").title(), msg):
+        title = "Out of stock" if status == "out" else "Low stock"
+        if _upsert_alert(cur, status, f"drug:{row['drug_id']}", severity, title, msg):
             created += 1
     return created
 
