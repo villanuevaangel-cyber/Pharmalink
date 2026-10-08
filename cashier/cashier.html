@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
     <link rel="stylesheet" href="/assets/theme.css?v=push3">
-    <link rel="stylesheet" href="/cashier/css/cashier.css?v=cash-quick1">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=dash-orders1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -156,15 +156,14 @@
 </div>
 
         <div class="table-card">
-            <h3>Pending Prescriptions</h3>
+            <h3>Pending Orders</h3>
             <div class="table-wrapper">
                 <table>
                     <thead>
-                        <tr><th>Patient</th><th>Medicine</th><th>Status</th><th>Action</th></tr>
+                        <tr><th>Customer</th><th>Medicine</th><th>Status</th><th>Action</th></tr>
                     </thead>
-                    <tbody>
-                        <tr><td>John Doe</td><td>Amoxicillin</td><td><span class="status pending">Pending</span></td><td><button type="button" class="btn-process"><i class="fas fa-check"></i> Process</button></td></tr>
-                        <tr><td>Jane Smith</td><td>Paracetamol</td><td><span class="status in-progress">In Progress</span></td><td><button type="button" class="btn-complete"><i class="fas fa-check-double"></i> Complete</button></td></tr>
+                    <tbody id="dashPendingOrdersBody">
+                        <tr><td colspan="4" class="cs-empty">Loading orders...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -881,31 +880,85 @@ function onlinePayLabel(order) {
     return name + (String(order.payment_status || '').toLowerCase() === 'paid' ? ' · Paid' : ' · Unpaid');
 }
 
+function dashEsc(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+function renderDashPendingOrders(orders) {
+    const body = document.getElementById('dashPendingOrdersBody');
+    if (!body) return;
+    if (!orders || !orders.length) {
+        body.innerHTML = '<tr><td colspan="4" class="cs-empty">No pending online orders.</td></tr>';
+        return;
+    }
+    body.innerHTML = orders.map((order) => {
+        const statusClass = String(order.status_class || '');
+        const ready = statusClass.includes('ready');
+        const orderId = Number(order.order_id);
+        const action = ready
+            ? `<button type="button" class="btn-complete" onclick="completeDashOrder(${orderId})"><i class="fas fa-check-double"></i> Complete</button>`
+            : `<button type="button" class="btn-process" onclick="reviewOrder(${orderId})"><i class="fas fa-check"></i> Process</button>`;
+        return `<tr>
+            <td>${dashEsc(order.customer_name)}<div class="cs-order-id">${dashEsc(order.display_id)}</div></td>
+            <td>${dashEsc(order.medicines || '—')}</td>
+            <td><span class="status ${dashEsc(statusClass)}">${dashEsc(order.status)}</span></td>
+            <td>${action}</td>
+        </tr>`;
+    }).join('');
+}
+
+window.completeDashOrder = function(orderId) {
+    const nav = document.querySelector('.nav-item[data-page="pos-page"]');
+    const grid = document.getElementById('posInventoryBody');
+    const stamp = grid ? (grid.dataset.loaded || '') : '';
+    if (nav) nav.click();
+    const started = Date.now();
+    const waitForProducts = function() {
+        const body = document.getElementById('posInventoryBody');
+        const ready = body && body.dataset.loaded && body.dataset.loaded !== stamp && body.querySelector('.add-btn');
+        if (ready || Date.now() - started > 8000) {
+            loadOrderToCart(orderId);
+            return;
+        }
+        setTimeout(waitForProducts, 100);
+    };
+    setTimeout(waitForProducts, 40);
+};
+
 function fetchOnlineOrders() {
     const onlineOrdersBody = document.getElementById('onlineOrdersBody');
     const pendingOrdersBadge = document.getElementById('pendingOrdersBadge');
-    
-    if (!onlineOrdersBody || !pendingOrdersBadge) return; 
+    const dashBody = document.getElementById('dashPendingOrdersBody');
 
-    // Display loading message
-    onlineOrdersBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">' + 
-                                 '<i class="fas fa-spinner fa-spin"></i> Loading online orders...</td></tr>';
-    
-    // Tiyakin na tama ang path papunta sa PHP file
-    fetch("/api/cashier/online-orders") 
+    if (!onlineOrdersBody && !dashBody) return;
+
+    if (onlineOrdersBody) {
+        onlineOrdersBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">' +
+                                     '<i class="fas fa-spinner fa-spin"></i> Loading online orders...</td></tr>';
+    }
+    if (dashBody) {
+        dashBody.innerHTML = '<tr><td colspan="4" class="cs-empty">Loading orders...</td></tr>';
+    }
+
+    fetch("/api/cashier/online-orders")
         .then(res => res.json())
         .then(data => {
-            onlineOrdersBody.innerHTML = ""; // Clear loading message
-            
-            if (data.success && data.orders.length > 0) {
+            const orders = data.success && Array.isArray(data.orders) ? data.orders : [];
+            renderDashPendingOrders(orders);
+            if (!onlineOrdersBody) return;
+            onlineOrdersBody.innerHTML = "";
+
+            if (orders.length > 0) {
                 let pendingCount = 0;
-                
-                data.orders.forEach(order => {
+
+                orders.forEach(order => {
                     const statusClass = order.status_class;
                     let actionButton = '';
-                    
+
                     if (statusClass.includes('pending') || statusClass.includes('processing')) {
-                        actionButton = `<button class="btn-review" onclick="reviewOrder('${order.order_id}')" 
+                        actionButton = `<button class="btn-review" onclick="reviewOrder('${order.order_id}')"
                                         style="background:#f0ad4e; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">
                                             Review
                                         </button>`;
@@ -915,7 +968,7 @@ function fetchOnlineOrders() {
                                         style="background:#5cb85c; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">
                                             Load to Cart
                                         </button>`;
-                        pendingCount++; 
+                        pendingCount++;
                     } else {
                         actionButton = '-';
                     }
@@ -931,24 +984,29 @@ function fetchOnlineOrders() {
                     `;
                     onlineOrdersBody.innerHTML += row;
                 });
-                
-                // Update Badge
-                if (pendingCount > 0) {
-                    pendingOrdersBadge.textContent = pendingCount;
-                    pendingOrdersBadge.style.display = 'inline';
-                } else {
-                    pendingOrdersBadge.style.display = 'none';
-                }
 
+                if (pendingOrdersBadge) {
+                    if (pendingCount > 0) {
+                        pendingOrdersBadge.textContent = pendingCount;
+                        pendingOrdersBadge.style.display = 'inline';
+                    } else {
+                        pendingOrdersBadge.style.display = 'none';
+                    }
+                }
             } else {
                 onlineOrdersBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px;">No online orders currently pending or ready.</td></tr>`;
-                pendingOrdersBadge.style.display = 'none';
+                if (pendingOrdersBadge) pendingOrdersBadge.style.display = 'none';
             }
         })
         .catch(err => {
             console.error("Error fetching online orders:", err);
-            onlineOrdersBody.innerHTML = `<tr><td colspan="5" style="color:red; text-align: center;">Failed to load online orders.</td></tr>`;
-            pendingOrdersBadge.style.display = 'none';
+            if (onlineOrdersBody) {
+                onlineOrdersBody.innerHTML = `<tr><td colspan="5" style="color:red; text-align: center;">Failed to load online orders.</td></tr>`;
+            }
+            if (dashBody) {
+                dashBody.innerHTML = '<tr><td colspan="4" class="cs-empty">Failed to load online orders.</td></tr>';
+            }
+            if (pendingOrdersBadge) pendingOrdersBadge.style.display = 'none';
         });
 }
 
@@ -2125,7 +2183,8 @@ console.log("Dashboard Inputs Found. Setting defaults...");
         
         // 2. Initial load ng dashboard data
         console.log("Calling handleDateFilter() for initial load...");
-        handleDateFilter(); 
+        handleDateFilter();
+        fetchOnlineOrders(); 
 
         // 3. Add listener for the button
         applyFilterBtn.addEventListener('click', handleDateFilter);
@@ -2260,6 +2319,7 @@ document.querySelectorAll(".add-btn").forEach(btn => {
     });
 });
         syncCartStockVisuals();
+        if (tbody) tbody.dataset.loaded = String(Date.now());
     })
     .catch(err => console.error("Error loading products:", err));
 }
@@ -2767,8 +2827,8 @@ navItems.forEach(item => {
         // ⭐ BAGONG DAGDAG: LOAD DASHBOARD DATA
         else if (target === "dashboard-page") {
             console.log("Dashboard page is now active → loading stats and charts...");
-            // Tiyaking defined ang handleDateFilter() at ang mga input IDs ay tama
-            handleDateFilter(); 
+            handleDateFilter();
+            fetchOnlineOrders();
         }
 
         // 🔧 FIX: the Customer Segmentation charts are NOT built at page

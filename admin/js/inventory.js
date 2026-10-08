@@ -373,6 +373,8 @@
         const proc = String(drug.procurement_type || 'purchase').toLowerCase() === 'consignment' ? 'consignment' : 'purchase';
         const procEl = document.getElementById('new_procurement_type');
         if (procEl && (overwrite || !procEl.value)) procEl.value = proc;
+        const saleEl = document.getElementById('new_sale_class');
+        if (saleEl && drug.sale_class) saleEl.value = drug.sale_class === 'otc' ? 'otc' : 'rx';
         const hint = document.getElementById('new_autofill_hint');
         if (hint) hint.textContent = 'Filled from catalog. Edit dosage if this is a new strength.';
         refreshBrandDatalist(drug.generic_name);
@@ -396,6 +398,7 @@
         const cat = mostCommon(pool.map(d => d.category));
         const form = mostCommon(pool.map(d => d.form));
         const proc = mostCommon(pool.map(d => d.procurement_type || 'purchase')) || 'purchase';
+        const saleClass = mostCommon(pool.map(d => d.sale_class || 'rx')) || 'rx';
         const mins = pool.map(d => Number(d.minimum_stock)).filter(n => Number.isFinite(n));
         const minStock = mins.length ? String(Math.round(mins.reduce((a, b) => a + b, 0) / mins.length)) : '';
         const brands = [...new Set(pool.map(d => d.brand_name).filter(Boolean))];
@@ -407,6 +410,7 @@
             category: cat,
             minimum_stock: minStock,
             procurement_type: proc,
+            sale_class: saleClass,
         };
         fillNewDrugFromRecord(template, false);
         if (hint && (cat || form)) {
@@ -427,6 +431,9 @@
         if (payload.barcode && !/^[A-Za-z0-9\-._]{4,64}$/.test(payload.barcode)) return 'Barcode must be 4-64 letters, numbers, dash, dot, or underscore.';
         if (!payload.procurement_type || !['purchase', 'consignment'].includes(payload.procurement_type)) {
             return 'Choose Purchased or Consignment. It is not set automatically.';
+        }
+        if (!payload.sale_class || !['otc', 'rx'].includes(payload.sale_class)) {
+            return 'Choose OTC or Needs Rx.';
         }
         const dup = masterDrugs.some(d =>
             String(d.generic_name || '').toLowerCase() === payload.generic_name.toLowerCase()
@@ -573,7 +580,7 @@
 
         let rows = masterDrugs.filter(d => {
             if (search) {
-                const hay = [d.generic_name, d.brand_name, d.dosage, d.form, d.category].join(' ').toLowerCase();
+                const hay = [d.generic_name, d.brand_name, d.dosage, d.form, d.category, d.sale_class === 'otc' ? 'otc' : 'needs rx'].join(' ').toLowerCase();
                 if (!hay.includes(search)) return false;
             }
             if (category && category !== 'all' && d.category !== category) return false;
@@ -604,6 +611,7 @@
                 <td>${escapeHtml(d.dosage)}</td>
                 <td>${escapeHtml(d.form)}</td>
                 <td>${escapeHtml(d.category)}${String(d.procurement_type || '') === 'consignment' ? ' <span class="inv-chip">Consignment</span>' : ''}</td>
+                <td><span class="inv-chip">${d.sale_class === 'otc' ? 'OTC' : 'Needs Rx'}</span></td>
                 <td>${d.minimum_stock}</td>
                 <td>${formatCatalogPrice(d.selling_price)}</td>
                 <td class="inv-mono">${escapeHtml(d.barcode) || '-'}</td>
@@ -858,6 +866,8 @@
         document.getElementById('edit_minimum_stock').value = drug.minimum_stock;
         const procEl = document.getElementById('edit_procurement_type');
         if (procEl) procEl.value = drug.procurement_type === 'consignment' ? 'consignment' : 'purchase';
+        const saleEl = document.getElementById('edit_sale_class');
+        if (saleEl) saleEl.value = drug.sale_class === 'otc' ? 'otc' : 'rx';
         const editBarcodeEl = document.getElementById('edit_barcode');
         if (editBarcodeEl) editBarcodeEl.value = drug.barcode || '';
         showModal('editDrugMasterModal');
@@ -873,6 +883,7 @@
             category: pickedCategory('new'),
             minimum_stock: parseInt(document.getElementById('new_minimum_stock').value, 10),
             procurement_type: document.getElementById('new_procurement_type')?.value || '',
+            sale_class: document.getElementById('new_sale_class')?.value || '',
             barcode: (document.getElementById('new_barcode')?.value || '').trim(),
         };
         const err = clientDrugError(payload);
@@ -908,6 +919,7 @@
             category: pickedCategory('edit'),
             minimum_stock: parseInt(document.getElementById('edit_minimum_stock').value, 10),
             procurement_type: document.getElementById('edit_procurement_type')?.value || '',
+            sale_class: document.getElementById('edit_sale_class')?.value || '',
             barcode: (document.getElementById('edit_barcode')?.value || '').trim(),
         };
         const err = clientDrugError(payload);

@@ -166,6 +166,47 @@ def ensure_automation_schema(conn) -> None:
             ADD COLUMN IF NOT EXISTS return_status VARCHAR(20)
             """
         )
+        cur.execute(
+            """
+            ALTER TABLE drugs_master
+            ADD COLUMN IF NOT EXISTS sale_class VARCHAR(10)
+            """
+        )
+        from app.sale_class import classify_sale_class
+
+        cur.execute(
+            """
+            SELECT drug_id, generic_name, dosage, category
+            FROM drugs_master
+            WHERE sale_class IS NULL OR btrim(sale_class) = ''
+            """
+        )
+        for drug_id, generic_name, dosage, category in cur.fetchall():
+            cur.execute(
+                "UPDATE drugs_master SET sale_class = %s WHERE drug_id = %s",
+                (classify_sale_class(generic_name, category, dosage), drug_id),
+            )
+        cur.execute("ALTER TABLE drugs_master ALTER COLUMN sale_class SET DEFAULT 'rx'")
+        cur.execute(
+            """
+            UPDATE drugs_master
+            SET sale_class = 'rx'
+            WHERE sale_class IS NULL OR btrim(sale_class) = ''
+            """
+        )
+        cur.execute("ALTER TABLE drugs_master ALTER COLUMN sale_class SET NOT NULL")
+        cur.execute(
+            """
+            DO $$
+            BEGIN
+                ALTER TABLE drugs_master
+                ADD CONSTRAINT drugs_master_sale_class_chk
+                CHECK (sale_class IN ('otc', 'rx'));
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END $$;
+            """
+        )
     conn.commit()
 
 
