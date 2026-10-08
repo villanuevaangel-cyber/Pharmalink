@@ -16,7 +16,7 @@ from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import session_user_id
 from app.payments import CUSTOMER_EWALLET_KEYS, CUSTOMER_PAYMENT_KEYS, normalize_payment_method
 from app.paymongo import PayMongoError, create_qrph_payment, require_paid_checkout, retrieve_payment
-from app.stock import allocate_expiring_first, drug_id_for_lot, match_prescription_to_stock, sellable_quantity, sync_stock_status_for_drug
+from app.stock import allocate_expiring_first, drug_id_for_lot, match_prescription_to_stock, restore_order_stock, sellable_quantity, sync_stock_status_for_drug
 from app.profile_photos import (
     ALLOWED_EXT,
     customer_photo_url,
@@ -837,6 +837,91 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
         }
     except PayMongoError as exc:
         return JSONResponse({"success": False, "message": str(exc)}, status_code=exc.status_code)
+    except ValueError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
+
+
+def _order_already_sold(cur, order_id: int) -> bool:
+    cur.execute("SAVEPOINT sold_check")
+    try:
+        cur.execute(
+            """
+            SELECT sale_id FROM sales
+            WHERE online_order_id = %s AND LOWER(COALESCE(status, '')) = 'completed'
+            LIMIT 1
+            """,
+            (order_id,),
+        )
+        return cur.fetchone() is not None
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT sold_check")
+        return False
+
+
+@router.post("/orders/{order_id}/cancel")
+def cancel_pending_order(request: Request, order_id: int):
+    customer_id = require_customer(request)
+    if customer_id is None:
+        return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT order_id, customer_id, order_status
+                    FROM customer_orders
+                    WHERE order_id = %s
+                    FOR UPDATE
+                    """,
+                    (order_id,),
+                )
+                order = cur.fetchone()
+                if not order:
+                    return JSONResponse({"success": False, "message": "Order not found."}, status_code=404)
+                if int(order["customer_id"] or 0) != int(customer_id):
+                    return JSONResponse({"success": False, "message": "Order not found."}, status_code=404)
+                status = str(order["order_status"] or "")
+                if status != "Pending":
+                    return JSONResponse(
+                        {"success": False, "message": "Only a pending order can be cancelled."},
+                        status_code=409,
+                    )
+                if _order_already_sold(cur, order_id):
+                    return JSONResponse(
+                        {"success": False, "message": "This order was already sold."},
+                        status_code=409,
+                    )
+                cur.execute(
+                    """
+                    UPDATE customer_orders
+                    SET order_status = 'Cancelled', is_read = 0
+                    WHERE order_id = %s AND order_status = 'Pending'
+                    """,
+                    (order_id,),
+                )
+                if cur.rowcount != 1:
+                    return JSONResponse(
+                        {"success": False, "message": "Only a pending order can be cancelled."},
+                        status_code=409,
+                    )
+                restore_order_stock(cur, order_id)
+                _upsert_alert(
+                    cur,
+                    "online_order",
+                    f"order:{order_id}:cancel",
+                    "info",
+                    "Order cancelled",
+                    f"Customer cancelled order #{order_id}. The items are back in stock.",
+                )
+                write_activity_log(
+                    cur,
+                    "Cancel Order",
+                    f"Customer cancelled pending order #{order_id}. Stock was returned.",
+                    request=request,
+                )
+        return {"success": True, "message": "Order cancelled. The items are back in stock."}
     except ValueError as exc:
         return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
     except Exception as exc:
