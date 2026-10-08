@@ -1442,6 +1442,7 @@
                         <th>Dosage</th>
                         <th>Form</th>
                         <th>Category</th>
+                        <th>Type</th>
                         <th>Min Stock</th>
                         <th>Price</th>
                         <th>Barcode</th>
@@ -3848,6 +3849,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="text" id="new_category_custom" placeholder="New category name" maxlength="60" style="display:none;margin-top:6px;">
                 <label for="new_minimum_stock">Minimum Stock Level:</label>
                 <input type="number" id="new_minimum_stock" min="0" max="100000" step="1" value="20" required>
+                <label for="new_sale_class">Type:</label>
+                <select id="new_sale_class" required>
+                    <option value="otc">OTC</option>
+                    <option value="rx" selected>Needs Rx</option>
+                </select>
+                <p class="barcode-hint">OTC can be sold without a prescription. Needs Rx is for prescription medicines.</p>
                 <label for="new_procurement_type">Procurement:</label>
                 <select id="new_procurement_type" required>
                     <option value="">Select procurement</option>
@@ -3892,6 +3899,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="text" id="edit_category_custom" placeholder="New category name" maxlength="60" style="display:none;margin-top:6px;">
                 <label for="edit_minimum_stock">Minimum Stock Level:</label>
                 <input type="number" id="edit_minimum_stock" min="0" max="100000" step="1" required>
+                <label for="edit_sale_class">Type:</label>
+                <select id="edit_sale_class" required>
+                    <option value="otc">OTC</option>
+                    <option value="rx">Needs Rx</option>
+                </select>
                 <label for="edit_procurement_type">Procurement:</label>
                 <select id="edit_procurement_type" required>
                     <option value="">Select procurement</option>
@@ -4072,7 +4084,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="/admin/js/inventory.js?v=consign-auto1"></script>
+    <script src="/admin/js/inventory.js?v=sale-class1"></script>
     <script src="/admin/js/supplier.js?v=sup-meds4"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {

@@ -16,6 +16,7 @@ from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin
 from app.pricing import reprice_lots_for_category, resolve_selling_price
 from app.profile_photos import resolve_photo_url, staff_photo_url
+from app.sale_class import classify_sale_class
 from app.security import hash_password
 from app.stock import sync_stock_status_for_drug
 from app.validation import (
@@ -36,6 +37,13 @@ MANILA = ZoneInfo("Asia/Manila")
 
 def _manila_today():
     return datetime.now(MANILA).date()
+
+
+def _sale_class(data: dict, generic_name: str, category: str, dosage: str) -> str:
+    raw = str(data.get("sale_class") or "").strip().lower()
+    if raw in {"otc", "rx"}:
+        return raw
+    return classify_sale_class(generic_name, category, dosage)
 
 
 def _unauthorized():
@@ -276,6 +284,7 @@ def list_drugs(request: Request, status: str = "active"):
         SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
                d.minimum_stock, d.cost_price,
                COALESCE(d.procurement_type, 'purchase') AS procurement_type,
+               COALESCE(d.sale_class, 'rx') AS sale_class,
                d.is_active, d.barcode, cm.markup_percent
         FROM drugs_master d
         LEFT JOIN category_markup cm
@@ -323,6 +332,7 @@ async def add_drug(request: Request):
     procurement = str(data.get("procurement_type") or "").strip().lower()
     if procurement not in {"purchase", "consignment"}:
         return {"success": False, "message": "Choose Purchased or Consignment. This is not set automatically."}
+    sale_class = _sale_class(data, generic_name, category, dosage)
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             drug_id = next_id(cur, "drugs_master", "drug_id")
@@ -330,8 +340,8 @@ async def add_drug(request: Request):
             try:
                 cur.execute(
                     """
-                    INSERT INTO drugs_master (drug_id, generic_name, brand_name, dosage, form, category, minimum_stock, procurement_type, barcode)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO drugs_master (drug_id, generic_name, brand_name, dosage, form, category, minimum_stock, procurement_type, barcode, sale_class)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         drug_id,
@@ -343,6 +353,7 @@ async def add_drug(request: Request):
                         int(data.get("minimum_stock") or 0),
                         procurement,
                         barcode,
+                        sale_class,
                     ),
                 )
             except IntegrityError as exc:
@@ -377,13 +388,14 @@ async def update_drug(request: Request):
     procurement = str(data.get("procurement_type") or "").strip().lower()
     if procurement not in {"purchase", "consignment"}:
         return {"success": False, "message": "Choose Purchased or Consignment. This is not set automatically."}
+    sale_class = _sale_class(data, generic_name, category, dosage)
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             try:
                 cur.execute(
                     """
                     UPDATE drugs_master
-                    SET generic_name=%s, brand_name=%s, dosage=%s, form=%s, category=%s, minimum_stock=%s, barcode=%s, procurement_type=%s
+                    SET generic_name=%s, brand_name=%s, dosage=%s, form=%s, category=%s, minimum_stock=%s, barcode=%s, procurement_type=%s, sale_class=%s
                     WHERE drug_id=%s
                     """,
                     (
@@ -395,6 +407,7 @@ async def update_drug(request: Request):
                         int(data.get("minimum_stock") or 0),
                         barcode,
                         procurement,
+                        sale_class,
                         drug_id,
                     ),
                 )
