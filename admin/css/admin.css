@@ -162,7 +162,7 @@
 #dashboard .ad-auto-pill.is-on{ background:#4BAA8B; color:#fff; }
 #dashboard .ad-auto-pill.is-off{ background:#fee2e2; color:#b91c1c; }
 #dashboard .ad-auto-meta{
-  display:grid; grid-template-columns:repeat(2, minmax(140px, 1fr)); gap:8px 20px; flex:1;
+  display:grid; grid-template-columns:repeat(3, minmax(140px, 1fr)); gap:8px 20px; flex:1;
 }
 #dashboard .ad-auto-label{
   display:block; font-size:10px; font-weight:700; letter-spacing:.04em;

@@ -189,7 +189,7 @@ def _upsert_alert(cur, alert_type: str, ref_key: str, severity: str, title: str,
         cur.execute(
             """
             UPDATE system_alerts
-            SET severity = %s, title = %s, message = %s, created_at = NOW()
+            SET severity = %s, title = %s, message = %s, created_at = NOW(), email_sent_at = NULL
             WHERE alert_id = %s
             """,
             (severity, title, message, existing["alert_id"]),
@@ -453,7 +453,18 @@ def compute_reorder_suggestions() -> dict:
                        d.minimum_stock, COALESCE(d.procurement_type, 'purchase') AS procurement_type,
                        COALESCE(stock.on_hand, 0) AS current_stock, COALESCE(recent.sold, 0) AS units_sold_30d,
                        recent_supplier.supplier_id AS suggested_supplier_id,
-                       recent_supplier.supplier_name AS suggested_supplier_name
+                       recent_supplier.supplier_name AS suggested_supplier_name,
+                       recent_supplier.consignment_policy AS supplier_consignment_policy,
+                       COALESCE((
+                           SELECT SUM(il.current_stock)
+                           FROM inventory_lots il
+                           WHERE il.drug_id = d.drug_id
+                             AND il.supplier = recent_supplier.supplier_id
+                             AND il.is_active = 1
+                             AND COALESCE(il.current_stock, 0) > 0
+                             AND il.expiration_date >= CURRENT_DATE
+                             AND il.expiration_date <= CURRENT_DATE + {NEAR_EXPIRY_DAYS} * INTERVAL '1 day'
+                       ), 0) AS soon_expiry_qty
                 FROM drugs_master d
                 LEFT JOIN (
                     SELECT drug_id, SUM(current_stock) AS on_hand
@@ -470,7 +481,7 @@ def compute_reorder_suggestions() -> dict:
                     GROUP BY si.drug_id
                 ) recent ON recent.drug_id = d.drug_id
                 LEFT JOIN LATERAL (
-                    SELECT s.supplier_id, s.supplier_name
+                    SELECT s.supplier_id, s.supplier_name, s.consignment_policy
                     FROM suppliers s
                     WHERE s.supplier_id = COALESCE(
                         (
@@ -514,6 +525,24 @@ def compute_reorder_suggestions() -> dict:
         procurement = str(row.get("procurement_type") or "purchase").lower()
         if procurement not in {"purchase", "consignment"}:
             procurement = "purchase"
+        policy = normalize_consignment_policy(row.get("supplier_consignment_policy"))
+        soon_expiry = int(row.get("soon_expiry_qty") or 0)
+        stock_for_order = current
+        policy_note = ""
+        auto_po = True
+        if procurement == "consignment":
+            if policy == "returnable":
+                stock_for_order = max(0, current - min(soon_expiry, current))
+                policy_note = (
+                    f" Returnable consignment: {soon_expiry} piece(s) expire within {NEAR_EXPIRY_DAYS} days and are not counted as stock to keep."
+                    if soon_expiry
+                    else " Returnable consignment: no near-expiry stock to return, so the order uses stock on hand."
+                )
+            elif policy == "non_returnable":
+                policy_note = " Non-returnable consignment: ordered like a purchase because this stock cannot be returned."
+            else:
+                auto_po = False
+                policy_note = " No consignment policy on the supplier, so this stays a manual purchase order."
         shown_rate = round(avg, 1) if avg >= 1 else round(avg, 2)
         rate_text = f"~{shown_rate}/day"
         forecast_n = int(round(predicted)) if predicted is not None else 0
@@ -525,14 +554,19 @@ def compute_reorder_suggestions() -> dict:
         else:
             signal = ""
         action, qty, reduce_qty, reasoning = "ok", 0, 0, ""
-        below_minimum = minimum > 0 and current <= minimum
-        if below_minimum or (has_demand and current <= reorder_point):
+        below_minimum = minimum > 0 and stock_for_order <= minimum
+        if below_minimum or (has_demand and stock_for_order <= reorder_point):
             action = "increase"
-            qty = max(1, int(math.ceil(target_stock - current)))
+            qty = max(1, int(math.ceil(target_stock - stock_for_order)))
+            counted = (
+                f" Unexpired stock is {current}, and {stock_for_order} of that is counted after the returnable near-expiry stock."
+                if stock_for_order != current
+                else f" Unexpired stock is {current}."
+            )
             reasoning = (
-                f"{signal}. Unexpired stock is {current}. Order {qty} to cover that forecast and still keep the minimum of {minimum}."
+                f"{signal}.{counted} Order {qty} to cover that forecast and still keep the minimum of {minimum}."
                 if has_demand
-                else f"Stock is at or below minimum ({minimum}); no forecasted demand - minimum-buffer refill."
+                else f"Stock counted for reorder is at or below minimum ({minimum}); no forecasted demand - minimum-buffer refill."
             )
         elif has_demand and days_of_stock is not None and days_of_stock > overstock:
             action = "decrease"
@@ -556,6 +590,8 @@ def compute_reorder_suggestions() -> dict:
                 if has_demand
                 else "No recent sales, and stock is within a reasonable range of the minimum."
             )
+        if policy_note:
+            reasoning = f"{reasoning}{policy_note}"
         suggestions.append({
             "drug_id": int(row["drug_id"]),
             "generic_name": row["generic_name"],
@@ -564,6 +600,9 @@ def compute_reorder_suggestions() -> dict:
             "form": row["form"],
             "category": row["category"],
             "procurement_type": procurement,
+            "consignment_policy": policy if procurement == "consignment" else "none",
+            "auto_po": auto_po,
+            "soon_expiry_qty": soon_expiry if procurement == "consignment" and policy == "returnable" else 0,
             "current_stock": current,
             "minimum_stock": minimum,
             "avg_daily_sales": round(avg, 2),
@@ -593,7 +632,7 @@ def compute_reorder_suggestions() -> dict:
             "sales_window_days": window,
             "demand_model": demand_engine,
             "unexpired_stock_only": True,
-            "consignment": "Label only. Qty is not auto-calculated from consignment policy.",
+            "consignment": "Returnable near-expiry stock is left out of the order qty. Non-returnable consignment is ordered like a purchase. A consignment supplier with no policy stays manual.",
         },
         "suggestions": suggestions,
     }
@@ -692,11 +731,12 @@ def create_auto_purchase_orders() -> dict:
         for s in data["suggestions"]
         if s["action"] == "increase"
         and s["suggested_qty"] > 0
-        and str(s.get("procurement_type") or "purchase") != "consignment"
+        and s.get("auto_po", True)
     ]
     notes = (
         "AUTO: generated from the Facebook Prophet demand forecast for the next 30 days. "
-        "Consignment items are excluded - create those POs manually. "
+        "Consignment medicines are included when the supplier is returnable or non-returnable. "
+        "Returnable near-expiry stock is not counted as stock to keep. "
         "Review quantities before sending to the supplier."
     )
     result = create_purchase_orders_from_needs(needs, "System", notes, raise_alerts=True)
@@ -727,39 +767,62 @@ def _admin_emails() -> list[str]:
     return emails
 
 
-def email_alert_digest() -> dict:
+_STOCK_EMAIL_TYPES = (
+    "expired",
+    "expiring",
+    "expiring_30",
+    "expiring_90",
+    "low",
+    "low_stock",
+    "out",
+    "out_of_stock",
+)
+
+
+def email_alert_digest(stock_and_expiry_only: bool = False) -> dict:
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                """
+            sql = """
                 SELECT alert_id, alert_type, severity, title, message, created_at
                 FROM system_alerts
                 WHERE email_sent_at IS NULL
                   AND created_at >= (NOW() - INTERVAL '2 days')
+            """
+            params: tuple = ()
+            if stock_and_expiry_only:
+                sql += " AND alert_type = ANY(%s)"
+                params = (list(_STOCK_EMAIL_TYPES),)
+            sql += """
                 ORDER BY
                     CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
                     created_at DESC
                 LIMIT 80
-                """
-            )
+            """
+            cur.execute(sql, params)
             pending = cur.fetchall()
     if not pending:
-        return {"sent": 0, "alerts": 0}
+        return {"sent": 0, "alerts": 0, "to": _admin_emails()}
     emails = _admin_emails()
     if not emails:
-        return {"sent": 0, "alerts": len(pending), "reason": "no admin email"}
+        return {"sent": 0, "alerts": len(pending), "reason": "no admin email", "to": []}
     items = "".join(
         f"<li><strong>{row['title']}</strong> - {row['message']}</li>" for row in pending
     )
+    if stock_and_expiry_only:
+        intro = "These medicines need attention because stock is low or a lot is near expiry."
+        subject = "PharmaLink: low stock and expiry"
+    else:
+        intro = "PharmaLink ran automated checks (stock, expiry, purchase orders)."
+        subject = "PharmaLink automation alerts"
     html = (
-        "<p>PharmaLink ran automated checks (stock, expiry, purchase orders).</p>"
+        f"<p>{intro}</p>"
         f"<ul>{items}</ul>"
-        "<p>Open the Admin portal to review purchase orders and inventory.</p>"
+        "<p>Open the Admin portal to review inventory and purchase orders.</p>"
     )
     sent = 0
     last_error = None
     for email in emails:
-        result = send_mail(email, "PharmaLink automation alerts", html)
+        result = send_mail(email, subject, html)
         if result.get("success"):
             sent += 1
         else:
@@ -772,7 +835,9 @@ def email_alert_digest() -> dict:
                     "UPDATE system_alerts SET email_sent_at = NOW() WHERE alert_id = ANY(%s)",
                     (ids,),
                 )
-    return {"sent": sent, "alerts": len(pending), "error": last_error}
+    outcome = {"sent": sent, "alerts": len(pending), "error": last_error, "to": emails}
+    _last_run["email"] = {"at": datetime.now(MANILA).isoformat(), **outcome}
+    return outcome
 
 
 def run_hourly_jobs() -> dict:
@@ -783,6 +848,7 @@ def run_hourly_jobs() -> dict:
             result["expired_lots"] = deactivate_expired_lots(cur)
             result["near_expiry_alerts"] = scan_near_expiry(cur)
             result["stock_alerts"] = scan_stock_alerts(cur)
+    result["email"] = email_alert_digest(stock_and_expiry_only=True)
     _last_run["hourly"] = {"at": datetime.now(MANILA).isoformat(), **result}
     logger.info("hourly jobs: %s", result)
     return result
@@ -899,11 +965,36 @@ def run_consignment_cross_check() -> dict:
     }
 
 
+def alert_email_status() -> dict:
+    recipients = _admin_emails()
+    last_sent_at = None
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT MAX(email_sent_at) AS last_sent_at
+                FROM system_alerts
+                WHERE email_sent_at IS NOT NULL
+                  AND alert_type = ANY(%s)
+                """,
+                (list(_STOCK_EMAIL_TYPES),),
+            )
+            row = cur.fetchone()
+            if row and row.get("last_sent_at"):
+                last_sent_at = row["last_sent_at"].isoformat()
+    return {
+        "recipients": recipients,
+        "last_sent_at": last_sent_at,
+        "last_result": _last_run.get("email") or None,
+    }
+
+
 def last_run_status() -> dict:
     return {
         "scheduler": "running" if _scheduler and _scheduler.running else "stopped",
         "timezone": "Asia/Manila",
         "last_run": _last_run,
+        "alert_email": alert_email_status(),
     }
 
 
