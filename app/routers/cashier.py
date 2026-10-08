@@ -647,6 +647,8 @@ def sales_report_detail(request: Request, sale_id: int):
         SELECT s.sale_id, s.transaction_id, s.date_created, s.total_amount, s.subtotal,
                s.discount_amount, s.tax_amount, s.cash_received, s.change_amount,
                s.payment_method, s.status,
+               COALESCE(s.points_redeemed, 0) AS points_redeemed,
+               COALESCE(s.points_discount_value, 0) AS points_discount_value,
                COALESCE(NULLIF(TRIM(CONCAT(c.first_name, ' ', c.last_name)), ''), 'Guest') AS customer_name,
                COALESCE(NULLIF(TRIM(CONCAT(st.first_name, ' ', st.last_name)), ''), 'Staff') AS cashier_name
         FROM sales s
@@ -691,6 +693,8 @@ def sales_report_detail(request: Request, sale_id: int):
             "total_amount": round(float(sale.get("total_amount") or 0), 2),
             "cash_received": round(float(sale.get("cash_received") or 0), 2),
             "change_amount": round(float(sale.get("change_amount") or 0), 2),
+            "points_redeemed": round(float(sale.get("points_redeemed") or 0), 2),
+            "points_discount_value": round(float(sale.get("points_discount_value") or 0), 2),
             "status": sale.get("status") or "completed",
         },
         "items": [

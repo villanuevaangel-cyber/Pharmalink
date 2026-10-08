@@ -524,6 +524,11 @@
 .sr-modal-body p{ margin:4px 0; color:#1E3A34; font-size:.9rem; }
 .sr-modal-body table{ width:100%; border-collapse:collapse; margin-top:10px; }
 .sr-modal-body th, .sr-modal-body td{ padding:8px 6px; border-bottom:1px solid #f3f4f6; text-align:left; font-size:.85rem; }
+.sr-modal-foot{ margin-top:14px; }
+#srReprintBtn{
+    width:auto !important; margin:0 !important; padding:8px 14px !important;
+    font-size:13px !important; box-shadow:none !important;
+}
 @media (max-width: 980px){
     #sales-report-page .sr-toolbar{ grid-template-columns:1fr 1fr; }
 }
