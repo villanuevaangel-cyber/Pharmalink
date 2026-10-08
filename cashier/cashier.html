@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
     <link rel="stylesheet" href="/assets/theme.css?v=push3">
-    <link rel="stylesheet" href="/cashier/css/cashier.css?v=reprint1">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=cash-quick1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -306,6 +306,13 @@
                 <div id="cashPaymentFields">
                     <label>Cash:</label>
                     <input type="number" id="cashInput" placeholder="Enter amount" min="0" step="0.01" inputmode="decimal">
+                    <div class="pos-cash-quick" id="posCashQuick">
+                        <button type="button" data-cash="exact">Exact</button>
+                        <button type="button" data-cash="100">₱100</button>
+                        <button type="button" data-cash="200">₱200</button>
+                        <button type="button" data-cash="500">₱500</button>
+                        <button type="button" data-cash="1000">₱1000</button>
+                    </div>
                     <p class="pos-sum-line">Change: <span id="change">₱0.00</span></p>
                 </div>
                 <div id="ewalletPaymentFields" style="display:none;">
@@ -1010,6 +1017,7 @@ window.clearCart = function() {
     // Reset cash and change inputs
     if (cashInput) cashInput.value = '';
     if (changeDisplay) changeDisplay.textContent = '₱0.00';
+    clearQuickCashChoice();
 
     // Reset payment method back to Cash for the next customer.
     const paymentMethodSelectReset = document.getElementById('paymentMethodSelect');
@@ -1329,13 +1337,33 @@ function startPaymongoCheckout(forceNew) {
         .catch(() => setEwalletStatus('Could not reach PayMongo. Check internet and try again.'));
 }
 
-function sanitizeCashInput() {
+let quickCashChoice = null;
+
+function clearQuickCashChoice() {
+    quickCashChoice = null;
+    document.querySelectorAll('#posCashQuick [data-cash]').forEach((btn) => btn.classList.remove('is-active'));
+}
+
+function applyQuickCash(choice) {
+    if (!cashInput || !totalDisplay) return;
+    quickCashChoice = String(choice);
+    const total = parseFloat(String(totalDisplay.textContent).replace(/[₱,]/g, '')) || 0;
+    const value = quickCashChoice === 'exact' ? total : Number(quickCashChoice);
+    cashInput.value = (Number.isFinite(value) ? value : 0).toFixed(2);
+    document.querySelectorAll('#posCashQuick [data-cash]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-cash') === quickCashChoice);
+    });
+    sanitizeCashInput(true);
+}
+
+function sanitizeCashInput(fromQuick) {
     if (!cashInput) return;
     let raw = String(cashInput.value || '');
     if (raw.indexOf('-') !== -1) raw = raw.replace(/-/g, '');
     cashInput.value = raw;
     const n = parseFloat(cashInput.value);
     if (cashInput.value !== '' && !isNaN(n) && n < 0) cashInput.value = '0';
+    if (fromQuick !== true) clearQuickCashChoice();
     calculateChange();
 }
 
@@ -1514,6 +1542,7 @@ cartTable.innerHTML += row;
     discountApplied.textContent = '₱' + (scDiscount + discountAmount).toFixed(2);
     taxDisplay.textContent = '₱' + taxAmount.toFixed(2);
     totalDisplay.textContent = '₱' + finalTotal.toFixed(2);
+    if (quickCashChoice === 'exact' && cashInput) cashInput.value = finalTotal.toFixed(2);
 
     const pointsDiscountRow = document.getElementById("pointsDiscountRow");
     const pointsDiscountDisplay = document.getElementById("pointsDiscountDisplay");
@@ -1884,6 +1913,11 @@ document.addEventListener("DOMContentLoaded", function() {
     // ===== INPUT EVENT BINDING =====
     discountInput.addEventListener("input", updateCart);
     cashInput.addEventListener("input", sanitizeCashInput);
+    document.getElementById('posCashQuick')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-cash]');
+        if (!btn) return;
+        applyQuickCash(btn.getAttribute('data-cash'));
+    });
     cashInput.addEventListener("keydown", function (e) {
         if (e.key === '-' || e.key === 'Minus' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
     });
