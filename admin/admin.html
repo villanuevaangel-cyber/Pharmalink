@@ -5527,13 +5527,19 @@ document.getElementById('analytics-year')?.addEventListener('change', function (
                     ? (data.result && data.result.hourly && data.result.hourly.consignment)
                     : (data.result && data.result.consignment);
                 if (consign && consign.updated) emailNote += ' Marked ' + consign.updated + ' consignment lot(s).';
-                alert((mode === 'daily' ? 'Auto purchase-order pass finished. Check Purchasing for new Pending POs.' : 'Stock status and expiry scan finished.') + emailNote);
+                let poNote = '';
+                if (mode === 'daily' && data.result && data.result.purchase_orders) {
+                    const pos = data.result.purchase_orders;
+                    if (pos.emailed) poNote += ' Emailed ' + pos.emailed + ' purchase order(s) to the supplier. They stay Pending until you receive the delivery.';
+                    if (pos.not_sent) poNote += ' ' + pos.not_sent + ' purchase order(s) stayed Pending because the email was not sent.';
+                }
+                alert((mode === 'daily' ? 'Auto purchase-order pass finished.' : 'Stock status and expiry scan finished.') + poNote + emailNote);
             })
             .catch(err => alert('Automation error: ' + err.message));
     }
     document.getElementById('runHourlyJobsBtn')?.addEventListener('click', () => runAutomation('hourly'));
     document.getElementById('runDailyJobsBtn')?.addEventListener('click', () => {
-        const msg = 'Create automatic Pending purchase orders from current sales trends? Consignment medicines are included when the supplier is returnable or non-returnable. Existing open POs for the same drugs are skipped.';
+        const msg = 'Create automatic Pending purchase orders from current sales trends and email each supplier? Consignment medicines are included when the supplier is returnable or non-returnable. Existing open POs for the same drugs are skipped. The order stays Pending until you receive the delivery.';
         const go = function (ok) { if (ok) runAutomation('daily'); };
         if (window.phConfirm) window.phConfirm(msg).then(go);
         else go(confirm(msg));
