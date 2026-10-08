@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
     <link rel="stylesheet" href="/assets/theme.css?v=push3">
-    <link rel="stylesheet" href="/cashier/css/cashier.css?v=nav-drawer1">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=reprint1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -528,6 +528,9 @@
             <button type="button" id="srDetailClose" aria-label="Close">&times;</button>
         </div>
         <div id="srDetailBody" class="sr-modal-body"></div>
+        <div class="sr-modal-foot">
+            <button type="button" id="srReprintBtn" disabled><i class="fas fa-print"></i> Reprint receipt</button>
+        </div>
     </div>
 </div>
 
@@ -1955,6 +1958,10 @@ console.log("Dashboard Inputs Found. Setting defaults...");
     document.getElementById('srSearch')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadSalesReport(); });
     document.getElementById('srPrintBtn')?.addEventListener('click', printSalesReport);
     document.getElementById('srDetailClose')?.addEventListener('click', closeSalesReportDetail);
+    document.getElementById('srReprintBtn')?.addEventListener('click', () => {
+        if (!srLoadedDetail) return;
+        reprintSalesReceipt(srLoadedDetail.sale, srLoadedDetail.items);
+    });
     document.getElementById('srDetailModal')?.addEventListener('click', (e) => {
         if (e.target.id === 'srDetailModal') closeSalesReportDetail();
     });
@@ -2953,12 +2960,82 @@ function closeSalesReportDetail() {
     modal.hidden = true;
 }
 
+let srLoadedDetail = null;
+
+function reprintSalesReceipt(sale, items) {
+    const width = 300;
+    const height = 500;
+    const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+    const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+    const printWindow = window.open('', '_blank', 'width=' + width + ',height=' + height + ',left=' + left + ',top=' + top);
+    if (!printWindow) {
+        alert('Allow pop-ups to reprint the receipt.');
+        return;
+    }
+    const method = String(sale.payment_method || 'cash').toLowerCase();
+    const labels = { cash: 'CASH', gcash: 'GCASH', maya: 'MAYA', card: 'CARD', bank: 'BANK TRANSFER' };
+    const methodName = labels[method] || method.toUpperCase();
+    const money = (n) => '₱' + Number(n || 0).toFixed(2);
+    const itemsHtml = (items || []).map((it) => {
+        const qty = Number(it.quantity || 0);
+        const price = Number(it.price || 0);
+        return '<tr>' +
+            '<td style="text-align:left;">' + qty + ' x ' + money(price) + '</td>' +
+            '<td style="text-align:left;">' + srEsc(it.name || 'Item') + '</td>' +
+            '<td style="text-align:right;">' + money(it.subtotal != null ? it.subtotal : price * qty) + '</td>' +
+            '</tr>';
+    }).join('');
+    const points = Number(sale.points_redeemed || 0);
+    const pointsLine = points > 0
+        ? '<tr><td class="right">Points Redeemed:</td><td class="right">' + points.toFixed(2) + ' (' + money(sale.points_discount_value) + ')</td></tr>'
+        : '';
+    const paymentLine = method === 'cash'
+        ? '<tr><td class="right">CASH:</td><td class="right">' + money(sale.cash_received) + '</td></tr>' +
+          '<tr><td class="right">CHANGE:</td><td class="right">' + money(sale.change_amount) + '</td></tr>'
+        : '<tr><td class="right">PAYMENT METHOD:</td><td class="right">' + srEsc(methodName) + '</td></tr>' +
+          (sale.payment_reference ? '<tr><td class="right">REF NO.:</td><td class="right">' + srEsc(sale.payment_reference) + '</td></tr>' : '');
+    const customer = sale.customer_name && sale.customer_name !== 'Guest'
+        ? 'Customer: ' + sale.customer_name
+        : 'Customer: Guest';
+    const receiptHtml = '<html><head><title>Receipt ' + srEsc(sale.transaction_id || '') + '</title>' +
+        '<style>body{font-family:Courier New,Courier,monospace;font-size:11px;margin:0;padding:10px;}' +
+        '.receipt{width:280px;margin:0 auto;}.center{text-align:center;}.right{text-align:right;}' +
+        'table{width:100%;border-collapse:collapse;margin-top:5px;}th,td{padding:2px 0;}' +
+        '.border-top{border-top:1px dashed #000;}.border-bottom{border-bottom:1px dashed #000;}' +
+        '@media print{.no-print{display:none;}}</style></head><body><div class="receipt">' +
+        '<div class="center"><h4>PHARMALINK SYSTEM</h4><p>123 PLP St, Kapasigan, Pasig City<br>TIN: 000-000-000-000</p></div>' +
+        '<div class="border-top"></div>' +
+        '<p>Date: ' + srEsc(sale.date || '') + '</p>' +
+        '<p>Trans ID: ' + srEsc(sale.transaction_id || '') + '</p>' +
+        '<p>' + srEsc(customer) + '</p>' +
+        '<div class="border-bottom"></div>' +
+        '<table><thead><tr><th style="text-align:left;width:30%;">QTY/Price</th><th style="text-align:left;">Description</th><th style="text-align:right;width:25%;">Amount</th></tr></thead><tbody>' +
+        itemsHtml + '</tbody></table><div class="border-top"></div><table>' +
+        '<tr><td class="right">Subtotal:</td><td class="right">' + money(sale.subtotal) + '</td></tr>' +
+        '<tr><td class="right">Discount:</td><td class="right">' + money(sale.discount_amount) + '</td></tr>' +
+        '<tr><td class="right">VAT:</td><td class="right">' + money(sale.tax_amount) + '</td></tr>' +
+        pointsLine +
+        '<tr class="border-top"><td class="right"><strong>TOTAL DUE:</strong></td><td class="right"><strong>' + money(sale.total_amount) + '</strong></td></tr>' +
+        paymentLine +
+        '</table><div class="border-bottom"></div>' +
+        '<div class="center no-print" style="margin-top:20px;">' +
+        '<button onclick="window.print()" style="padding:10px 20px;cursor:pointer;">Print Receipt</button> ' +
+        '<button onclick="window.close()" style="padding:10px 20px;cursor:pointer;">Close</button></div>' +
+        '<div class="center" style="margin-top:10px;"><p>Thank you! Come again.</p></div></div></body></html>';
+    printWindow.document.write(receiptHtml);
+    printWindow.document.close();
+    printWindow.focus();
+}
+
 function openSalesReportDetail(saleId) {
     const modal = document.getElementById('srDetailModal');
     const title = document.getElementById('srDetailTitle');
     const box = document.getElementById('srDetailBody');
+    const reprintBtn = document.getElementById('srReprintBtn');
     if (!modal || !box) return;
     modal.hidden = false;
+    srLoadedDetail = null;
+    if (reprintBtn) reprintBtn.disabled = true;
     if (title) title.textContent = 'Transaction';
     box.innerHTML = '<p>Loading...</p>';
     fetch('/api/cashier/sales-report/' + encodeURIComponent(saleId), { credentials: 'same-origin' })
@@ -2969,6 +3046,8 @@ function openSalesReportDetail(saleId) {
                 return;
             }
             const s = data.sale;
+            srLoadedDetail = { sale: s, items: data.items || [] };
+            if (reprintBtn) reprintBtn.disabled = false;
             if (title) title.textContent = s.transaction_id;
             const itemRows = (data.items || []).map((it) =>
                 '<tr><td>' + srEsc(it.name) + (it.promo_name ? ' <small>' + srEsc(it.promo_name) + '</small>' : '') +
