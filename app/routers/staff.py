@@ -38,7 +38,7 @@ def _staff_nav(atype: str) -> tuple[str, str]:
     t = (atype or "").lower()
     if t == "auto_po":
         return "deliveries", ""
-    if t == "online_order":
+    if t in {"online_order", "order_paid"}:
         return "orders", ""
     if t == "expired":
         return "inventory", "all"
@@ -62,6 +62,8 @@ def _icon_for(atype: str) -> str:
         return "fa-cart-plus"
     if atype == "online_order":
         return "fa-bag-shopping"
+    if atype == "order_paid":
+        return "fa-circle-check"
     if atype == "expired":
         return "fa-ban"
     return "fa-bell"
@@ -78,6 +80,7 @@ _NOTE_TITLES = {
     "out_of_stock": "Out of stock",
     "auto_po": "Automatic purchase order",
     "online_order": "New online order",
+    "order_paid": "Payment received",
 }
 
 

@@ -9,3 +9,4 @@ apscheduler
 rapidocr-onnxruntime
 openpyxl
 fpdf2
+pywebpush

@@ -481,18 +481,49 @@ def _order_for_customer(order_id: int, customer_id: int):
     return header
 
 
-def _mark_order_paid(order_id: int, reference: str) -> None:
+def _mark_order_paid(order_id: int, reference: str, payment_method: str = "") -> None:
+    changed = False
     with get_conn() as conn:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
                 UPDATE customer_orders
                 SET payment_status = 'paid',
                     payment_reference = COALESCE(NULLIF(%s, ''), payment_reference)
                 WHERE order_id = %s
+                  AND COALESCE(payment_status, 'unpaid') <> 'paid'
+                RETURNING order_id, customer_id
                 """,
                 (reference or "", order_id),
             )
+            row = cur.fetchone()
+            changed = bool(row)
+            if changed:
+                label = {"gcash": "GCash", "maya": "Maya"}.get(str(payment_method or "").lower(), "E-wallet")
+                _upsert_alert(
+                    cur,
+                    "order_paid",
+                    f"order:{order_id}:paid",
+                    "info",
+                    "Payment received",
+                    f"{label} payment received for order #{order_id}. It can be released at pickup.",
+                )
+    if not changed:
+        return
+    try:
+        from app.push import queue_customer_push
+        paid = fetch_one("SELECT customer_id FROM customer_orders WHERE order_id = %s", (order_id,))
+        customer_id = int((paid or {}).get("customer_id") or 0)
+        if customer_id:
+            label = {"gcash": "GCash", "maya": "Maya"}.get(str(payment_method or "").lower(), "E-wallet")
+            queue_customer_push(
+                customer_id,
+                f"Payment received for order #{order_id}",
+                f"Your {label} payment was received. You can pick the order up at the store.",
+                order_id,
+            )
+    except Exception:
+        pass
 
 
 def _payment_payload(header: dict, *, qr_image: str = "", message: str = "", expired: bool = False) -> dict:
@@ -529,7 +560,7 @@ def _sync_order_payment(header: dict, *, create: bool) -> dict:
             session = None
         if session and session.get("paid"):
             paid_ref = session.get("reference") or reference
-            _mark_order_paid(int(header["order_id"]), paid_ref)
+            _mark_order_paid(int(header["order_id"]), paid_ref, method)
             header = dict(header)
             header["payment_status"] = "paid"
             header["payment_reference"] = paid_ref
@@ -783,6 +814,17 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
                 if payment_reference:
                     details += f" Paid via {payment_method} ({payment_reference})."
                 write_activity_log(cur, "Online Order", details, request=request)
+
+        try:
+            from app.push import queue_customer_push
+            queue_customer_push(
+                int(customer_id),
+                f"Order #{order_id} received",
+                "The cashier will confirm your order. We will notify you when it is Ready for Pickup.",
+                order_id,
+            )
+        except Exception:
+            pass
 
         import secrets
         request.session["order_token"] = secrets.token_hex(32)
@@ -1041,19 +1083,21 @@ def notifications(request: Request):
         return {"count": 0, "notifications": []}
     rows = fetch_all(
         """
-        SELECT order_id, order_status, order_date
+        SELECT order_id, order_status, order_date, payment_method
         FROM customer_orders
         WHERE customer_id = %s
-          AND (order_status = 'Ready for Pickup' OR order_status = 'Completed')
+          AND order_status IN ('Processing', 'Ready for Pickup', 'Completed', 'Cancelled')
           AND is_read = 0
         ORDER BY order_date DESC
         """,
         (customer_id,),
     )
+    from app.routers.cashier import customer_status_note
+
     notes = [
         {
             "order_id": r["order_id"],
-            "message": f"Order #{r['order_id']} status updated to: {r['order_status']}",
+            "message": f"Order #{r['order_id']}: {customer_status_note(r['order_status'], r.get('payment_method') or '')}",
             "status": r["order_status"],
             "date": _fmt_dt(r["order_date"], "%b %d, %Y %I:%M %p"),
         }

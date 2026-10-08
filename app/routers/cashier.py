@@ -347,7 +347,21 @@ def _order_status_email_html(first_name: str, order_id: int, status: str, total:
     """
 
 
-def _notify_customer_order_status(order_id: int, status: str, email: str, first_name: str, total: float, payment_method: str = "") -> bool:
+def customer_status_note(status: str, payment_method: str = "") -> str:
+    note = _ORDER_STATUS_MAIL.get(status, f"Your order status is now {status}.")
+    if status == "Ready for Pickup" and str(payment_method or "").lower() in CUSTOMER_EWALLET_KEYS:
+        note = "Your order is ready. Open My Orders and scan the QR code to pay. You can pay from home."
+    return note
+
+
+def _notify_customer_order_status(order_id: int, status: str, email: str, first_name: str, total: float, payment_method: str = "", customer_id: int | None = None) -> bool:
+    note = customer_status_note(status, payment_method)
+    if customer_id:
+        try:
+            from app.push import queue_customer_push
+            queue_customer_push(int(customer_id), f"Order #{order_id} is {status}", note, order_id)
+        except Exception:
+            logger.exception("Order %s push failed", order_id)
     address = str(email or "").strip()
     if not address:
         return False
@@ -377,7 +391,7 @@ async def update_order_status(request: Request):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT co.order_status, co.total_amount, co.payment_method, c.email, c.first_name
+                SELECT co.order_status, co.total_amount, co.payment_method, co.customer_id, c.email, c.first_name
                 FROM customer_orders co
                 JOIN customers c ON c.customer_id = co.customer_id
                 WHERE co.order_id = %s
@@ -390,7 +404,7 @@ async def update_order_status(request: Request):
             previous = str(row["order_status"] or "")
             if previous != status:
                 cur.execute(
-                    "UPDATE customer_orders SET order_status = %s WHERE order_id = %s",
+                    "UPDATE customer_orders SET order_status = %s, is_read = 0 WHERE order_id = %s",
                     (status, order_id),
                 )
                 write_activity_log(
@@ -404,6 +418,7 @@ async def update_order_status(request: Request):
                     "first_name": row.get("first_name") or "",
                     "total": float(row.get("total_amount") or 0),
                     "payment_method": row.get("payment_method") or "cash",
+                    "customer_id": row.get("customer_id"),
                 }
     emailed = False
     if recipient:
@@ -414,6 +429,7 @@ async def update_order_status(request: Request):
             recipient["first_name"],
             recipient["total"],
             recipient["payment_method"],
+            recipient.get("customer_id"),
         )
     return {"success": True, "email_sent": emailed}
 
