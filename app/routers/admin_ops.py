@@ -727,6 +727,60 @@ async def email_purchase_order(po_id: int, request: Request):
     }
 
 
+def send_saved_purchase_order(po_id: int, actor: str = "System") -> dict:
+    """Email a saved purchase order. Status stays Pending."""
+    po = fetch_one(
+        """
+        SELECT po.po_id, po.order_date, po.expected_date, po.notes, s.supplier_name, s.email
+        FROM purchase_orders po JOIN suppliers s ON po.supplier_id = s.supplier_id
+        WHERE po.po_id = %s
+        """,
+        (po_id,),
+    )
+    if not po:
+        return {"email_sent": False, "message": "Purchase order not found."}
+    po = _row(po)
+    raw_items = [_row(row) for row in fetch_all(
+        """
+        SELECT poi.drug_id, poi.quantity_ordered, poi.unit_cost
+        FROM purchase_order_items poi
+        WHERE poi.po_id = %s ORDER BY poi.po_item_id ASC
+        """,
+        (po_id,),
+    )]
+    lines, err = _lines_for_items(raw_items)
+    po_number = f"PO-{int(po['po_id']):05d}"
+    if err:
+        log_event("Email Purchase Order", f"Did not email {po_number}. {err}", actor=actor)
+        return {"email_sent": False, "po_number": po_number, "message": f"{po_number} is still Pending. The email was not sent."}
+    payload = _email_preview_payload(
+        po_number,
+        po.get("supplier_name") or "",
+        po.get("email") or "",
+        _date_text(po.get("order_date")),
+        _date_text(po.get("expected_date")),
+        (po.get("notes") or "").strip(),
+        lines,
+    )
+    if not payload.get("can_send"):
+        log_event("Email Purchase Order", f"Did not email {po_number}. Supplier has no email.", actor=actor)
+        return {
+            "email_sent": False,
+            "po_number": po_number,
+            "message": "This supplier has no email. Add it on the supplier record. The purchase order stays Pending.",
+        }
+    sent = send_mail(payload["to"], payload["subject"], payload["html"])
+    if sent.get("success"):
+        log_event("Email Purchase Order", f"Emailed {po_number} to {payload['to']}.", actor=actor)
+        return {"email_sent": True, "po_number": po_number, "message": f"Emailed {po_number} to {payload['to']}."}
+    log_event("Email Purchase Order", f"Did not email {po_number} to {payload['to']}.", actor=actor)
+    return {
+        "email_sent": False,
+        "po_number": po_number,
+        "message": f"{po_number} is still Pending. The email was not sent.",
+    }
+
+
 @router.post("/deliveries/receive")
 async def receive_delivery(request: Request):
     if not require_admin(request):

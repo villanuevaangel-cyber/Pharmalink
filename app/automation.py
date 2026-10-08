@@ -736,11 +736,28 @@ def create_auto_purchase_orders() -> dict:
     notes = (
         "AUTO: generated from the Facebook Prophet demand forecast for the next 30 days. "
         "Consignment medicines are included when the supplier is returnable or non-returnable. "
-        "Returnable near-expiry stock is not counted as stock to keep. "
-        "Review quantities before sending to the supplier."
+        "Returnable near-expiry stock is not counted as stock to keep."
     )
     result = create_purchase_orders_from_needs(needs, "System", notes, raise_alerts=True)
-    return {"created": result["created"], "skipped": len(result["skipped"]), "needed": len(needs)}
+    from app.routers.admin_ops import send_saved_purchase_order
+
+    emailed = 0
+    not_sent = 0
+    for po in result["created"]:
+        mail = send_saved_purchase_order(int(po["po_id"]), actor="System")
+        po["email_sent"] = bool(mail.get("email_sent"))
+        po["email_message"] = mail.get("message") or ""
+        if po["email_sent"]:
+            emailed += 1
+        else:
+            not_sent += 1
+    return {
+        "created": result["created"],
+        "skipped": len(result["skipped"]),
+        "needed": len(needs),
+        "emailed": emailed,
+        "not_sent": not_sent,
+    }
 
 
 def _admin_emails() -> list[str]:
