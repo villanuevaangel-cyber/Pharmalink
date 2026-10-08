@@ -61,6 +61,10 @@ onCustomerReady(function() {
     if (categoryFilter) {
         categoryFilter.addEventListener('change', applyProductFilters);
     }
+    const productSort = document.getElementById('productSort');
+    if (productSort) {
+        productSort.addEventListener('change', applyProductFilters);
+    }
     if (closeReceiptModal) {
         closeReceiptModal.addEventListener('click', () => {
             receiptModal.style.display = 'none';
@@ -257,8 +261,13 @@ if (target === 'orders') {
                     btn.setAttribute('data-stock', stock);
 
                     const card = btn.closest('.product');
-                    const stockLabel = card ? card.querySelector('p[style*="color:#888"]') : null;
-                    if (stockLabel) stockLabel.textContent = stock > 0 ? `${stock} in stock` : 'Out of stock';
+                    if (card) card.setAttribute('data-stock', String(stock));
+                    const stockLabel = card ? card.querySelector('.shop-stock') : null;
+                    if (stockLabel) {
+                        stockLabel.textContent = stock > 0 ? `${stock} in stock` : 'Out of stock';
+                        stockLabel.classList.remove('shop-stock-ok', 'shop-stock-low', 'shop-stock-out');
+                        stockLabel.classList.add(stock <= 0 ? 'shop-stock-out' : (stock <= 10 ? 'shop-stock-low' : 'shop-stock-ok'));
+                    }
 
                     if (stock <= 0) {
                         btn.disabled = true;
@@ -270,6 +279,7 @@ if (target === 'orders') {
                         btn.style.cursor = 'pointer';
                     }
                 });
+                applyProductFilters();
             })
             .catch(err => console.error('Product stock refresh failed:', err));
     };
@@ -1040,7 +1050,24 @@ function displayOrderDetails(data) {
         if (!searchInput || !categoryFilter || !productGrid) return;
         const search = searchInput.value.toLowerCase().trim();
         const selectedCategory = categoryFilter.value;
-        const products = productGrid.querySelectorAll('.product');
+        const sort = document.getElementById('productSort')?.value || 'name-asc';
+        const products = Array.from(productGrid.querySelectorAll('.product'));
+
+        products.sort((a, b) => {
+            const nameA = (a.getAttribute('data-sort-name') || '').toLowerCase();
+            const nameB = (b.getAttribute('data-sort-name') || '').toLowerCase();
+            const priceA = parseFloat(a.getAttribute('data-price')) || 0;
+            const priceB = parseFloat(b.getAttribute('data-price')) || 0;
+            const stockA = parseInt(a.getAttribute('data-stock'), 10) || 0;
+            const stockB = parseInt(b.getAttribute('data-stock'), 10) || 0;
+            if (sort === 'name-desc') return nameB.localeCompare(nameA);
+            if (sort === 'price-asc') return priceA - priceB || nameA.localeCompare(nameB);
+            if (sort === 'price-desc') return priceB - priceA || nameA.localeCompare(nameB);
+            if (sort === 'stock-asc') return stockA - stockB || nameA.localeCompare(nameB);
+            if (sort === 'stock-desc') return stockB - stockA || nameA.localeCompare(nameB);
+            return nameA.localeCompare(nameB);
+        });
+        products.forEach((product) => productGrid.appendChild(product));
 
         products.forEach(product => {
             const productCategory = product.getAttribute('data-category') || '';
@@ -1078,6 +1105,7 @@ function displayOrderDetails(data) {
     // Initial Load
     updateCartPanel();
     loadHomeStats();
+    applyProductFilters();
 
     // FILE: customer.js (Sa dulo ng DOMContentLoaded block)
 
