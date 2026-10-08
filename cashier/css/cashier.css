@@ -109,6 +109,7 @@
 #dashboard-page .cs-empty{
     text-align:center; color:#4BAA8B; padding:22px 8px;
 }
+#dashboard-page .cs-order-id{ color:#6b7280; font-size:11px; margin-top:2px; }
 @media (max-width: 900px){
     #dashboard-page .cs-dash-stats{ grid-template-columns:1fr 1fr; }
     #dashboard-page .cs-dash-grid{ grid-template-columns:1fr; }

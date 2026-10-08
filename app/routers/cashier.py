@@ -251,7 +251,16 @@ def online_orders(request: Request):
     rows = fetch_all(
         """
         SELECT co.order_id, co.order_date, co.order_status, co.payment_method, co.payment_status,
-               c.first_name, c.last_name
+               c.first_name, c.last_name,
+               COALESCE((
+                   SELECT string_agg(
+                       COALESCE(NULLIF(TRIM(dm.brand_name), ''), dm.generic_name),
+                       ', ' ORDER BY od.detail_id
+                   )
+                   FROM order_details od
+                   JOIN drugs_master dm ON dm.drug_id = od.drug_id
+                   WHERE od.order_id = co.order_id
+               ), '') AS medicines
         FROM customer_orders co
         JOIN customers c ON co.customer_id = c.customer_id
         WHERE co.order_status IN ('Pending', 'Processing', 'Ready for Pickup')
@@ -269,6 +278,7 @@ def online_orders(request: Request):
             "status_class": str(status).lower().replace(" ", "-"),
             "payment_method": row.get("payment_method") or "cash",
             "payment_status": row.get("payment_status") or "unpaid",
+            "medicines": row.get("medicines") or "",
             "date": _fmt_dt(row["order_date"], "%b %d, %Y %I:%M %p"),
         })
     return {"success": True, "orders": orders}
