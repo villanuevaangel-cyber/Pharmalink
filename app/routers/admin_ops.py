@@ -1038,6 +1038,74 @@ def expiring(request: Request, days: int = 30):
     return {"days": days, "count": len(items), "total_value_at_risk": round(total, 2), "items": items}
 
 
+@router.get("/capital-at-risk")
+def capital_at_risk(request: Request):
+    """Money already paid for stock that is expired or expires within 30 days."""
+    if not require_admin(request):
+        return _unauthorized()
+    items = []
+    expired_cost = soon_cost = 0.0
+    expired_units = soon_units = 0
+    for row in fetch_all(
+        """
+        SELECT l.lot_inventory_id, l.lot_number, l.expiration_date, l.current_stock,
+               COALESCE(l.cost_price, 0) AS unit_cost,
+               d.generic_name, d.brand_name, d.dosage, d.form,
+               COALESCE(s.supplier_name, '') AS supplier_name,
+               (l.expiration_date - CURRENT_DATE) AS days_left,
+               CASE WHEN l.expiration_date < CURRENT_DATE THEN 'expired' ELSE 'soon' END AS bucket
+        FROM inventory_lots l
+        JOIN drugs_master d ON l.drug_id = d.drug_id
+        LEFT JOIN suppliers s ON s.supplier_id = l.supplier
+        WHERE l.current_stock > 0
+          AND (
+                l.expiration_date < CURRENT_DATE
+                OR (
+                    l.is_active = 1
+                    AND l.expiration_date >= CURRENT_DATE
+                    AND l.expiration_date <= (CURRENT_DATE + INTERVAL '30 days')
+                )
+          )
+        ORDER BY (COALESCE(l.cost_price, 0) * l.current_stock) DESC, l.expiration_date ASC, d.generic_name ASC
+        """
+    ):
+        qty = int(row["current_stock"] or 0)
+        unit_cost = round(float(row["unit_cost"] or 0), 2)
+        capital = round(qty * unit_cost, 2)
+        bucket = row["bucket"]
+        if bucket == "expired":
+            expired_cost += capital
+            expired_units += qty
+        else:
+            soon_cost += capital
+            soon_units += qty
+        items.append({
+            "lot_inventory_id": int(row["lot_inventory_id"]),
+            "generic_name": row["generic_name"],
+            "brand_name": row["brand_name"] or "",
+            "dosage": row["dosage"] or "",
+            "form": row["form"] or "",
+            "lot_number": row["lot_number"] or "",
+            "supplier_name": row["supplier_name"] or "",
+            "expiration_date": _jsonable(row["expiration_date"]),
+            "days_left": int(row["days_left"] or 0),
+            "bucket": bucket,
+            "current_stock": qty,
+            "unit_cost": unit_cost,
+            "capital": capital,
+        })
+    return {
+        "days": 30,
+        "count": len(items),
+        "expired_cost": round(expired_cost, 2),
+        "expired_units": expired_units,
+        "soon_cost": round(soon_cost, 2),
+        "soon_units": soon_units,
+        "total_capital": round(expired_cost + soon_cost, 2),
+        "items": items,
+    }
+
+
 @router.get("/reorder-suggestions")
 def reorder_suggestions(request: Request):
     if not require_admin(request):
@@ -1067,8 +1135,8 @@ async def create_pos_from_reorder(request: Request):
             skipped.append({"name": f"Drug #{drug_id}", "reason": "not in current suggestions"})
             continue
         label = row.get("generic_name") or f"Drug #{drug_id}"
-        if str(row.get("procurement_type") or "purchase") == "consignment":
-            skipped.append({"name": label, "reason": "consignment - create that PO manually"})
+        if row.get("auto_po") is False:
+            skipped.append({"name": label, "reason": "consignment supplier has no return policy - create that PO manually"})
             continue
         if row.get("action") != "increase" or int(row.get("suggested_qty") or 0) <= 0:
             skipped.append({"name": label, "reason": "does not need reorder"})
@@ -1855,10 +1923,44 @@ def export_report(request: Request, kind: str = "", format: str = "xlsx", period
             rows.append(["Type", r.get("category"), r.get("total_cost"), r.get("total_units"), ""])
         title = "Cost of stock on hand"
         filename = "procurement"
+    elif kind == "capital":
+        data = capital_at_risk(request)
+        if hasattr(data, "body"):
+            return data
+        headers = ["Medicine", "Brand", "Lot", "Supplier", "Expires", "Days left", "Pieces", "Unit cost", "Capital"]
+        rows = [[
+            "SUMMARY", "", "", "", "", "",
+            (data.get("expired_units") or 0) + (data.get("soon_units") or 0),
+            "",
+            data.get("total_capital"),
+        ]]
+        rows.append(["Expires within 30 days", "", "", "", "", "", data.get("soon_units"), "", data.get("soon_cost")])
+        rows.append(["Already expired, still in stock", "", "", "", "", "", data.get("expired_units"), "", data.get("expired_cost")])
+        for r in data.get("items") or []:
+            days_left = r.get("days_left")
+            days_label = "Expired" if r.get("bucket") == "expired" else days_left
+            rows.append([
+                r.get("generic_name"),
+                r.get("brand_name"),
+                r.get("lot_number"),
+                r.get("supplier_name"),
+                r.get("expiration_date"),
+                days_label,
+                r.get("current_stock"),
+                r.get("unit_cost"),
+                r.get("capital"),
+            ])
+        title = "Medicine capital at risk (30 days)"
+        filename = "capital-at-risk"
     else:
         return {"success": False, "message": "Unknown report type."}
 
-    kind_label = {"forecast": "Sales forecast", "consumption": "Monthly consumption", "procurement": "Procurement cost"}.get(kind, title)
+    kind_label = {
+        "forecast": "Sales forecast",
+        "consumption": "Monthly consumption",
+        "procurement": "Procurement cost",
+        "capital": "Medicine capital at risk",
+    }.get(kind, title)
     log_event("Generate Report", f"Generated the {kind_label} report as {fmt.upper()}.", request=request)
 
     if fmt == "pdf":

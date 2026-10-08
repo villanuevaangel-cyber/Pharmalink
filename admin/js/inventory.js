@@ -1015,7 +1015,7 @@
             } else if (status === 'non_returnable') {
                 returnCell = '<span class="inv-chip return-no">Non-returnable</span>';
             } else if (nearExpiry && hasPolicy) {
-                returnCell = '<span class="inv-chip return-flag">Flagged - run check</span>';
+                returnCell = '<span class="inv-chip return-flag">Marks on the next stock check</span>';
             }
             return `
             <tr data-lot-id="${l.lot_inventory_id}">

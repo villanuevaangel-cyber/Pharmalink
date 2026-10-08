@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=push3">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=drug-pick1">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=alert-email1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -469,6 +469,10 @@
                             <span class="ad-auto-label">Auto-PO · 6:00 AM</span>
                             <strong id="automation-daily-text">Checking…</strong>
                         </div>
+                        <div class="ad-auto-meta-item">
+                            <span class="ad-auto-label">Low stock &amp; expiry email</span>
+                            <strong id="automation-email-text">Checking…</strong>
+                        </div>
                     </div>
                     <div class="ad-auto-actions">
                         <button type="button" id="runHourlyJobsBtn">Run stock &amp; expiry</button>
@@ -489,7 +493,7 @@
                     <button type="button" class="inv-tab-btn active" data-inv-panel="lots"><i class="fas fa-boxes"></i> Stock Lots</button>
                     <button type="button" class="inv-tab-btn" data-inv-panel="history"><i class="fas fa-clock-rotate-left"></i> Adjustment History</button>
                     <button type="button" class="inv-tab-btn" data-inv-panel="reorder"><i class="fas fa-cart-plus"></i> Reorder Suggestions</button>
-                    <button type="button" id="runConsignmentCheckBtn"><i class="fas fa-rotate"></i> Run consignment cross-check</button>
+                    <button type="button" id="runConsignmentCheckBtn" title="This also runs every hour with the stock and expiry check. Use this only if you want the marks right now."><i class="fas fa-rotate"></i> Refresh consignment marks</button>
                 </div>
 
                 <div class="dashboard-cards inv-stats">
@@ -1137,7 +1141,7 @@
             <section id="reports" style="display:none;">
     <div class="dashboard-header">
         <h2>Reports</h2>
-        <p class="subtitle">See pieces sold, or the cost of medicine still in stock.</p>
+        <p class="subtitle">See pieces sold, what stock cost, or money tied up in medicine that is expiring.</p>
     </div>
 
     <div class="rpt-upload-card" title="Excel or CSV of past sales. Use the template, and match the medicine names already in the store. Stock on the shelf does not change.">
@@ -1170,6 +1174,16 @@
                 <button type="button" class="rpt-btn navy" data-report-modal="procurementReportModal"><i class="fas fa-list"></i> Open</button>
                 <button type="button" class="rpt-btn pdf" data-rpt-kind="procurement" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
                 <button type="button" class="rpt-btn xlsx" data-rpt-kind="procurement" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
+            </div>
+        </div>
+        <div class="report-hub-card" title="Money already paid for stock that expires within 30 days, plus lots that are already expired but still have pieces. The amount uses unit cost. A lot with no cost still appears, and its amount is zero.">
+            <h3><i class="fas fa-hourglass-half"></i> Capital at risk</h3>
+            <span class="hub-value" id="hub-capital-total" style="color:#b45309;">₱0</span>
+            <p class="hub-hint" id="hub-capital-range">Next 30 days and already expired</p>
+            <div class="hub-actions">
+                <button type="button" class="rpt-btn navy" data-report-modal="capitalReportModal"><i class="fas fa-list"></i> Open</button>
+                <button type="button" class="rpt-btn pdf" data-rpt-kind="capital" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button type="button" class="rpt-btn xlsx" data-rpt-kind="capital" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
             </div>
         </div>
     </div>
@@ -1268,6 +1282,54 @@
             </div>
         </div>
     </div>
+    </div>
+</div>
+
+<div id="capitalReportModal" class="modal">
+    <div class="modal-content modal-wide">
+        <div class="modal-header">
+            <h2><i class="fas fa-hourglass-half"></i> Capital at risk</h2>
+            <div class="rpt-export-row" style="margin:0 12px 0 auto;">
+                <button type="button" class="rpt-btn pdf" data-rpt-kind="capital" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button type="button" class="rpt-btn xlsx" data-rpt-kind="capital" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
+            </div>
+            <span class="close" data-close-report-modal="capitalReportModal">&times;</span>
+        </div>
+        <div style="display:flex; gap:15px; margin-bottom:16px; flex-wrap:wrap;" title="Money already paid for stock that expires within 30 days, plus lots that are already expired but still have pieces.">
+            <div class="card" style="flex:1; min-width:180px; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
+                <h3 style="color:#b45309; margin:0;">Expires in 30 days</h3>
+                <p class="value" id="capital-soon-cost" style="font-size:1.5em; color:#b45309;">₱0</p>
+            </div>
+            <div class="card" style="flex:1; min-width:180px; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
+                <h3 style="color:#dc2626; margin:0;">Already expired</h3>
+                <p class="value" id="capital-expired-cost" style="font-size:1.5em; color:#dc2626;">₱0</p>
+            </div>
+            <div class="card" style="flex:1; min-width:180px; padding:15px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.05); background:#fff;">
+                <h3 style="color:#1E3A34; margin:0;">Total capital</h3>
+                <p class="value" id="capital-total-cost" style="font-size:1.5em; color:#1E3A34;">₱0</p>
+            </div>
+        </div>
+        <input type="text" id="capitalSearch" placeholder="Search medicine, lot, or supplier" style="padding:8px 12px; border:1px solid #ccc; border-radius:5px; margin-bottom:10px; width:280px; max-width:100%;">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Medicine</th>
+                        <th>Lot</th>
+                        <th>Supplier</th>
+                        <th>Expires</th>
+                        <th>Pieces</th>
+                        <th>Capital</th>
+                    </tr>
+                </thead>
+                <tbody id="capitalTableBody"><tr><td colspan="6" style="text-align:center;color:#6b7280;padding:15px;">Loading...</td></tr></tbody>
+            </table>
+        </div>
+        <div class="um-pagination ph-pagination" id="capital-pagination">
+            <button type="button" id="capital-prev" class="um-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
+            <span id="capital-page-info">Page 1</span>
+            <button type="button" id="capital-next" class="um-page-btn">Next <i class="fas fa-chevron-right"></i></button>
+        </div>
     </div>
 </div>
 
@@ -2313,6 +2375,84 @@
 
     loadProcurementCosts();
 
+    let capitalItems = [];
+    let capitalPage = 1;
+    const CAPITAL_PAGE_SIZE = 8;
+
+    function loadCapitalAtRisk() {
+        fetch('/api/admin/capital-at-risk')
+            .then(res => res.json())
+            .then(data => {
+                const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+                setText('hub-capital-total', peso(data.total_capital));
+                setText('capital-soon-cost', peso(data.soon_cost));
+                setText('capital-expired-cost', peso(data.expired_cost));
+                setText('capital-total-cost', peso(data.total_capital));
+                capitalItems = data.items || [];
+                capitalPage = 1;
+                renderCapitalTable();
+            })
+            .catch(err => console.error('Capital at risk error:', err));
+    }
+
+    function renderCapitalTable() {
+        const body = document.getElementById('capitalTableBody');
+        if (!body) return;
+        const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+        const q = (document.getElementById('capitalSearch')?.value || '').trim().toLowerCase();
+        const rows = capitalItems.filter((r) => {
+            if (!q) return true;
+            return [r.generic_name, r.brand_name, r.lot_number, r.supplier_name, r.dosage].join(' ').toLowerCase().includes(q);
+        });
+        const pages = Math.max(1, Math.ceil(rows.length / CAPITAL_PAGE_SIZE) || 1);
+        if (capitalPage > pages) capitalPage = pages;
+        if (capitalPage < 1) capitalPage = 1;
+        const start = (capitalPage - 1) * CAPITAL_PAGE_SIZE;
+        const info = document.getElementById('capital-page-info');
+        const prev = document.getElementById('capital-prev');
+        const next = document.getElementById('capital-next');
+        if (info) info.textContent = `Page ${capitalPage} of ${pages} (${rows.length} results)`;
+        if (prev) prev.disabled = capitalPage <= 1;
+        if (next) next.disabled = capitalPage >= pages || !rows.length;
+        if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#6b7280;padding:15px;">No stock is expiring in 30 days, and no expired lot still has pieces.</td></tr>';
+            return;
+        }
+        body.innerHTML = rows.slice(start, start + CAPITAL_PAGE_SIZE).map((r) => {
+            const name = esc(r.generic_name) + (r.brand_name ? ' (' + esc(r.brand_name) + ')' : '');
+            const detail = [r.dosage, r.form].filter((part) => part && String(part).toUpperCase() !== 'N/A').map(esc).join(', ');
+            const label = detail ? `${name}<div class="pc-meta">${detail}</div>` : name;
+            const when = r.bucket === 'expired'
+                ? `<span style="color:#dc2626;font-weight:700;">Expired</span><div class="pc-meta">${esc(r.expiration_date)}</div>`
+                : `${esc(r.expiration_date)}<div class="pc-meta">${Number(r.days_left)} day${Number(r.days_left) === 1 ? '' : 's'} left</div>`;
+            return `<tr>
+                <td>${label}</td>
+                <td>${esc(r.lot_number || '-')}</td>
+                <td>${esc(r.supplier_name || '-')}</td>
+                <td>${when}</td>
+                <td>${Number(r.current_stock || 0).toLocaleString()}</td>
+                <td style="font-weight:700;">${peso(r.capital)}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    document.getElementById('capitalSearch')?.addEventListener('input', () => {
+        capitalPage = 1;
+        renderCapitalTable();
+    });
+    document.getElementById('capital-prev')?.addEventListener('click', () => {
+        if (capitalPage <= 1) return;
+        capitalPage -= 1;
+        renderCapitalTable();
+    });
+    document.getElementById('capital-next')?.addEventListener('click', () => {
+        capitalPage += 1;
+        renderCapitalTable();
+    });
+    loadCapitalAtRisk();
+
     function resizeReportCharts() {
         requestAnimationFrame(() => {
             if (consumptionTrendChart) consumptionTrendChart.resize();
@@ -2333,6 +2473,7 @@
             const id = btn.getAttribute('data-report-modal');
             if (id === 'consumptionReportModal' && typeof loadMonthlyConsumption === 'function') loadMonthlyConsumption();
             if (id === 'procurementReportModal' && typeof loadProcurementCosts === 'function') loadProcurementCosts();
+            if (id === 'capitalReportModal' && typeof loadCapitalAtRisk === 'function') loadCapitalAtRisk();
             openReportModal(id);
         });
     });
@@ -2496,7 +2637,12 @@
             }
             // Only "needs reorder" rows are selectable for a draft PO -
             // overstocked/sufficient rows have nothing to order.
-            const checkboxCell = r.action === 'increase'
+            if (r.procurement_type === 'consignment') {
+                if (r.consignment_policy === 'returnable') note += ' Near-expiry stock can be returned, so it is not counted.';
+                else if (r.consignment_policy === 'non_returnable') note += ' Cannot be returned, so it is ordered like a purchase.';
+                else note += ' No return policy, so this stays a manual PO.';
+            }
+            const checkboxCell = r.action === 'increase' && r.auto_po !== false
                 ? `<input type="checkbox" class="reorder-select-cb" data-drug-id="${r.drug_id}" ${reorderSelectedIds.has(r.drug_id) ? 'checked' : ''}>`
                 : '';
             const supplierText = r.suggested_supplier_name
@@ -2507,7 +2653,7 @@
                 <td>${checkboxCell}</td>
                 <td>${label}</td>
                 <td>${r.category}</td>
-                <td>${r.procurement_type === 'consignment' ? 'Consignment' : 'Purchase'}</td>
+                <td>${r.procurement_type === 'consignment' ? ('Consignment' + (r.consignment_policy === 'returnable' ? ' · Returnable' : (r.consignment_policy === 'non_returnable' ? ' · Non-returnable' : ' · No policy'))) : 'Purchase'}</td>
                 <td>${r.current_stock}</td>
                 <td>${r.minimum_stock}</td>
                 <td>${r.avg_daily_sales}</td>
@@ -3926,7 +4072,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="/admin/js/inventory.js?v=inv-pick1"></script>
+    <script src="/admin/js/inventory.js?v=consign-auto1"></script>
     <script src="/admin/js/supplier.js?v=sup-meds4"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -5326,8 +5472,23 @@ document.getElementById('analytics-year')?.addEventListener('change', function (
                 }
                 const hourly = data.last_run && data.last_run.hourly;
                 const daily = data.last_run && data.last_run.daily;
+                const emailEl = document.getElementById('automation-email-text');
+                const mail = data.alert_email || {};
+                const recipients = mail.recipients || [];
+                const last = mail.last_result || {};
                 if (hourlyEl) hourlyEl.textContent = hourly ? ('Last run ' + fmtAutomationAt(hourly.at)) : 'Waiting for first pass';
                 if (dailyEl) dailyEl.textContent = daily ? ('Last run ' + fmtAutomationAt(daily.at)) : 'Runs daily at 6:00 AM';
+                if (emailEl) {
+                    if (!recipients.length) {
+                        emailEl.textContent = 'No admin email saved. Add one on the admin account.';
+                    } else if (last.error && !last.sent) {
+                        emailEl.textContent = 'Not sent. ' + last.error;
+                    } else if (mail.last_sent_at) {
+                        emailEl.textContent = 'Last sent ' + fmtAutomationAt(mail.last_sent_at) + ' to ' + recipients.join(', ');
+                    } else {
+                        emailEl.textContent = 'Goes to ' + recipients.join(', ') + ' when stock or expiry changes.';
+                    }
+                }
             })
             .catch(() => {
                 const pill = document.getElementById('automation-scheduler-pill');
@@ -5352,13 +5513,27 @@ document.getElementById('analytics-year')?.addEventListener('change', function (
                 refreshAutomationStatus();
                 refreshExpiringMeds();
                 refreshDashboardCards();
-                alert(mode === 'daily' ? 'Auto purchase-order pass finished. Check Purchasing for new Pending POs.' : 'Stock status and expiry scan finished.');
+                const mail = mode === 'daily'
+                    ? (data.result && data.result.hourly && data.result.hourly.email)
+                    : (data.result && data.result.email);
+                let emailNote = '';
+                if (mail) {
+                    if (mail.reason === 'no admin email') emailNote = ' No admin email is saved, so nothing was emailed.';
+                    else if (mail.sent) emailNote = ' Emailed ' + mail.alerts + ' alert(s) to ' + (mail.to || []).join(', ') + '.';
+                    else if (mail.error) emailNote = ' Email was not sent: ' + mail.error;
+                    else emailNote = ' No new low-stock or expiry alerts to email.';
+                }
+                const consign = mode === 'daily'
+                    ? (data.result && data.result.hourly && data.result.hourly.consignment)
+                    : (data.result && data.result.consignment);
+                if (consign && consign.updated) emailNote += ' Marked ' + consign.updated + ' consignment lot(s).';
+                alert((mode === 'daily' ? 'Auto purchase-order pass finished. Check Purchasing for new Pending POs.' : 'Stock status and expiry scan finished.') + emailNote);
             })
             .catch(err => alert('Automation error: ' + err.message));
     }
     document.getElementById('runHourlyJobsBtn')?.addEventListener('click', () => runAutomation('hourly'));
     document.getElementById('runDailyJobsBtn')?.addEventListener('click', () => {
-        const msg = 'Create automatic Pending purchase orders from current sales trends? Consignment drugs are skipped. Existing open POs for the same drugs are skipped.';
+        const msg = 'Create automatic Pending purchase orders from current sales trends? Consignment medicines are included when the supplier is returnable or non-returnable. Existing open POs for the same drugs are skipped.';
         const go = function (ok) { if (ok) runAutomation('daily'); };
         if (window.phConfirm) window.phConfirm(msg).then(go);
         else go(confirm(msg));
