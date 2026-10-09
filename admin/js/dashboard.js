@@ -44,7 +44,7 @@
     }
 
     function loadCharts() {
-        fetch('/api/admin/sales-analytics?year=' + new Date().getFullYear())
+        fetch('/api/admin/sales-analytics')
             .then(res => res.json())
             .then(data => {
                 const salesCanvas = document.getElementById('salesChart');

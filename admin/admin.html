@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=push3">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=alert-email1">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=chart-tips1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <style>
@@ -410,23 +410,19 @@
 <div id="sales-analytics-section">
     <div class="ad-dash-card-head">
         <h3>Charts</h3>
-        <div>
-            <label for="analytics-year">Year</label>
-            <select id="analytics-year"></select>
-        </div>
     </div>
     <div class="ad-dash-charts">
         <div class="ad-dash-card">
-        <h4>By month</h4>
+            <h4 class="ad-chart-title">By month <span class="ad-chart-tip" tabindex="0" data-tip="Completed sales in pesos for each month on record, across every year."><i class="fas fa-circle-info"></i></span></h4>
             <div class="ad-dash-chart"><canvas id="monthlySalesChart"></canvas></div>
         </div>
         <div class="ad-dash-card">
-            <h4>Top categories</h4>
+            <h4 class="ad-chart-title">Top categories <span class="ad-chart-tip" tabindex="0" data-tip="Pieces sold by medicine type, from all completed sales."><i class="fas fa-circle-info"></i></span></h4>
             <div class="ad-dash-chart ad-dash-chart-pie"><canvas id="topCategoriesChart"></canvas></div>
         </div>
     </div>
     <div class="ad-dash-card">
-        <h4>Seasonal</h4>
+        <h4 class="ad-chart-title">Seasonal <span class="ad-chart-tip" tabindex="0" data-tip="Which calendar month is usually strongest. Every year is added into the same January to December bars."><i class="fas fa-circle-info"></i></span></h4>
         <div class="ad-dash-chart"><canvas id="seasonalTrendChart"></canvas></div>
     </div>
 </div>
@@ -1839,7 +1835,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>window.SEGMENTATION_MANAGE = true;</script>
 <script src="/shared/js/segmentation.js?v=chart-colors1"></script>
-<script src="/admin/js/admin-boot.js?v=header-first1"></script>
+<script src="/admin/js/admin-boot.js?v=chart-tips1"></script>
 <script>
 (function () {
     const topItemsCtx = document.getElementById('topItemsChart').getContext('2d');
@@ -4966,6 +4962,19 @@ let monthlySalesChartInstance = null;
 let topCategoriesChartInstance = null;
 let seasonalTrendChartInstance = null;
 
+const chartTip = {
+    backgroundColor: '#1E3A34',
+    titleColor: '#fff',
+    bodyColor: '#fff',
+    padding: 10,
+    cornerRadius: 8,
+    displayColors: false
+};
+
+function pesoTip(value) {
+    return '₱' + Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+}
+
 function renderSeasonalChart(labels, salesData) {
     const ctx = document.getElementById('seasonalTrendChart')?.getContext('2d');
     if (!ctx) return;
@@ -4984,11 +4993,13 @@ function renderSeasonalChart(labels, salesData) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { display: false },
                 tooltip: {
+                    ...chartTip,
                     callbacks: {
-                        label: ctx => '₱' + Number(ctx.parsed.y).toLocaleString('en-US', { minimumFractionDigits: 2 }),
+                        label: (item) => pesoTip(item.parsed.y),
                     },
                 },
             },
@@ -5021,11 +5032,13 @@ function renderSalesCharts(labels, salesData, catLabels, catData) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        ...chartTip,
                         callbacks: {
-                            label: ctx => '₱' + Number(ctx.parsed.y).toLocaleString('en-US', { minimumFractionDigits: 2 })
+                            label: (item) => pesoTip(item.parsed.y)
                         }
                     }
                 },
@@ -5058,10 +5071,13 @@ function renderSalesCharts(labels, salesData, catLabels, catData) {
                 plugins: {
                     legend: { position: 'right' },
                     tooltip: {
+                        ...chartTip,
+                        displayColors: true,
                         callbacks: {
-                            label: ctx => {
-                                const pct = catTotal ? ((ctx.parsed / catTotal) * 100).toFixed(1) : 0;
-                                return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+                            title: (items) => items[0]?.label || '',
+                            label: (item) => {
+                                const pct = catTotal ? ((item.parsed / catTotal) * 100).toFixed(1) : 0;
+                                return `${item.parsed} pieces (${pct}%)`;
                             }
                         }
                     }
@@ -5074,17 +5090,17 @@ function renderSalesCharts(labels, salesData, catLabels, catData) {
 renderSalesCharts([], [], [], []);
 renderSeasonalChart([], []);
 
-document.getElementById('analytics-year')?.addEventListener('change', function () {
-    const year = this.value;
-    if (!year) return;
-    fetch('/api/admin/sales-analytics?year=' + year)
+function loadSalesAnalytics() {
+    fetch('/api/admin/sales-analytics')
         .then(r => r.json())
         .then(d => {
             renderSalesCharts(d.monthly_labels, d.monthly_data, d.category_labels, d.category_data);
             renderSeasonalChart(d.seasonal_labels, d.seasonal_data);
         })
         .catch(err => console.error('Analytics reload error:', err));
-});
+}
+
+loadSalesAnalytics();
 </script>
 
 <script>

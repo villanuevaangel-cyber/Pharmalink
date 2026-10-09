@@ -902,56 +902,62 @@ async def receive_delivery(request: Request):
 def sales_analytics(request: Request, year: int = 0):
     if not require_admin(request):
         return _unauthorized()
-    year = year or date.today().year
-    if year < 2000 or year > 2100:
-        year = date.today().year
-    monthly_rows = {
-        int(r["m"]): float(r["total"] or 0)
-        for r in fetch_all(
-            """
-            SELECT EXTRACT(MONTH FROM date_created) AS m, COALESCE(SUM(total_amount), 0) AS total
-            FROM sales WHERE EXTRACT(YEAR FROM date_created) = %s AND status = 'completed'
-            GROUP BY EXTRACT(MONTH FROM date_created)
-            """,
-            (year,),
-        )
-    }
+    month_rows = fetch_all(
+        """
+        SELECT date_trunc('month', date_created)::date AS month_start,
+               COALESCE(SUM(total_amount), 0) AS total
+        FROM sales
+        WHERE status = 'completed' AND date_created IS NOT NULL
+        GROUP BY 1
+        ORDER BY 1
+        """
+    )
+    by_month = {}
+    for row in month_rows:
+        start = row["month_start"]
+        if isinstance(start, datetime):
+            start = start.date()
+        start = date(start.year, start.month, 1)
+        by_month[start] = float(row["total"] or 0)
     monthly_labels = []
     monthly_data = []
-    for m in range(1, 13):
-        monthly_labels.append(datetime(year, m, 1).strftime("%b %Y"))
-        monthly_data.append(monthly_rows.get(m, 0))
+    if by_month:
+        cursor = min(by_month)
+        last = max(by_month)
+        while cursor <= last:
+            monthly_labels.append(cursor.strftime("%b %Y"))
+            monthly_data.append(by_month.get(cursor, 0.0))
+            if cursor.month == 12:
+                cursor = date(cursor.year + 1, 1, 1)
+            else:
+                cursor = date(cursor.year, cursor.month + 1, 1)
     cat_rows = fetch_all(
         """
         SELECT d.category, COALESCE(SUM(si.quantity), 0) AS total_qty
         FROM sales_items si JOIN sales s ON si.sale_id = s.sale_id JOIN drugs_master d ON si.drug_id = d.drug_id
-        WHERE EXTRACT(YEAR FROM s.date_created) = %s AND s.status = 'completed'
+        WHERE s.status = 'completed'
         GROUP BY d.category ORDER BY total_qty DESC LIMIT 8
-        """,
-        (year,),
+        """
     )
     seasonal_rows = {
         int(r["m"]): float(r["total"] or 0)
         for r in fetch_all(
             """
             SELECT EXTRACT(MONTH FROM date_created) AS m, COALESCE(SUM(total_amount), 0) AS total
-            FROM sales WHERE EXTRACT(YEAR FROM date_created) = %s AND status = 'completed'
+            FROM sales WHERE status = 'completed'
             GROUP BY EXTRACT(MONTH FROM date_created)
-            """,
-            (year,),
+            """
         )
     }
     month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    seasonal_labels = month_names
-    seasonal_data = [seasonal_rows.get(m, 0) for m in range(1, 13)]
     return {
-        "year": year,
+        "year": int(year or 0),
         "monthly_labels": monthly_labels,
         "monthly_data": monthly_data,
         "category_labels": [str(r["category"] or "Other").title() for r in cat_rows],
         "category_data": [int(r["total_qty"] or 0) for r in cat_rows],
-        "seasonal_labels": seasonal_labels,
-        "seasonal_data": seasonal_data,
+        "seasonal_labels": month_names,
+        "seasonal_data": [seasonal_rows.get(m, 0) for m in range(1, 13)],
     }
 
 

@@ -33,21 +33,6 @@
             return;
         }
 
-        const yearSel = document.getElementById("analytics-year");
-        if (yearSel) {
-            const y = new Date().getFullYear();
-            const current = yearSel.value;
-            yearSel.innerHTML = "";
-            for (let i = 0; i < 5; i++) {
-                const opt = document.createElement("option");
-                opt.value = String(y - i);
-                opt.textContent = String(y - i);
-                if (String(y - i) === current || (!current && i === 0)) opt.selected = true;
-                yearSel.appendChild(opt);
-            }
-            yearSel.dispatchEvent(new Event("change"));
-        }
-
         loadStaffTable();
         loadCustomerTable();
     });
