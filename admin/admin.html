@@ -1835,7 +1835,7 @@
 </script>
 
 
-<script src="/assets/chart-colors.js?v=chart-colors1"></script>
+<script src="/assets/chart-colors.js?v=chart-colors2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>window.SEGMENTATION_MANAGE = true;</script>
 <script src="/shared/js/segmentation.js?v=chart-colors1"></script>
@@ -4975,7 +4975,7 @@ function renderSeasonalChart(labels, salesData) {
         data: {
             labels: labels || [],
             datasets: [{
-                label: 'Sales by month (all years)',
+                label: 'Sales',
                 data: salesData || [],
                 backgroundColor: PharmaChart.sales,
                 borderRadius: 4,
@@ -5046,7 +5046,7 @@ function renderSalesCharts(labels, salesData, catLabels, catData) {
                 labels: catLabels.length ? catLabels : ['No data'],
                 datasets: [{
                     data: catData.length ? catData : [1],
-                    backgroundColor: catData.length ? PharmaChart.slices('sales', catLabels.length) : [PharmaChart.empty],
+                    backgroundColor: catData.length ? PharmaChart.slices('category', catLabels.length) : [PharmaChart.empty],
                     borderColor: '#fff',
                     borderWidth: 2
                 }]
