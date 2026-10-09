@@ -935,9 +935,10 @@ def sales_analytics(request: Request, year: int = 0):
         for r in fetch_all(
             """
             SELECT EXTRACT(MONTH FROM date_created) AS m, COALESCE(SUM(total_amount), 0) AS total
-            FROM sales WHERE status = 'completed'
+            FROM sales WHERE EXTRACT(YEAR FROM date_created) = %s AND status = 'completed'
             GROUP BY EXTRACT(MONTH FROM date_created)
-            """
+            """,
+            (year,),
         )
     }
     month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]

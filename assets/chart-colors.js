@@ -3,10 +3,10 @@
    Gold   = a forecast, not actual sales yet
    Forest = inventory cost
    Red    = loss from expiry or waste
-   Doughnut slices stay inside that same family so a slice is only
-   "which item", never a second status. */
+   Category slices use separate hues so neighboring slices stay easy to tell apart. */
 (function () {
     var salesShades = ['#1E3A34', '#24544C', '#4BAA8B', '#7BC4A8', '#C5E6D8'];
+    var categoryShades = ['#1E3A34', '#4BAA8B', '#FFC857', '#2A6F97', '#E07A5F', '#6B4C9A', '#C45C26', '#8B5E3C'];
     var costShades = ['#1E3A34', '#24544C', '#3D6B62', '#6B948C', '#A8C4BE'];
     var lossShades = ['#7f1d1d', '#b91c1c', '#dc2626', '#fca5a5', '#fecaca'];
     window.PharmaChart = {
@@ -21,7 +21,7 @@
         tooltip: '#1E3A34',
         segments: salesShades,
         slices: function (kind, count) {
-            var sets = { sales: salesShades, cost: costShades, loss: lossShades, segment: salesShades };
+            var sets = { sales: salesShades, cost: costShades, loss: lossShades, segment: salesShades, category: categoryShades };
             var base = sets[kind] || salesShades;
             var n = Math.max(0, count || 0);
             var out = [];
