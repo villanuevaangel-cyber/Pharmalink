@@ -116,7 +116,7 @@
                 badge.style.display = 'none';
             } else {
                 badge.style.display = '';
-                badge.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running K-Means clustering...';
+                badge.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Grouping customers...';
             }
         }
 
@@ -189,13 +189,7 @@
             return;
         }
         el.style.display = '';
-        if (segmentEngine === 'kmeans') {
-            const score = segmentSilhouette[n];
-            const scoreText = (score !== undefined && score !== null) ? ` &middot; Silhouette Score: <strong>${score}</strong>` : '';
-            el.innerHTML = `<i class="fas fa-brain" style="color:#4BAA8B;"></i> K-Means Clustering (scikit-learn)${scoreText}`;
-        } else {
-            el.innerHTML = `<i class="fas fa-info-circle"></i> Quantile-based grouping (fallback - K-Means unavailable on this server)`;
-        }
+        el.innerHTML = '<i class="fas fa-users" style="color:#4BAA8B;"></i> Grouped by how often they buy and how much they spend.';
     }
 
     function applySegmentCount(n) {

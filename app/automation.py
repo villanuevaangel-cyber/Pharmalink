@@ -168,6 +168,71 @@ def ensure_automation_schema(conn) -> None:
         )
         cur.execute(
             """
+            DO $$
+            DECLARE r record;
+            BEGIN
+                FOR r IN
+                    SELECT con.conname
+                    FROM pg_constraint con
+                    JOIN pg_class rel ON rel.oid = con.conrelid
+                    JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+                    WHERE nsp.nspname = 'public'
+                      AND rel.relname = 'inventory_lots'
+                      AND con.contype = 'u'
+                      AND pg_get_constraintdef(con.oid) NOT ILIKE '%expiration_date%'
+                LOOP
+                    EXECUTE format('ALTER TABLE inventory_lots DROP CONSTRAINT %I', r.conname);
+                END LOOP;
+                FOR r IN
+                    SELECT ic.relname AS index_name
+                    FROM pg_index ix
+                    JOIN pg_class tc ON tc.oid = ix.indrelid
+                    JOIN pg_class ic ON ic.oid = ix.indexrelid
+                    JOIN pg_namespace nsp ON nsp.oid = tc.relnamespace
+                    WHERE nsp.nspname = 'public'
+                      AND tc.relname = 'inventory_lots'
+                      AND ix.indisunique
+                      AND NOT ix.indisprimary
+                      AND ic.relname <> 'uq_inventory_lots_lot_expiry'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM pg_attribute a
+                          WHERE a.attrelid = tc.oid
+                            AND a.attnum = ANY (ix.indkey)
+                            AND a.attname = 'expiration_date'
+                      )
+                LOOP
+                    EXECUTE format('DROP INDEX IF EXISTS %I', r.index_name);
+                END LOOP;
+            END $$;
+            """
+        )
+        cur.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_lots_lot_expiry
+            ON inventory_lots (drug_id, lot_number, expiration_date)
+            """
+        )
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_inventory_lots_active_exp
+            ON inventory_lots (is_active, expiration_date)
+            """
+        )
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_inventory_lots_drug_active
+            ON inventory_lots (drug_id, is_active)
+            """
+        )
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_sales_completed_date
+            ON sales (status, date_created)
+            """
+        )
+        cur.execute(
+            """
             ALTER TABLE drugs_master
             ADD COLUMN IF NOT EXISTS sale_class VARCHAR(10)
             """
@@ -994,18 +1059,32 @@ def run_daily_jobs() -> dict:
     return result
 
 
+def _as_lot_date(value):
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return datetime.strptime(str(value or "").strip()[:10], "%Y-%m-%d").date()
+
+
 def apply_received_lot(cur, drug_id: int, lot_number: str, expiration_date, qty: int, price, cost_price, po_id: int):
-    """Add received qty. Never overwrite an existing lot's selling price or replace its stock."""
+    """Add pieces only when the lot number and expiration date are both the same.
+
+    A different expiration date, even by one day, is a new inventory row.
+    An existing row keeps its selling price. Stock is added, never replaced.
+    """
     from app.pricing import resolve_selling_price
 
+    lot_number = str(lot_number or "").strip()
+    exp = _as_lot_date(expiration_date)
     cur.execute(
         """
         SELECT lot_inventory_id, price, cost_price, current_stock, is_active, expiration_date
         FROM inventory_lots
-        WHERE drug_id = %s AND lot_number = %s
+        WHERE drug_id = %s AND lot_number = %s AND expiration_date = %s
         FOR UPDATE
         """,
-        (drug_id, lot_number),
+        (drug_id, lot_number, exp),
     )
     existing = cur.fetchone()
     if existing:
@@ -1035,7 +1114,7 @@ def apply_received_lot(cur, drug_id: int, lot_number: str, expiration_date, qty:
             (lot_inventory_id, drug_id, lot_number, expiration_date, current_stock, price, cost_price, supplier, is_active, date_added)
         VALUES (%s, %s, %s, %s, %s, %s, %s, (SELECT supplier_id FROM purchase_orders WHERE po_id = %s), 1, CURRENT_TIMESTAMP)
         """,
-        (lot_id, drug_id, lot_number, expiration_date, qty, sell, cost_price, po_id),
+        (lot_id, drug_id, lot_number, exp, qty, sell, cost_price, po_id),
     )
     return lot_id, "created"
 

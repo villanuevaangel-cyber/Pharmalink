@@ -7,12 +7,12 @@
     <link rel="stylesheet" href="/assets/theme.css?v=notif-new1">
     <link rel="stylesheet" href="/cashier/css/cashier.css?v=no-rx1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <script src="/assets/chart-colors.js?v=chart-colors1"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
+    <script defer src="/assets/chart-colors.js?v=chart-colors1"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 
 <body>
@@ -446,13 +446,13 @@
       </div>
     </div>
     <div class="chart-card">
-      <h3>Purchase Frequency <span>(orders / customer)</span></h3>
+      <h3>How often they buy <span>(orders)</span></h3>
       <div class="cs-seg-chart">
         <canvas id="purchaseFrequencyChart"></canvas>
       </div>
     </div>
     <div class="chart-card">
-      <h3>Spending Tier <span>(total ₱ / customer)</span></h3>
+      <h3>How much they have spent <span>(₱)</span></h3>
       <div class="cs-seg-chart">
         <canvas id="spendingTierChart"></canvas>
       </div>
@@ -697,7 +697,7 @@
 <script src="/assets/profile-validate.js?v=pv4"></script>
 <script src="/cashier/js/cashier-boot.js?v=header-first2"></script>
 <script>window.SEGMENTATION_MANAGE = false;</script>
-<script src="/shared/js/segmentation.js?v=cashier-plain1"></script>
+<script src="/shared/js/segmentation.js?v=plain2"></script>
 <script>
 // =======================================================
 // 1. GLOBAL VARIABLES & CONSTANTS (Available to ALL functions)
@@ -789,7 +789,9 @@ fetch('/api/cashier/promos')
         if (typeof updateCart === 'function') updateCart();
     })
     .catch(err => console.error('Failed to load active promos:', err));
-loadCustomerSegments();
+const loadSegmentsLater = () => loadCustomerSegments();
+if (window.requestIdleCallback) requestIdleCallback(loadSegmentsLater, { timeout: 1500 });
+else setTimeout(loadSegmentsLater, 400);
 
 function formatCheckoutPercent(rate) {
     const n = Math.round(rate * 1000) / 10;
@@ -2110,8 +2112,9 @@ document.querySelectorAll('.nav-item').forEach(nav => {
 if (target === "pos-page") {
     console.log("POS page activated → Loading categories & POS inventory...");
     loadCategories();
-    loadPOSInventory();
-        }
+    loadPOSProducts();
+    if (typeof loadPOSInventory === 'function') loadPOSInventory();
+}
     });
 });
 
@@ -2355,7 +2358,6 @@ document.querySelectorAll(".add-btn").forEach(btn => {
     })
     .catch(err => console.error("Error loading products:", err));
 }
-loadPOSProducts();
              // If fetch fails, this alert helps diagnose:
              // alert("Failed to load products. Check console for details.");
 
@@ -2852,7 +2854,8 @@ navItems.forEach(item => {
                 console.log("POS page is now active → loading categories & inventory...");
                 // Tiyaking defined ang loadCategories() at loadPOSInventory()
                 loadCategories();
-                loadPOSInventory();
+                loadPOSProducts();
+                if (typeof loadPOSInventory === 'function') loadPOSInventory();
             }, 10); // small delay to allow rendering
         } 
         
@@ -3430,17 +3433,19 @@ function printSalesReport() {
 // (or by this same cashier) is reflected without a manual refresh.
 setInterval(() => {
     const dashboardPage = document.getElementById('dashboard-page');
-    const isVisible = dashboardPage && dashboardPage.style.display !== 'none' && dashboardPage.classList.contains('active');
+    const isVisible = dashboardPage && dashboardPage.classList.contains('active');
     if (isVisible) handleDateFilter();
-}, 15000);
+}, 60000);
 
 
 // ===== REAL-TIME ONLINE ORDERS QUEUE =====
-// Polls the online orders list + badge every 10s so a new customer checkout,
-// or a status change made from another cashier terminal, shows up automatically.
 setInterval(() => {
-    fetchOnlineOrders({ silent: true });
-}, 10000);
+    const ordersPage = document.getElementById('online-orders-page') || document.getElementById('orders-page');
+    const dashboardPage = document.getElementById('dashboard-page');
+    const ordersOpen = ordersPage && ordersPage.classList.contains('active');
+    const dashOpen = dashboardPage && dashboardPage.classList.contains('active');
+    if (ordersOpen || dashOpen) fetchOnlineOrders({ silent: true });
+}, 30000);
 
 // ===== REAL-TIME POS STOCK =====
 // The POS product/stock grid was previously only reloaded right after this
@@ -3460,7 +3465,7 @@ setInterval(() => {
     if (isTyping) return;
 
     loadPOSProducts();
-}, 15000);
+}, 60000);
 
 // === Category filter ===
 document.getElementById('categoryFilter').addEventListener('change', function() {
@@ -3704,7 +3709,7 @@ document.getElementById('searchInput').addEventListener('input', function() {
 
 
 
-<script src="/assets/theme.js?v=push8"></script>
+<script src="/assets/theme.js?v=load1"></script>
 </body>
 
 </html>

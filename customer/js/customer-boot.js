@@ -5,6 +5,7 @@
     }
 
     ready(async function () {
+        const productsReady = loadProducts();
         const meRes = await fetch('/api/auth/me', { credentials: 'same-origin' });
         let me = null;
         if (meRes.ok) {
@@ -31,7 +32,7 @@
             setupGuestShop();
         }
 
-        await loadProducts();
+        await productsReady;
         if (!window.CUSTOMER_GUEST) {
             await loadProfile();
             initProfileForm();

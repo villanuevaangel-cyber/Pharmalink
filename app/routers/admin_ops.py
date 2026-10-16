@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import psycopg2
 from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import Response
 from psycopg2.extras import RealDictCursor
@@ -514,12 +515,11 @@ async def create_po(request: Request):
     for it in data.get("items") or []:
         drug_id = int(it.get("drug_id") or 0)
         qty = int(it.get("quantity_ordered") or 0)
-        unit_cost = float(it["unit_cost"]) if it.get("unit_cost") not in (None, "") else None
         if not drug_id:
             continue
         if qty < 1:
-            return {"success": False, "message": "Quantity must be at least 1."}
-        items.append((drug_id, qty, unit_cost))
+            return {"success": False, "message": "Boxes ordered must be at least 1."}
+        items.append((drug_id, qty))
     if not items:
         return {"success": False, "message": "Please add at least one item with a quantity of 1 or more."}
     supplier = fetch_one(
@@ -547,11 +547,11 @@ async def create_po(request: Request):
                 """,
                 (po_id, supplier_id, order_date, expected_date, notes, admin_name),
             )
-            for drug_id, qty, unit_cost in items:
+            for drug_id, qty in items:
                 item_id = next_id(cur, "purchase_order_items", "po_item_id")
                 cur.execute(
-                    "INSERT INTO purchase_order_items (po_item_id, po_id, drug_id, quantity_ordered, unit_cost) VALUES (%s, %s, %s, %s, %s)",
-                    (item_id, po_id, drug_id, qty, unit_cost),
+                    "INSERT INTO purchase_order_items (po_item_id, po_id, drug_id, quantity_ordered, unit_cost) VALUES (%s, %s, %s, %s, NULL)",
+                    (item_id, po_id, drug_id, qty),
                 )
             po_number = f"PO-{po_id:05d}"
             _log(
@@ -575,10 +575,6 @@ def _date_text(value) -> str:
     return str(value)[:10]
 
 
-def _peso(amount) -> str:
-    return f"₱{amount:,.2f}"
-
-
 def _po_email_subject(po_number: str) -> str:
     return f"Purchase order {po_number}"
 
@@ -586,14 +582,8 @@ def _po_email_subject(po_number: str) -> str:
 def _po_email_html(po_number, supplier_name, _to_email, order_date, expected_date, notes, lines) -> str:
     """One document for the on-screen preview and the message that is sent."""
     body_rows = []
-    total = 0.0
-    priced = 0
     for line in lines:
         qty = int(line["quantity"])
-        cost = line.get("unit_cost")
-        if cost is not None:
-            total += round(qty * round(float(cost), 2), 2)
-            priced += 1
         body_rows.append(
             "<tr>"
             f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('generic_name') or '—')}</td>"
@@ -602,7 +592,6 @@ def _po_email_html(po_number, supplier_name, _to_email, order_date, expected_dat
             f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;text-align:right;\">{qty}</td>"
             "</tr>"
         )
-    total_txt = _peso(round(total, 2)) if priced else "—"
     rows = "".join(body_rows) or (
         "<tr><td colspan=\"4\" style=\"padding:8px;\">No items</td></tr>"
     )
@@ -623,10 +612,10 @@ def _po_email_html(po_number, supplier_name, _to_email, order_date, expected_dat
         f"<th style=\"{th}\">Generic name</th>"
         f"<th style=\"{th}\">Brand</th>"
         f"<th style=\"{th}\">Dosage</th>"
-        f"<th style=\"{thr}\">Quantity</th>"
+        f"<th style=\"{thr}\">Boxes</th>"
         "</tr></thead><tbody>"
         f"{rows}</tbody></table>"
-        f"<p style=\"margin:12px 0 0;text-align:right;\"><strong>Grand total:</strong> {_esc(total_txt)}</p>"
+        "<p style=\"margin:12px 0 0;\">Please send the cost per box with the delivery.</p>"
         "</div>"
     )
 
@@ -665,15 +654,11 @@ def _lines_for_items(raw_items) -> tuple[list, str | None]:
         if not drug_id:
             continue
         if qty < 1:
-            return [], "Quantity must be at least 1."
-        cost_raw = it.get("unit_cost")
-        cost = None if cost_raw in (None, "") else round(float(cost_raw), 2)
-        if cost is not None and cost < 0:
-            return [], "Unit cost cannot be negative."
-        wanted.append((drug_id, qty, cost))
+            return [], "Boxes ordered must be at least 1."
+        wanted.append((drug_id, qty))
     if not wanted:
-        return [], "Please add at least one item with a valid quantity."
-    ids = list(dict.fromkeys(drug_id for drug_id, _, _ in wanted))
+        return [], "Add at least one medicine and enter at least 1 box."
+    ids = list(dict.fromkeys(drug_id for drug_id, _ in wanted))
     drugs = {
         int(row["drug_id"]): row
         for row in fetch_all(
@@ -682,7 +667,7 @@ def _lines_for_items(raw_items) -> tuple[list, str | None]:
         )
     }
     lines = []
-    for drug_id, qty, cost in wanted:
+    for drug_id, qty in wanted:
         drug = drugs.get(drug_id)
         if not drug:
             return [], "One of the items is not in the catalog."
@@ -691,7 +676,6 @@ def _lines_for_items(raw_items) -> tuple[list, str | None]:
             "brand_name": drug.get("brand_name") or "",
             "dosage": drug.get("dosage") or "",
             "quantity": qty,
-            "unit_cost": cost,
         })
     return lines, None
 
@@ -778,11 +762,26 @@ async def preview_purchase_order_email(request: Request):
     )
 
 
+def _plain_email_problem(reason: str) -> str:
+    text = (reason or "").strip()
+    low = text.lower()
+    if "no email" in low:
+        return "This supplier has no email address yet. Add it on the supplier record."
+    if any(token in low for token in (
+        "unreachable", "errno", "timed out", "timeout", "connection", "network",
+        "getaddrinfo", "refused", "reset",
+    )):
+        return "The internet connection failed, so the email was not sent. Try again."
+    if any(token in low for token in ("smtp", "auth", "login", "not configured", "password", "credential")):
+        return "The store email is not set up, so the message was not sent."
+    if not text or low == "sent" or "traceback" in low or "exception" in low:
+        return "The email was not sent. Try again."
+    return text
+
+
 def _mail_fail_message(po_number, sent=None, extra=""):
     reason = extra or ((sent or {}).get("message") or "").strip()
-    if reason and reason.lower() != "sent":
-        return f"{po_number} is still Pending. The email was not sent. {reason}"
-    return f"{po_number} is still Pending. The email was not sent."
+    return f"{po_number} is still Pending. {_plain_email_problem(reason)}"
 
 
 @router.post("/purchase-orders/{po_id}/email")
@@ -796,7 +795,7 @@ def email_purchase_order(po_id: int, request: Request):
         return {
             "success": False,
             "email_sent": False,
-            "message": f"The email was not sent. {exc}",
+            "message": "The email was not sent. Try again.",
         }
     if result.get("email_sent"):
         return {"success": True, **result}
@@ -831,7 +830,7 @@ def send_saved_purchase_order(po_id: int, actor: str = "System") -> dict:
     lines, err = _lines_for_items(raw_items)
     po_number = f"PO-{int(po['po_id']):05d}"
     if err:
-        log_event("Email Purchase Order", f"Did not email {po_number}. {err}", actor=actor)
+        log_event("Email Purchase Order", f"Could not email {po_number}. {_plain_email_problem(err)}", actor=actor)
         return {"email_sent": False, "po_number": po_number, "message": _mail_fail_message(po_number, extra=err)}
     payload = _email_preview_payload(
         po_number,
@@ -843,7 +842,7 @@ def send_saved_purchase_order(po_id: int, actor: str = "System") -> dict:
         lines,
     )
     if not payload.get("can_send"):
-        log_event("Email Purchase Order", f"Did not email {po_number}. Supplier has no email.", actor=actor)
+        log_event("Email Purchase Order", f"Could not email {po_number}. This supplier has no email address yet.", actor=actor)
         return {
             "email_sent": False,
             "po_number": po_number,
@@ -855,7 +854,7 @@ def send_saved_purchase_order(po_id: int, actor: str = "System") -> dict:
         return {"email_sent": True, "po_number": po_number, "message": f"Emailed {po_number} to {payload['to']}."}
     log_event(
         "Email Purchase Order",
-        f"Did not email {po_number} to {payload['to']}. {sent.get('message') or ''}".strip(),
+        f"Could not email {po_number}. {_plain_email_problem(sent.get('message') or '')}",
         actor=actor,
     )
     return {
@@ -932,18 +931,18 @@ async def receive_delivery(request: Request):
     if delivery_date < _manila_today():
         return {"success": False, "message": "Delivery date cannot be in the past."}
     admin_name = request.session.get("user_first_name") or "Admin"
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            delivery_id = next_id(cur, "deliveries", "delivery_id")
-            cur.execute(
-                "INSERT INTO deliveries (delivery_id, po_id, delivery_date, received_by, reference_number, notes) VALUES (%s, %s, %s, %s, %s, %s)",
-                (delivery_id, po_id, delivery_date, admin_name, reference, str(data.get("notes") or "").strip() or None),
-            )
-            created = 0
-            updated = 0
-            affected = set()
-            for it in to_receive:
-                try:
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                delivery_id = next_id(cur, "deliveries", "delivery_id")
+                cur.execute(
+                    "INSERT INTO deliveries (delivery_id, po_id, delivery_date, received_by, reference_number, notes) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (delivery_id, po_id, delivery_date, admin_name, reference, str(data.get("notes") or "").strip() or None),
+                )
+                created = 0
+                updated = 0
+                affected = set()
+                for it in to_receive:
                     lot_id, action = apply_received_lot(
                         cur,
                         it["drug_id"],
@@ -954,42 +953,43 @@ async def receive_delivery(request: Request):
                         it["cost_price"],
                         po_id,
                     )
-                except Exception:
-                    continue
-                if action == "created":
-                    created += 1
-                else:
-                    updated += 1
-                di_id = next_id(cur, "delivery_items", "delivery_item_id")
+                    if action == "created":
+                        created += 1
+                    else:
+                        updated += 1
+                    di_id = next_id(cur, "delivery_items", "delivery_item_id")
+                    cur.execute(
+                        "INSERT INTO delivery_items (delivery_item_id, delivery_id, po_item_id, lot_inventory_id, quantity_received) VALUES (%s, %s, %s, %s, %s)",
+                        (di_id, delivery_id, it["po_item_id"], lot_id, it["quantity_received"]),
+                    )
+                    cur.execute(
+                        "UPDATE purchase_order_items SET quantity_received = quantity_received + %s WHERE po_item_id = %s",
+                        (it["quantity_received"], it["po_item_id"]),
+                    )
+                    affected.add(it["drug_id"])
+                for drug_id in affected:
+                    sync_stock_status_for_drug(cur, drug_id)
                 cur.execute(
-                    "INSERT INTO delivery_items (delivery_item_id, delivery_id, po_item_id, lot_inventory_id, quantity_received) VALUES (%s, %s, %s, %s, %s)",
-                    (di_id, delivery_id, it["po_item_id"], lot_id, it["quantity_received"]),
+                    "SELECT SUM(quantity_ordered) AS ordered, SUM(quantity_received) AS received FROM purchase_order_items WHERE po_id = %s",
+                    (po_id,),
                 )
-                cur.execute(
-                    "UPDATE purchase_order_items SET quantity_received = quantity_received + %s WHERE po_item_id = %s",
-                    (it["quantity_received"], it["po_item_id"]),
+                totals = cur.fetchone()
+                ordered = int(totals["ordered"] or 0)
+                received = int(totals["received"] or 0)
+                new_status = "Pending" if received <= 0 else ("Received" if received >= ordered else "Partially Received")
+                cur.execute("UPDATE purchase_orders SET status = %s WHERE po_id = %s", (new_status, po_id))
+                po_number = f"PO-{po_id:05d}"
+                _log(
+                    cur,
+                    request,
+                    "Receive Delivery",
+                    f"Received {po_number}. {created} new stock row(s). {updated} row(s) already had this lot number and expiration, so those pieces were added there. Status is now {new_status}.",
                 )
-                affected.add(it["drug_id"])
-            if created == 0 and updated == 0:
-                return {"success": False, "message": "No items could be received. Check lot numbers and try again."}
-            for drug_id in affected:
-                sync_stock_status_for_drug(cur, drug_id)
-            cur.execute(
-                "SELECT SUM(quantity_ordered) AS ordered, SUM(quantity_received) AS received FROM purchase_order_items WHERE po_id = %s",
-                (po_id,),
-            )
-            totals = cur.fetchone()
-            ordered = int(totals["ordered"] or 0)
-            received = int(totals["received"] or 0)
-            new_status = "Pending" if received <= 0 else ("Received" if received >= ordered else "Partially Received")
-            cur.execute("UPDATE purchase_orders SET status = %s WHERE po_id = %s", (new_status, po_id))
-            po_number = f"PO-{po_id:05d}"
-            _log(
-                cur,
-                request,
-                "Receive Delivery",
-                f"Received {po_number}: {created} new lot(s), {updated} existing lot(s) topped up. Status is now {new_status}.",
-            )
+    except psycopg2.Error:
+        return {
+            "success": False,
+            "message": "This delivery could not be saved. Check the lot number and expiration date, then try again.",
+        }
     return {
         "success": True,
         "delivery_id": delivery_id,

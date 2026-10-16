@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>PharmaLink System - Admin Portal</title>
     <link rel="stylesheet" href="/assets/theme.css?v=notif-new1">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=admin-mobile1">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=sup-meds-lg">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=seg-mobile1">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'"/>
     <style>
         /* Page-specific tweaks only - shared cards, tables, modals, buttons,
            badges, toasts, and Profile layout live in assets/theme.css */
@@ -743,13 +743,13 @@
       </div>
     </div>
     <div class="chart-card">
-      <h3>Purchase Frequency <span>(orders / customer)</span></h3>
+      <h3>How often they buy <span>(orders)</span></h3>
       <div class="cs-seg-chart">
         <canvas id="purchaseFrequencyChart"></canvas>
       </div>
     </div>
     <div class="chart-card">
-      <h3>Spending Tier <span>(total ₱ / customer)</span></h3>
+      <h3>How much they have spent <span>(₱)</span></h3>
       <div class="cs-seg-chart">
         <canvas id="spendingTierChart"></canvas>
       </div>
@@ -1023,7 +1023,6 @@
 
         <div class="form-group">
             <label>Items:</label>
-            <p id="poDrugFilterHint" style="font-size:12px;color:#64748b;margin:0 0 8px;">Previously ordered from this supplier appear first. You can still pick any other catalog drug.</p>
             <div id="poItemsContainer" style="max-height:240px;overflow-y:auto;border:1.5px solid var(--ph-border);border-radius:var(--ph-radius-sm);padding:10px;margin-bottom:8px;"></div>
             <button type="button" id="addPoItemRowBtn" class="action-btn" style="background:var(--ph-surface-2);color:var(--ph-text-soft);"><i class="fas fa-plus"></i> Add Item</button>
         </div>
@@ -1826,14 +1825,12 @@
 
 
 <script src="/assets/chart-colors.js?v=chart-colors3"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>window.SEGMENTATION_MANAGE = true;</script>
-<script src="/shared/js/segmentation.js?v=cashier-plain1"></script>
-<script src="/admin/js/admin-boot.js?v=chart-tips1"></script>
+<script src="/shared/js/segmentation.js?v=plain2"></script>
+<script src="/admin/js/admin-boot.js?v=fast2"></script>
 <script>
 (function () {
-    const topItemsCtx = document.getElementById('topItemsChart').getContext('2d');
-    const forecastChartCtx = document.getElementById('forecastChart').getContext('2d');
     const forecastHint = document.getElementById('forecastHint');
     const forecastPeriodSelect = document.getElementById('forecastPeriod');
     const generateBtn = document.querySelector('.generate-btn');
@@ -1841,7 +1838,14 @@
     const forecastCards = document.querySelectorAll('.forecast-cards .card .value');
     // forecastCards[0] = Predicted Total Sales, [1] = Predicted Items Sold, [2] = Top Forecasted Category
 
-    const topItemsChart = new Chart(topItemsCtx, {
+    let topItemsChart = null;
+    let forecastChart = null;
+
+    function buildForecastCharts() {
+        if (!window.Chart || topItemsChart) return !!topItemsChart;
+        const topItemsCtx = document.getElementById('topItemsChart').getContext('2d');
+        const forecastChartCtx = document.getElementById('forecastChart').getContext('2d');
+        topItemsChart = new Chart(topItemsCtx, {
         type: 'bar',
         data: {
             labels: [],
@@ -1871,7 +1875,7 @@
         }
     });
 
-    const forecastChart = new Chart(forecastChartCtx, {
+        forecastChart = new Chart(forecastChartCtx, {
         type: 'line',
         data: {
             labels: [],
@@ -1958,8 +1962,12 @@
     // box to measure and can end up with a bad internal size that then
     // compounds every redraw. Exposing the instances lets the nav click
     // handler force a resize() once the section is actually visible.
-    window.__forecastChart = forecastChart;
-    window.__topItemsChart = topItemsChart;
+        window.__forecastChart = forecastChart;
+        window.__topItemsChart = topItemsChart;
+        return true;
+    }
+    if (window.Chart) buildForecastCharts();
+    else window.addEventListener('DOMContentLoaded', buildForecastCharts);
 
     function setCards(totalSales, itemsSold, topCategory) {
         if (forecastCards[0]) forecastCards[0].textContent = '₱' + Number(totalSales).toLocaleString(undefined, {minimumFractionDigits: 2});
@@ -1968,6 +1976,13 @@
     }
 
     function generateForecast() {
+        if (!buildForecastCharts()) {
+            if (forecastHint) {
+                forecastHint.style.display = 'block';
+                forecastHint.textContent = 'Chart library is still loading. Try again in a moment.';
+            }
+            return;
+        }
         const period = forecastPeriodSelect ? forecastPeriodSelect.value : 30;
 
         if (generateBtn) {
@@ -3351,14 +3366,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------- Supplier + Drug lookups (shared by Create + Receive) ----------
+    let poLookupsPromise = null;
     function loadPoLookups() {
-        return Promise.all([
+        if (poSupplierList.length && poDrugList.length) return Promise.resolve();
+        if (poLookupsPromise) return poLookupsPromise;
+        poLookupsPromise = Promise.all([
             fetch('/api/admin/suppliers').then(r => r.json()).catch(() => []),
             fetch('/api/admin/drugs').then(r => r.json()).catch(() => []),
         ]).then(([suppliers, drugs]) => {
             poSupplierList = (Array.isArray(suppliers) ? suppliers : []).filter(s => (s.status || '').toLowerCase() === 'active');
             poDrugList = (Array.isArray(drugs) ? drugs : []).filter(d => Number(d.is_active) === 1);
+        }).catch(() => {
+            poLookupsPromise = null;
         });
+        return poLookupsPromise;
     }
 
     // ---------- Purchase Orders table ----------
@@ -3423,14 +3444,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderPoItemRow(prefill) {
         const row = document.createElement('div');
         row.className = 'po-item-row';
-        row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px;';
+        row.style.cssText = 'display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;';
+        const fieldLabel = 'display:block;font-size:11px;font-weight:600;color:var(--ph-text-faint);margin-bottom:2px;';
         row.innerHTML = `
-            <select class="po-item-drug" style="flex:3;">
-                ${poDrugOptionsHtml(prefill?.drug_id)}
-            </select>
-            <input type="number" class="po-item-qty" placeholder="Qty (boxes)" min="1" step="1" value="${prefill?.quantity_ordered || 1}" style="flex:1;min-width:70px;">
-            <input type="number" class="po-item-cost" placeholder="Cost / box (optional)" min="0" step="0.01" style="flex:1;min-width:110px;">
-            <button type="button" class="po-item-remove btn-delete action-btn"><i class="fas fa-trash"></i></button>
+            <div style="flex:3;min-width:0;">
+                <label style="${fieldLabel}">Product</label>
+                <select class="po-item-drug" style="width:100%;">
+                    ${poDrugOptionsHtml(prefill?.drug_id)}
+                </select>
+            </div>
+            <div style="flex:0 0 110px;">
+                <label style="${fieldLabel}">Boxes</label>
+                <input type="number" class="po-item-qty" min="1" step="1" value="${prefill?.quantity_ordered || 1}" title="Number of boxes to order" style="width:100%;">
+            </div>
+            <button type="button" class="po-item-remove btn-delete action-btn" aria-label="Remove item"><i class="fas fa-trash"></i></button>
         `;
         if (prefill?.drug_id) {
             const sel = row.querySelector('.po-item-drug');
@@ -3537,39 +3564,56 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modal) modal.style.display = 'flex';
     }
 
+    function fillCreatePoChoices(prefillItems, prefillSupplierId) {
+        const supplierSel = document.getElementById('po_supplier');
+        if (supplierSel) {
+            const current = prefillSupplierId || supplierSel.value;
+            supplierSel.innerHTML = poSupplierList.length
+                ? poSupplierList.map(s => `<option value="${s.supplier_id}">${escapeHtmlPo(s.supplier_name)}</option>`).join('')
+                : '<option value="">No active suppliers</option>';
+            if (current) supplierSel.value = String(current);
+        }
+        const container = document.getElementById('poItemsContainer');
+        if (!container) return;
+        const typedQty = container.querySelector('.po-item-qty')?.value || '';
+        container.innerHTML = '';
+        const items = Array.isArray(prefillItems) && prefillItems.length ? prefillItems : [null];
+        items.forEach((it, index) => {
+            const row = renderPoItemRow(it);
+            if (!it && index === 0 && typedQty) {
+                const qty = row.querySelector('.po-item-qty');
+                if (qty) qty.value = typedQty;
+            }
+            container.appendChild(row);
+        });
+    }
+
     function openCreatePoModal(prefillItems, prefillSupplierId) {
         poEmailDraft = null;
         showPoFormPane();
+        document.getElementById('po_order_date').value = manilaTodayYmd();
+        lockFutureDateInput(document.getElementById('po_order_date'));
+        const expectedEl = document.getElementById('po_expected_date');
+        if (expectedEl) {
+            expectedEl.value = '';
+            lockFutureDateInput(expectedEl);
+        }
+        document.getElementById('po_notes').value = '';
+        const modal = document.getElementById('createPoModal');
+        if (modal) modal.style.display = 'flex';
+        if (poSupplierList.length && poDrugList.length) {
+            fillCreatePoChoices(prefillItems, prefillSupplierId);
+            loadSupplierPriorDrugs(document.getElementById('po_supplier')?.value);
+            return;
+        }
+        const supplierSel = document.getElementById('po_supplier');
+        if (supplierSel) supplierSel.innerHTML = '<option value="">Loading suppliers...</option>';
+        const container = document.getElementById('poItemsContainer');
+        if (container) container.innerHTML = '<p style="margin:0;color:var(--ph-text-faint);font-size:13px;">Loading products...</p>';
         loadPoLookups().then(() => {
-            const supplierSel = document.getElementById('po_supplier');
-            if (supplierSel) {
-                supplierSel.innerHTML = poSupplierList.map(s => `<option value="${s.supplier_id}">${escapeHtmlPo(s.supplier_name)}</option>`).join('');
-                if (prefillSupplierId) supplierSel.value = String(prefillSupplierId);
-            }
-
-            document.getElementById('po_order_date').value = manilaTodayYmd();
-            lockFutureDateInput(document.getElementById('po_order_date'));
-            const expectedEl = document.getElementById('po_expected_date');
-            if (expectedEl) {
-                expectedEl.value = '';
-                lockFutureDateInput(expectedEl);
-            }
-            document.getElementById('po_notes').value = '';
-
-            const container = document.getElementById('poItemsContainer');
-            const afterPrior = () => {
-                if (container) {
-                    container.innerHTML = '';
-                    if (Array.isArray(prefillItems) && prefillItems.length > 0) {
-                        prefillItems.forEach(it => container.appendChild(renderPoItemRow(it)));
-                    } else {
-                        container.appendChild(renderPoItemRow());
-                    }
-                }
-                const modal = document.getElementById('createPoModal');
-                if (modal) modal.style.display = 'flex';
-            };
-            loadSupplierPriorDrugs(supplierSel?.value).then(afterPrior);
+            if (!modal || modal.style.display === 'none') return;
+            fillCreatePoChoices(prefillItems, prefillSupplierId);
+            loadSupplierPriorDrugs(document.getElementById('po_supplier')?.value);
         });
     }
 
@@ -3601,7 +3645,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return {
                 drug_id: row.querySelector('.po-item-drug').value,
                 quantity_ordered: qty,
-                unit_cost: row.querySelector('.po-item-cost').value || null,
             };
         }).filter(it => it.drug_id && it.quantity_ordered >= 1);
         return {
@@ -3910,6 +3953,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!deliveriesLoaded) {
                 deliveriesLoaded = true;
                 loadPurchaseOrders();
+                loadPoLookups();
             }
         });
     }
@@ -4187,9 +4231,9 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="/admin/js/inventory.js?v=recv2"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+    <script defer src="/admin/js/inventory.js?v=load1"></script>
     <script src="/admin/js/supplier.js?v=no-policy1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -4233,6 +4277,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Initialize user management events when first viewed
                 initializeUserManagementEvents();
                 userManagementInitialized = true;
+                if (typeof window.reloadAdminUserTables === 'function') window.reloadAdminUserTables();
+            } else if (targetId === 'inventory') {
+                if (typeof window.ensureInventoryData === 'function') window.ensureInventoryData();
             } else if (targetId === 'supplier-section') {
                 if (typeof initializeSupplierModule === 'function') {
                     initializeSupplierModule();
@@ -5213,8 +5260,13 @@ function renderSalesCharts(labels, salesData, catLabels, catData) {
     }
 }
 
-renderSalesCharts([], [], [], []);
-renderSeasonalChart([], []);
+function bootSalesCharts() {
+    if (!window.Chart) return;
+    renderSalesCharts([], [], [], []);
+    renderSeasonalChart([], []);
+}
+if (window.Chart) bootSalesCharts();
+else window.addEventListener('DOMContentLoaded', bootSalesCharts);
 
 function loadSalesAnalytics() {
     fetch('/api/admin/sales-analytics')
@@ -5225,8 +5277,7 @@ function loadSalesAnalytics() {
         })
         .catch(err => console.error('Analytics reload error:', err));
 }
-
-loadSalesAnalytics();
+window.loadSalesAnalytics = loadSalesAnalytics;
 </script>
 
 <script>
@@ -5590,9 +5641,9 @@ loadSalesAnalytics();
         });
     });
 
-    refreshActivityLogs();
     refreshMovingItems();
-    refreshExpiringMeds();
+    window.refreshActivityLogs = refreshActivityLogs;
+    window.refreshExpiringMeds = refreshExpiringMeds;
     function fmtAutomationAt(iso) {
         if (!iso) return '';
         const d = new Date(iso);
@@ -5682,12 +5733,17 @@ loadSalesAnalytics();
         if (window.phConfirm) window.phConfirm(msg).then(go);
         else go(confirm(msg));
     });
-    refreshAutomationStatus();
+    function dashPanelOpen(name) {
+        const panel = document.querySelector('#dashboard .ad-dash-panel[data-ad-panel="' + name + '"]');
+        return !!(panel && panel.classList.contains('active'));
+    }
+    setTimeout(refreshAutomationStatus, 400);
     setInterval(refreshAutomationStatus, 60000);
-    setInterval(refreshDashboardCards, 15000);
-    setInterval(refreshActivityLogs, 30000);
+    setInterval(refreshDashboardCards, 60000);
+    setInterval(() => { if (dashPanelOpen('activity')) refreshActivityLogs(); }, 120000);
     setInterval(refreshMovingItems, 60000);
-    setInterval(refreshExpiringMeds, 60000);
+    setInterval(() => { if (dashPanelOpen('expiring')) refreshExpiringMeds(); }, 60000);
+    setInterval(() => { if (dashPanelOpen('analytics')) loadSalesAnalytics(); }, 120000);
 })();
 
 // Dashboard cards - clickable navigation + tooltips
@@ -5736,17 +5792,22 @@ window.switchAdminDashPanel = function switchAdminDashPanel(name) {
         panel.classList.toggle('active', panel.dataset.adPanel === name);
     });
     if (name === 'analytics') {
+        if (typeof window.loadSalesAnalytics === 'function') window.loadSalesAnalytics();
         requestAnimationFrame(() => {
             if (typeof monthlySalesChartInstance !== 'undefined' && monthlySalesChartInstance) monthlySalesChartInstance.resize();
             if (typeof topCategoriesChartInstance !== 'undefined' && topCategoriesChartInstance) topCategoriesChartInstance.resize();
             if (typeof seasonalTrendChartInstance !== 'undefined' && seasonalTrendChartInstance) seasonalTrendChartInstance.resize();
         });
+    } else if (name === 'expiring' && typeof window.refreshExpiringMeds === 'function') {
+        window.refreshExpiringMeds();
+    } else if (name === 'activity' && typeof window.refreshActivityLogs === 'function') {
+        window.refreshActivityLogs();
     }
 };
 document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     btn.addEventListener('click', () => window.switchAdminDashPanel(btn.dataset.adPanel));
 });
 </script>
-<script src="/assets/theme.js?v=push8"></script>
+<script src="/assets/theme.js?v=load1"></script>
 </body>
 </html>

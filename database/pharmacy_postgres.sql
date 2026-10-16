@@ -429,7 +429,7 @@ ALTER TABLE drugs_master ADD PRIMARY KEY (drug_id);
 ALTER TABLE drugs_master ADD CONSTRAINT uq_drugs_master_unique_drug UNIQUE (generic_name,dosage,form);
 ALTER TABLE inventory ADD PRIMARY KEY (id);
 ALTER TABLE inventory_lots ADD PRIMARY KEY (lot_inventory_id);
-ALTER TABLE inventory_lots ADD CONSTRAINT uq_inventory_lots_unique_lot UNIQUE (drug_id,lot_number);
+ALTER TABLE inventory_lots ADD CONSTRAINT uq_inventory_lots_lot_expiry UNIQUE (drug_id, lot_number, expiration_date);
 ALTER TABLE order_details ADD PRIMARY KEY (detail_id);
 ALTER TABLE prescriptions ADD PRIMARY KEY (id);
 ALTER TABLE returns ADD PRIMARY KEY (id);

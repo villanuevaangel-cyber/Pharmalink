@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             if (loginMessage) loginMessage.innerHTML = '';
 
-            const usernameValue = document.getElementById('email').value.trim();
+            const usernameValue = document.getElementById('username').value.trim();
             const passwordValue = passwordInput.value.trim();
             const submitBtn = loginForm.querySelector('button[type="submit"]');
             if (submitBtn) {

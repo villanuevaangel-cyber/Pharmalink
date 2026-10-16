@@ -84,23 +84,6 @@ def _log(cur, request: Request, action: str, details: str):
     write_activity_log(cur, action, details, request=request)
 
 
-def _sync_all_stock(cur):
-    cur.execute(
-        """
-        UPDATE drugs_master dm
-        SET stock_status = CASE
-            WHEN COALESCE(dm.minimum_stock, 0) = 0
-             AND NOT EXISTS (SELECT 1 FROM inventory_lots WHERE drug_id = dm.drug_id)
-            THEN 'ok'
-            WHEN COALESCE((SELECT SUM(current_stock) FROM inventory_lots WHERE is_active = 1 AND expiration_date >= CURRENT_DATE AND drug_id = dm.drug_id), 0) <= 0 THEN 'out'
-            WHEN COALESCE((SELECT SUM(current_stock) FROM inventory_lots WHERE is_active = 1 AND expiration_date >= CURRENT_DATE AND drug_id = dm.drug_id), 0) <= dm.minimum_stock THEN 'low'
-            ELSE 'ok'
-        END
-        WHERE dm.is_active = 1
-        """
-    )
-
-
 def _parse_day(value: str):
     try:
         return date.fromisoformat(str(value or "").strip()[:10])
@@ -144,7 +127,6 @@ def dashboard(
         period_label = "This Month"
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            _sync_all_stock(cur)
             cur.execute(
                 "SELECT COUNT(u.user_id) AS n FROM users u JOIN role r ON u.role_id=r.role_id WHERE LOWER(r.role_name) != 'customer'"
             )
@@ -152,7 +134,13 @@ def dashboard(
             cur.execute("SELECT COUNT(customer_id) AS n FROM customers")
             customer_count = int(cur.fetchone()["n"] or 0)
             cur.execute(
-                "SELECT COALESCE(SUM(total_amount), 0) AS total FROM sales WHERE date_created::date BETWEEN %s AND %s AND status = 'completed'",
+                """
+                SELECT COALESCE(SUM(total_amount), 0) AS total
+                FROM sales
+                WHERE status = 'completed'
+                  AND date_created >= %s
+                  AND date_created < (%s::date + INTERVAL '1 day')
+                """,
                 (start.isoformat(), end.isoformat()),
             )
             total_sales = float(cur.fetchone()["total"] or 0)
