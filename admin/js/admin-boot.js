@@ -13,42 +13,21 @@
     ready(async function () {
         try {
             const meRes = await fetch("/api/auth/me", { credentials: "same-origin" });
-            if (!meRes.ok) { window.location.href = "/"; return; }
-            const me = await meRes.json();
-            if (!me.success || String(me.role || "").toLowerCase() !== "admin") {
-                window.location.href = "/";
-                return;
+            if (meRes.status === 401) { window.location.href = "/"; return; }
+            if (meRes.ok) {
+                const me = await meRes.json();
+                if (!me.success || String(me.role || "").toLowerCase() !== "admin") {
+                    window.location.href = "/";
+                    return;
+                }
+                window.ADMIN_USER_ID = me.user_id;
+                const staff = me.staff || {};
+                applyProfile(staff, me.firstName, me.lastName, me.profile_image || staff.profile_image);
             }
-            window.ADMIN_USER_ID = me.user_id;
-            let staff = me.staff || {};
-            try {
-                const profileRes = await fetch("/api/admin/profile", { credentials: "same-origin" });
-                const profile = await profileRes.json();
-                if (profile.success && profile.staff) staff = profile.staff;
-            } catch (err) {}
-            applyProfile(staff, me.firstName, me.lastName, me.profile_image || staff.profile_image);
         } catch (err) {
-            window.location.href = "/";
             return;
         }
 
-        const yearSel = document.getElementById("analytics-year");
-        if (yearSel) {
-            const y = new Date().getFullYear();
-            const current = yearSel.value;
-            yearSel.innerHTML = "";
-            for (let i = 0; i < 5; i++) {
-                const opt = document.createElement("option");
-                opt.value = String(y - i);
-                opt.textContent = String(y - i);
-                if (String(y - i) === current || (!current && i === 0)) opt.selected = true;
-                yearSel.appendChild(opt);
-            }
-            yearSel.dispatchEvent(new Event("change"));
-        }
-
-        loadStaffTable();
-        loadCustomerTable();
     });
 
     function personName(staff, firstName, lastName, fallback) {
@@ -59,8 +38,9 @@
 
     function applyProfile(staff, firstName, lastName, profileImage) {
         const name = personName(staff, firstName, lastName, "Admin");
+        const first = String(staff.first_name || firstName || "").replace(/\s+/g, " ").trim() || "Admin";
         const welcome = document.getElementById("headerWelcomeName");
-        if (welcome) welcome.textContent = "Welcome, " + name;
+        if (welcome) welcome.textContent = "Welcome, " + first;
         ["first_name", "middle_name", "last_name", "email", "phone_number", "address"].forEach((id) => {
             const el = document.getElementById(id);
             if (!el || staff[id] == null) return;

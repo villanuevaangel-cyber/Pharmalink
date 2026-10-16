@@ -48,6 +48,12 @@
         return '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    function formatCatalogPrice(n) {
+        const v = Number(n);
+        if (!Number.isFinite(v) || v <= 0) return '—';
+        return money(v);
+    }
+
     function daysUntil(dateStr) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -79,6 +85,8 @@
         document.querySelectorAll('.inv-panel').forEach(el => {
             el.classList.toggle('active', el.id === 'inv-panel-' + panel);
         });
+        if (panel === 'history') fetchStockAdjustments();
+        if (panel === 'reorder' && typeof window.loadReorderSuggestions === 'function') window.loadReorderSuggestions();
     }
 
     function allCategories() {
@@ -146,27 +154,141 @@
         return sel.value;
     }
 
-    function refreshGenericDatalist() {
-        const list = document.getElementById('genericNameSuggestions');
-        if (!list) return;
-        const names = [...new Set(masterDrugs.map(d => d.generic_name).filter(Boolean))].sort();
-        list.innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
-        refreshCopyFromSelect();
-    }
-
-    function refreshCopyFromSelect() {
-        const sel = document.getElementById('new_copy_from');
-        if (!sel) return;
-        const prev = sel.value;
-        const active = masterDrugs.filter(d => Number(d.is_active) === 1).slice().sort((a, b) =>
+    function catalogDrugs() {
+        return masterDrugs.filter(d => Number(d.is_active) === 1).slice().sort((a, b) =>
             String(a.generic_name || '').localeCompare(String(b.generic_name || ''), undefined, { sensitivity: 'base' })
         );
-        sel.innerHTML = '<option value="">Start blank - or pick a catalog drug to copy</option>' +
-            active.map(d => {
-                const brand = d.brand_name ? ` (${d.brand_name})` : '';
-                return `<option value="${d.drug_id}">${escapeHtml(d.generic_name)}${escapeHtml(brand)} - ${escapeHtml(d.dosage)}, ${escapeHtml(d.form)}</option>`;
-            }).join('');
-        if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+    }
+
+    function hidePickList(id) {
+        const list = document.getElementById(id);
+        if (!list) return;
+        list.hidden = true;
+        list.innerHTML = '';
+    }
+
+    function showPickList(id, items, onPick) {
+        const list = document.getElementById(id);
+        if (!list) return;
+        if (!items.length) {
+            hidePickList(id);
+            return;
+        }
+        list.hidden = false;
+        list.innerHTML = items.map((item, i) =>
+            `<button type="button" class="drug-pick-item" data-i="${i}">` +
+            `<strong>${escapeHtml(item.title)}</strong>` +
+            (item.meta ? `<span>${escapeHtml(item.meta)}</span>` : '') +
+            `</button>`
+        ).join('');
+        list.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                onPick(items[Number(btn.dataset.i)]);
+            });
+        });
+    }
+
+    function renderCopyMatches(query) {
+        const q = String(query || '').trim().toLowerCase();
+        const list = document.getElementById('new_copy_list');
+        if (!list) return;
+        if (q.length < 1) {
+            hidePickList('new_copy_list');
+            return;
+        }
+        const matches = catalogDrugs().filter(d =>
+            [d.generic_name, d.brand_name, d.dosage, d.form, d.category].join(' ').toLowerCase().includes(q)
+        ).slice(0, 12);
+        if (!matches.length) {
+            list.hidden = false;
+            list.innerHTML = '<p class="drug-pick-empty">No catalog drug matches.</p>';
+            return;
+        }
+        showPickList('new_copy_list', matches.map(d => ({
+            title: d.generic_name,
+            meta: [d.brand_name, d.dosage, d.form].filter(Boolean).join(' · '),
+            drug: d,
+        })), (item) => {
+            const search = document.getElementById('new_copy_search');
+            if (search) search.value = item.drug.generic_name;
+            hidePickList('new_copy_list');
+            fillNewDrugFromRecord(item.drug, true);
+            const barcode = document.getElementById('new_barcode');
+            if (barcode) barcode.value = '';
+        });
+    }
+
+    function renderGenericMatches(query) {
+        const q = String(query || '').trim().toLowerCase();
+        if (q.length < 1) {
+            hidePickList('new_generic_list');
+            return;
+        }
+        const names = [...new Set(catalogDrugs().map(d => String(d.generic_name || '').trim()).filter(Boolean))];
+        const matches = names
+            .filter(n => n.toLowerCase().includes(q))
+            .sort((a, b) => {
+                const as = a.toLowerCase().startsWith(q) ? 0 : 1;
+                const bs = b.toLowerCase().startsWith(q) ? 0 : 1;
+                return as - bs || a.localeCompare(b, undefined, { sensitivity: 'base' });
+            })
+            .slice(0, 12);
+        showPickList('new_generic_list', matches.map(n => {
+            const count = catalogDrugs().filter(d => String(d.generic_name || '').toLowerCase() === n.toLowerCase()).length;
+            return {
+                title: n,
+                meta: count === 1 ? '1 catalog item' : `${count} catalog items`,
+                name: n,
+            };
+        }), (item) => {
+            const input = document.getElementById('new_generic_name');
+            if (input) input.value = item.name;
+            hidePickList('new_generic_list');
+            suggestFromGeneric(item.name, 'new');
+        });
+    }
+
+    function bindPickInput(inputId, listId, render, blockEnter) {
+        const input = document.getElementById(inputId);
+        if (!input || input.dataset.pickBound) return;
+        input.dataset.pickBound = '1';
+        input.addEventListener('input', () => render(input.value));
+        input.addEventListener('focus', () => render(input.value));
+        input.addEventListener('blur', () => setTimeout(() => hidePickList(listId), 150));
+        input.addEventListener('keydown', (e) => {
+            const list = document.getElementById(listId);
+            const open = list && !list.hidden;
+            const buttons = open ? [...list.querySelectorAll('button')] : [];
+            if (e.key === 'Escape' && open) {
+                hidePickList(listId);
+                return;
+            }
+            if (!buttons.length) {
+                if (blockEnter && e.key === 'Enter') e.preventDefault();
+                return;
+            }
+            const current = buttons.findIndex(b => b.classList.contains('is-active'));
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const next = e.key === 'ArrowDown'
+                    ? (current + 1) % buttons.length
+                    : (current <= 0 ? buttons.length - 1 : current - 1);
+                buttons.forEach(b => b.classList.remove('is-active'));
+                buttons[next].classList.add('is-active');
+                buttons[next].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                (buttons[current >= 0 ? current : 0]).dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            }
+        });
+    }
+
+    function refreshGenericDatalist() {
+        const copy = document.getElementById('new_copy_search');
+        if (copy && document.activeElement === copy) renderCopyMatches(copy.value);
+        const generic = document.getElementById('new_generic_name');
+        if (generic && document.activeElement === generic) renderGenericMatches(generic.value);
     }
 
     function refreshBrandDatalist(genericName) {
@@ -231,8 +353,16 @@
             const valEl = document.getElementById('new_dosage_value');
             const unitEl = document.getElementById('new_dosage_unit');
             if (valEl) valEl.value = dose.unit === 'N/A' ? '' : dose.value;
-            if (unitEl) unitEl.value = DOSAGE_UNITS.includes(dose.unit) ? dose.unit : (dose.unit ? dose.unit : 'mg');
-            if (unitEl && dose.unit === 'N/A') unitEl.value = 'N/A';
+            if (unitEl) {
+                const wanted = dose.unit || 'mg';
+                if (![...unitEl.options].some(o => o.value === wanted)) {
+                    const opt = document.createElement('option');
+                    opt.value = wanted;
+                    opt.textContent = wanted;
+                    unitEl.appendChild(opt);
+                }
+                unitEl.value = wanted;
+            }
             if (valEl) valEl.required = unitEl?.value !== 'N/A';
         }
         setSelectValue(document.getElementById('new_form'), drug.form, 'new_form_custom', '__other__');
@@ -243,6 +373,8 @@
         const proc = String(drug.procurement_type || 'purchase').toLowerCase() === 'consignment' ? 'consignment' : 'purchase';
         const procEl = document.getElementById('new_procurement_type');
         if (procEl && (overwrite || !procEl.value)) procEl.value = proc;
+        const saleEl = document.getElementById('new_sale_class');
+        if (saleEl && drug.sale_class) saleEl.value = drug.sale_class === 'otc' ? 'otc' : 'rx';
         const hint = document.getElementById('new_autofill_hint');
         if (hint) hint.textContent = 'Filled from catalog. Edit dosage if this is a new strength.';
         refreshBrandDatalist(drug.generic_name);
@@ -266,6 +398,7 @@
         const cat = mostCommon(pool.map(d => d.category));
         const form = mostCommon(pool.map(d => d.form));
         const proc = mostCommon(pool.map(d => d.procurement_type || 'purchase')) || 'purchase';
+        const saleClass = mostCommon(pool.map(d => d.sale_class || 'rx')) || 'rx';
         const mins = pool.map(d => Number(d.minimum_stock)).filter(n => Number.isFinite(n));
         const minStock = mins.length ? String(Math.round(mins.reduce((a, b) => a + b, 0) / mins.length)) : '';
         const brands = [...new Set(pool.map(d => d.brand_name).filter(Boolean))];
@@ -277,6 +410,7 @@
             category: cat,
             minimum_stock: minStock,
             procurement_type: proc,
+            sale_class: saleClass,
         };
         fillNewDrugFromRecord(template, false);
         if (hint && (cat || form)) {
@@ -285,18 +419,21 @@
     }
 
     function clientDrugError(payload) {
-        const nameRe = /^[A-Za-z0-9Ññ][A-Za-z0-9Ññ\s.'/()+\-]{1,79}$/;
+        const nameRe = /^[A-Za-z0-9Ññ][A-Za-z0-9Ññ\s.'/()+\-,]{1,254}$/;
         if (!payload.generic_name) return 'Generic name is required.';
-        if (!nameRe.test(payload.generic_name)) return 'Generic name: 2-80 characters, letters/numbers only (plus . \' / ( ) - +).';
-        if (payload.brand_name && !nameRe.test(payload.brand_name)) return 'Brand name: 2-80 characters, letters/numbers only (plus . \' / ( ) - +).';
+        if (!nameRe.test(payload.generic_name)) return 'Generic name: 2-255 characters, letters/numbers only (plus . \' / ( ) - + ,).';
+        if (payload.brand_name && !nameRe.test(payload.brand_name)) return 'Brand name: 2-255 characters, letters/numbers only (plus . \' / ( ) - + ,).';
         if (!payload.dosage) return 'Dosage is required.';
         if (!payload.form) return 'Form is required.';
         if (!payload.category) return 'Category is required.';
         const min = Number(payload.minimum_stock);
-        if (!Number.isInteger(min) || min < 0 || min > 100000) return 'Minimum stock must be a whole number from 0 to 100,000.';
+        if (!Number.isInteger(min) || min < 1 || min > 500) return 'Minimum stock must be a whole number from 1 to 500.';
         if (payload.barcode && !/^[A-Za-z0-9\-._]{4,64}$/.test(payload.barcode)) return 'Barcode must be 4-64 letters, numbers, dash, dot, or underscore.';
         if (!payload.procurement_type || !['purchase', 'consignment'].includes(payload.procurement_type)) {
             return 'Choose Purchased or Consignment. It is not set automatically.';
+        }
+        if (!payload.sale_class || !['otc', 'rx'].includes(payload.sale_class)) {
+            return 'Choose OTC or Needs Rx.';
         }
         const dup = masterDrugs.some(d =>
             String(d.generic_name || '').toLowerCase() === payload.generic_name.toLowerCase()
@@ -341,54 +478,24 @@
             if (minEl) minEl.value = '20';
             const procEl = document.getElementById('new_procurement_type');
             if (procEl) procEl.value = 'purchase';
-            const copyEl = document.getElementById('new_copy_from');
+            const copyEl = document.getElementById('new_copy_search');
             if (copyEl) copyEl.value = '';
+            hidePickList('new_copy_list');
+            hidePickList('new_generic_list');
             const hint = document.getElementById('new_autofill_hint');
             if (hint) hint.textContent = 'Type a known generic, or pick a drug above, to auto-fill form, category, and min stock.';
             toggleCustomField('new_form', 'new_form_custom', '__other__');
             toggleCustomField('new_category', 'new_category_custom', '__new__');
             showModal('addDrugModal');
         });
-        document.getElementById('openAdjustHistoryBtn')?.addEventListener('click', () => {
-            fetchStockAdjustments();
-            showModal('adjustHistoryModal');
-        });
-        document.getElementById('openReorderModalBtn')?.addEventListener('click', () => {
-            if (typeof window.loadReorderSuggestions === 'function') window.loadReorderSuggestions();
-            showModal('reorderModal');
-        });
-
-        document.getElementById('closeDrugModal')?.addEventListener('click', () => hideModal('addDrugModal'));
-        document.getElementById('closeEditDrugMasterModal')?.addEventListener('click', () => hideModal('editDrugMasterModal'));
-        document.getElementById('closeEditModal')?.addEventListener('click', () => hideModal('editLotModal'));
         document.getElementById('closeAdjustStockModal')?.addEventListener('click', () => hideModal('adjustStockModal'));
-        document.getElementById('closeAdjustHistoryModal')?.addEventListener('click', () => hideModal('adjustHistoryModal'));
-        document.getElementById('closeReorderModal')?.addEventListener('click', () => hideModal('reorderModal'));
-        document.getElementById('runConsignmentCheckBtn')?.addEventListener('click', () => {
-            fetch('/api/admin/lots/consignment-cross-check', { method: 'POST' })
-                .then(res => res.json())
-                .then(result => {
-                    if (!result.success) {
-                        alert(result.message || 'Cross-check failed.');
-                        return;
-                    }
-                    fetchLots();
-                    const n = Number(result.updated || 0);
-                    if (!n) {
-                        alert('No near-expiry lots were linked to a supplier with a consignment policy.');
-                        return;
-                    }
-                    alert('Cross-check done. Returnable: ' + (result.returnable || 0) + '. Non-returnable: ' + (result.non_returnable || 0) + '.');
-                })
-                .catch(err => alert('Error: ' + err.message));
-        });
 
         document.querySelectorAll('.inv-tab-btn[data-inv-panel]').forEach(btn => {
             btn.addEventListener('click', () => switchInvPanel(btn.getAttribute('data-inv-panel')));
         });
 
         window.addEventListener('click', e => {
-            ['addDrugModal', 'editDrugMasterModal', 'editLotModal', 'adjustStockModal', 'adjustHistoryModal', 'reorderModal', 'addCategoryModal'].forEach(id => {
+            ['addDrugModal', 'editDrugMasterModal', 'editLotModal', 'adjustStockModal', 'addCategoryModal'].forEach(id => {
                 const modal = document.getElementById(id);
                 if (modal && e.target === modal) modal.style.display = 'none';
             });
@@ -455,7 +562,7 @@
 
         let rows = masterDrugs.filter(d => {
             if (search) {
-                const hay = [d.generic_name, d.brand_name, d.dosage, d.form, d.category].join(' ').toLowerCase();
+                const hay = [d.generic_name, d.brand_name, d.dosage, d.form, d.category, d.sale_class === 'otc' ? 'otc' : 'needs rx'].join(' ').toLowerCase();
                 if (!hay.includes(search)) return false;
             }
             if (category && category !== 'all' && d.category !== category) return false;
@@ -486,7 +593,9 @@
                 <td>${escapeHtml(d.dosage)}</td>
                 <td>${escapeHtml(d.form)}</td>
                 <td>${escapeHtml(d.category)}${String(d.procurement_type || '') === 'consignment' ? ' <span class="inv-chip">Consignment</span>' : ''}</td>
+                <td><span class="inv-chip">${d.sale_class === 'otc' ? 'OTC' : 'Needs Rx'}</span></td>
                 <td>${d.minimum_stock}</td>
+                <td>${formatCatalogPrice(d.selling_price)}</td>
                 <td class="inv-mono">${escapeHtml(d.barcode) || '-'}</td>
                 ${statusCell}
                 <td class="action-btn-group">
@@ -739,6 +848,8 @@
         document.getElementById('edit_minimum_stock').value = drug.minimum_stock;
         const procEl = document.getElementById('edit_procurement_type');
         if (procEl) procEl.value = drug.procurement_type === 'consignment' ? 'consignment' : 'purchase';
+        const saleEl = document.getElementById('edit_sale_class');
+        if (saleEl) saleEl.value = drug.sale_class === 'otc' ? 'otc' : 'rx';
         const editBarcodeEl = document.getElementById('edit_barcode');
         if (editBarcodeEl) editBarcodeEl.value = drug.barcode || '';
         showModal('editDrugMasterModal');
@@ -754,6 +865,7 @@
             category: pickedCategory('new'),
             minimum_stock: parseInt(document.getElementById('new_minimum_stock').value, 10),
             procurement_type: document.getElementById('new_procurement_type')?.value || '',
+            sale_class: document.getElementById('new_sale_class')?.value || '',
             barcode: (document.getElementById('new_barcode')?.value || '').trim(),
         };
         const err = clientDrugError(payload);
@@ -789,6 +901,7 @@
             category: pickedCategory('edit'),
             minimum_stock: parseInt(document.getElementById('edit_minimum_stock').value, 10),
             procurement_type: document.getElementById('edit_procurement_type')?.value || '',
+            sale_class: document.getElementById('edit_sale_class')?.value || '',
             barcode: (document.getElementById('edit_barcode')?.value || '').trim(),
         };
         const err = clientDrugError(payload);
@@ -816,11 +929,18 @@
     }
 
     function fetchLots() {
+        const body = document.getElementById('inventoryBody');
+        if (body) body.innerHTML = '<tr><td colspan="13" class="inv-empty">Loading...</td></tr>';
         const status = lotStatusFilter();
         const excludeExpired = status === 'active' ? '1' : '0';
         const params = new URLSearchParams({ status, exclude_expired: excludeExpired });
         return fetch('/api/admin/lots?' + params.toString())
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error('Server returned ' + res.status);
+                const ctype = (res.headers.get('content-type') || '').toLowerCase();
+                if (!ctype.includes('application/json')) throw new Error('Server returned ' + res.status);
+                return res.json();
+            })
             .then(data => {
                 lots = Array.isArray(data) ? data : [];
                 renderSummaryCards();
@@ -829,7 +949,7 @@
             .catch(err => {
                 console.error('Failed to load inventory lots:', err);
                 const body = document.getElementById('inventoryBody');
-                if (body) body.innerHTML = '<tr><td colspan="14" class="inv-empty is-error">Failed to load inventory.</td></tr>';
+                if (body) body.innerHTML = '<tr><td colspan="13" class="inv-empty is-error">Failed to load inventory.</td></tr>';
             });
     }
 
@@ -873,7 +993,7 @@
         updateInvPager('lots', paged.page, paged.pages, paged.total);
 
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="14" class="inv-empty">No stock lots found.</td></tr>';
+            body.innerHTML = '<tr><td colspan="13" class="inv-empty">No stock lots found.</td></tr>';
             return;
         }
 
@@ -886,18 +1006,6 @@
             const expClass = expired ? 'is-expired' : (expiringCritical ? 'is-critical' : (expiringSoon ? 'is-soon' : ''));
             const stockClass = l.current_stock === 0 ? 'is-out' : (l.current_stock <= l.minimum_stock ? 'is-low' : 'is-ok');
             const expTag = expired ? ' (expired)' : (expiringCritical ? ` (${daysLeft}d left ⚠️)` : (expiringSoon ? ` (${daysLeft}d left)` : ''));
-            const policy = String(l.supplier_consignment_policy || '').toLowerCase();
-            const hasPolicy = policy === 'returnable' || policy === 'non_returnable';
-            const status = String(l.return_status || '').toLowerCase();
-            const nearExpiry = !expired && daysLeft <= 90 && l.current_stock > 0;
-            let returnCell = '-';
-            if (status === 'returnable') {
-                returnCell = '<span class="inv-chip return-yes">Returnable</span>';
-            } else if (status === 'non_returnable') {
-                returnCell = '<span class="inv-chip return-no">Non-returnable</span>';
-            } else if (nearExpiry && hasPolicy) {
-                returnCell = '<span class="inv-chip return-flag">Flagged - run check</span>';
-            }
             return `
             <tr data-lot-id="${l.lot_inventory_id}">
                 <td>${escapeHtml(l.generic_name)}</td>
@@ -911,7 +1019,6 @@
                 <td>${l.minimum_stock}</td>
                 <td>${money(l.price)}</td>
                 <td>${l.supplier && suppliersById[l.supplier] ? escapeHtml(suppliersById[l.supplier]) : '-'}</td>
-                <td>${returnCell}</td>
                 <td><span class="inv-badge ${isActive ? 'active' : 'archived'}">${isActive ? 'Active' : 'Archived'}</span></td>
                 <td class="action-btn-group">
                     <button type="button" class="inv-icon-btn adjust-stock-btn" title="Adjust Stock (with reason)"><i class="fas fa-sliders"></i></button>
@@ -1031,7 +1138,7 @@
             .then(data => {
                 const rows = Array.isArray(data) ? data : [];
                 if (!rows.length) {
-                    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#6b7280;padding:15px;">No stock adjustments recorded yet.</td></tr>';
+                    body.innerHTML = '<tr><td colspan="7" class="inv-empty">No stock adjustments recorded yet.</td></tr>';
                     return;
                 }
                 body.innerHTML = rows.map(r => {
@@ -1084,7 +1191,7 @@
         body.innerHTML = rows.map(r => `
             <tr data-category="${escapeHtml(r.category)}">
                 <td>${escapeHtml(r.category)}</td>
-                <td><input type="number" step="0.1" min="0" class="markup-input" value="${r.markup_percent}" style="width:90px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;"> %</td>
+                <td><span class="maint-pct"><input type="number" step="0.1" min="0" class="markup-input" value="${r.markup_percent}"> <span>%</span></span></td>
                 <td><button type="button" class="save-markup-btn" style="background:#4BAA8B;color:#fff;border:none;border-radius:4px;padding:5px 12px;cursor:pointer;">Save</button></td>
             </tr>`).join('');
     }
@@ -1227,13 +1334,8 @@
             clearTimeout(genericSuggestTimer);
             genericSuggestTimer = setTimeout(() => suggestFromGeneric(e.target.value, 'new'), 200);
         });
-        document.getElementById('new_copy_from')?.addEventListener('change', (e) => {
-            const drug = masterDrugs.find(d => String(d.drug_id) === String(e.target.value));
-            if (!drug) return;
-            fillNewDrugFromRecord(drug, true);
-            const barcode = document.getElementById('new_barcode');
-            if (barcode) barcode.value = '';
-        });
+        bindPickInput('new_copy_search', 'new_copy_list', renderCopyMatches, true);
+        bindPickInput('new_generic_name', 'new_generic_list', renderGenericMatches, false);
         const syncDoseReq = (prefix) => {
             const unit = document.getElementById(prefix + '_dosage_unit')?.value;
             const val = document.getElementById(prefix + '_dosage_value');
@@ -1284,6 +1386,12 @@
             });
         });
 
+    }
+
+    let inventoryDataLoaded = false;
+    function ensureInventoryData() {
+        if (inventoryDataLoaded) return;
+        inventoryDataLoaded = true;
         fetchMasterDrugs();
         fetchLots();
         fetchStockAdjustments();
@@ -1293,6 +1401,8 @@
     window.computeSuggestedPrice = computeSuggestedPrice;
     window.fetchCategoryMarkups = fetchCategoryMarkups;
     window.fetchMasterDrugs = fetchMasterDrugs;
+    window.fetchLots = fetchLots;
+    window.ensureInventoryData = ensureInventoryData;
     window.openDrugBarcodeScanner = openDrugBarcodeScanner;
 
     if (document.readyState === 'loading') {

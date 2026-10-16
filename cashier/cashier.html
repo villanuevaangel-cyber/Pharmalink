@@ -4,14 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
-    <link rel="stylesheet" href="/assets/theme.css?v=palette-w4">
-    <link rel="stylesheet" href="/cashier/css/cashier.css?v=ewallet-qr-modal">
+    <link rel="stylesheet" href="/assets/theme.css?v=notif-new1">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=no-rx1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
+    <script defer src="/assets/chart-colors.js?v=chart-colors1"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 
 <body>
@@ -32,7 +33,7 @@
       <i class="fas fa-file-invoice-dollar"></i><span>Sales Report</span>
     </div>
     <div class="nav-item" data-page="customer-segmentation-page">
-      <i class="fas fa-users"></i><span>Customer Segmentation</span>
+      <i class="fas fa-users"></i><span class="nav-long">Customer Segmentation</span><span class="nav-short">Segments</span>
     </div>
     <div class="nav-item" data-page="profile-page">
       <i class="fas fa-user"></i><span>Profile</span>
@@ -70,7 +71,6 @@
         <div class="cs-dash-header">
             <div class="dashboard-header">
                 <h2>Dashboard Overview</h2>
-                <p class="subtitle">Monitor daily sales, transactions, and inventory status.</p>
             </div>
             <div id="dashboard-datetime" class="cs-dash-clock">
                 <span>Today</span>
@@ -152,20 +152,29 @@
             </tbody>
         </table>
     </div>
+    <div class="cs-pager">
+        <button type="button" id="recentTxPrev" class="cs-page-btn" onclick="dashRecentGo(-1)"><i class="fas fa-chevron-left"></i> Prev</button>
+        <span id="recentTxPageInfo">Page 1 of 1</span>
+        <button type="button" id="recentTxNext" class="cs-page-btn" onclick="dashRecentGo(1)">Next <i class="fas fa-chevron-right"></i></button>
+    </div>
 </div>
 
         <div class="table-card">
-            <h3>Pending Prescriptions</h3>
+            <h3>Pending Orders</h3>
             <div class="table-wrapper">
                 <table>
                     <thead>
-                        <tr><th>Patient</th><th>Medicine</th><th>Status</th><th>Action</th></tr>
+                        <tr><th>Customer</th><th>Medicine</th><th>Status</th><th>Action</th></tr>
                     </thead>
-                    <tbody>
-                        <tr><td>John Doe</td><td>Amoxicillin</td><td><span class="status pending">Pending</span></td><td><button type="button" class="btn-process"><i class="fas fa-check"></i> Process</button></td></tr>
-                        <tr><td>Jane Smith</td><td>Paracetamol</td><td><span class="status in-progress">In Progress</span></td><td><button type="button" class="btn-complete"><i class="fas fa-check-double"></i> Complete</button></td></tr>
+                    <tbody id="dashPendingOrdersBody">
+                        <tr><td colspan="4" class="cs-empty">Loading orders...</td></tr>
                     </tbody>
                 </table>
+            </div>
+            <div class="cs-pager">
+                <button type="button" id="dashOrdersPrev" class="cs-page-btn" onclick="dashOrdersGo(-1)"><i class="fas fa-chevron-left"></i> Prev</button>
+                <span id="dashOrdersPageInfo">Page 1 of 1</span>
+                <button type="button" id="dashOrdersNext" class="cs-page-btn" onclick="dashOrdersGo(1)">Next <i class="fas fa-chevron-right"></i></button>
             </div>
         </div>
         </div>
@@ -173,7 +182,6 @@
 <div id="pos-page" class="page">
     <div class="dashboard-header">
         <h2>Point of Sale</h2>
-        <p class="subtitle">Process transactions and manage customer purchases efficiently.</p>
     </div>
 
     <div class="pos-mode-selector">
@@ -217,7 +225,6 @@
 
             <div id="online-order-content" style="display: none;">
                 <h3>Online Orders Queue</h3>
-                <p class="subtitle">Review prescriptions, process orders, or load "Ready for Pickup" transactions.</p>
                 <div class="table-wrapper">
                     <table id="onlineOrdersTable" class="pos-inventory-table">
                         <thead>
@@ -225,6 +232,7 @@
                                 <th>Order ID</th>
                                 <th>Customer</th>
                                 <th>Status</th>
+                                <th>Payment</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -257,21 +265,12 @@
     <div class="pos-loyalty-pts">
         <i class="fas fa-coins"></i> Available Points: <span id="availablePointsDisplay">0.00</span>
     </div>
-    <label>
+    <label class="pos-check-line" for="applyPointsToggle">
         <input type="checkbox" id="applyPointsToggle">
-        Apply Points as Discount (Max ₱<span id="maxPointsDiscountDisplay">0.00</span>)
-        <span id="loyaltyRateHint" style="display:block;font-size:12px;color:#4BAA8B;margin-top:4px;"></span>
+        <span class="pos-check-text">Apply points (max ₱<span id="maxPointsDiscountDisplay">0.00</span>)</span>
     </label>
+    <span id="loyaltyRateHint"></span>
 </div>
-
-            <div id="customerModal" class="modal">
-                <div class="pos-modal-card">
-                    <h4>Select Customer (Optional)</h4>
-                    <input type="text" id="customerSearch" placeholder="Search name, username, or number..." autocomplete="off">
-                    <ul id="customerList"></ul>
-                    <button type="button" id="closeModal"><i class="fas fa-xmark"></i> Close</button>
-                </div>
-            </div>
 
             <table class="pos-cart-table">
                 <thead></thead>
@@ -283,7 +282,7 @@
                 <div class="pos-scpwd">
                     <label for="scPwdToggle">
                         <input type="checkbox" id="scPwdToggle">
-                        Apply Senior Citizen/PWD Discount
+                        <span id="scPwdLabel">SC/PWD Discount (20%)</span>
                     </label>
                 </div>
 
@@ -304,10 +303,16 @@
                 <div id="cashPaymentFields">
                     <label>Cash:</label>
                     <input type="number" id="cashInput" placeholder="Enter amount" min="0" step="0.01" inputmode="decimal">
+                    <div class="pos-cash-quick" id="posCashQuick">
+                        <button type="button" data-cash="exact">Exact</button>
+                        <button type="button" data-cash="100">₱100</button>
+                        <button type="button" data-cash="200">₱200</button>
+                        <button type="button" data-cash="500">₱500</button>
+                        <button type="button" data-cash="1000">₱1000</button>
+                    </div>
                     <p class="pos-sum-line">Change: <span id="change">₱0.00</span></p>
                 </div>
                 <div id="ewalletPaymentFields" style="display:none;">
-                    <p class="pos-ewallet-hint">Click Confirm Sale. A QR appears with this total already inside it. When the customer scans it in GCash or Maya, the amount is filled in.</p>
                     <p class="pos-pay-qr-amt">₱<span id="ewalletTotalDisplay">0.00</span></p>
                 </div>
 
@@ -315,6 +320,15 @@
             </div>
         </div>
         </div>
+
+<div id="customerModal" class="modal" aria-hidden="true">
+    <div class="pos-modal-card" role="dialog" aria-labelledby="customerModalTitle">
+        <h4 id="customerModalTitle">Select Customer (Optional)</h4>
+        <input type="text" id="customerSearch" placeholder="Search name, username, or number..." autocomplete="off">
+        <ul id="customerList"></ul>
+        <button type="button" id="closeModal"><i class="fas fa-xmark"></i> Close</button>
+    </div>
+</div>
 
 <div id="ewalletQrModal" class="modal">
     <div class="pos-scan-card">
@@ -324,7 +338,7 @@
         </div>
         <div class="pos-pay-qr-box">
             <div id="posPayQr" aria-label="Customer payment QR code"></div>
-            <p class="pos-pay-qr-title">Scan this in the GCash or Maya app. The amount is already included.</p>
+            <p class="pos-pay-qr-title">Scan to pay.</p>
             <p class="pos-pay-qr-amt">₱<span id="ewalletModalTotal">0.00</span></p>
             <p id="ewalletPayStatus" class="pos-ewallet-hint">Creating the payment QR...</p>
         </div>
@@ -352,7 +366,6 @@
 
   <div class="dashboard-header">
     <h2>Customer Segmentation</h2>
-    <p class="subtitle">Read-only. These groups are set by Admin - you can view members, not change clustering or points.</p>
   </div>
 
   <div class="cs-seg-stats">
@@ -433,13 +446,13 @@
       </div>
     </div>
     <div class="chart-card">
-      <h3>Purchase Frequency <span>(orders / customer)</span></h3>
+      <h3>How often they buy <span>(orders)</span></h3>
       <div class="cs-seg-chart">
         <canvas id="purchaseFrequencyChart"></canvas>
       </div>
     </div>
     <div class="chart-card">
-      <h3>Spending Tier <span>(total ₱ / customer)</span></h3>
+      <h3>How much they have spent <span>(₱)</span></h3>
       <div class="cs-seg-chart">
         <canvas id="spendingTierChart"></canvas>
       </div>
@@ -452,7 +465,6 @@
 <div id="sales-report-page" class="page">
     <div class="dashboard-header">
         <h2>Sales Report &amp; Transaction Logs</h2>
-        <p class="subtitle">Review completed POS sales, payment method, and transaction details.</p>
     </div>
 
     <div class="date-filter-container cs-dash-toolbar sr-toolbar">
@@ -471,7 +483,7 @@
             </select>
         </label>
         <label for="srSearch" class="sr-search">Search
-            <input type="text" id="srSearch" placeholder="Txn ID, customer, cashier, reference" autocomplete="off">
+            <input type="text" id="srSearch" placeholder="Txn ID, order no, customer, cashier, reference" autocomplete="off">
         </label>
         <button type="button" id="srApplyBtn"><i class="fas fa-filter"></i> Apply</button>
         <button type="button" id="srPrintBtn" class="sr-print-btn"><i class="fas fa-print"></i> Print</button>
@@ -526,6 +538,9 @@
             <button type="button" id="srDetailClose" aria-label="Close">&times;</button>
         </div>
         <div id="srDetailBody" class="sr-modal-body"></div>
+        <div class="sr-modal-foot">
+            <button type="button" id="srReprintBtn" disabled><i class="fas fa-print"></i> Reprint receipt</button>
+        </div>
     </div>
 </div>
 
@@ -649,6 +664,7 @@
         </div>
         <p>Customer: <strong id="reviewCustomerName"></strong></p>
         <p>Status: <span id="reviewOrderStatus"></span></p>
+        <p>Payment: <strong id="reviewPayment"></strong></p>
         
         <hr>
         
@@ -666,11 +682,6 @@
                 </tbody>
         </table>
 
-        <div id="prescriptionContainer" style="margin-top: 20px; text-align: center; border: 1px dashed #ccc; padding: 10px; display:none;">
-            <h4>Prescription Image:</h4>
-            <img id="prescriptionImage" src="" alt="Prescription" style="max-width: 100%; height: auto; cursor: pointer;">
-        </div>
-
         <hr>
 
         <div style="text-align: right; margin-top: 20px;">
@@ -684,15 +695,16 @@
 
 
 <script src="/assets/profile-validate.js?v=pv4"></script>
-<script src="/cashier/js/cashier-boot.js?v=photo-db1"></script>
+<script src="/cashier/js/cashier-boot.js?v=header-first2"></script>
 <script>window.SEGMENTATION_MANAGE = false;</script>
-<script src="/shared/js/segmentation.js?v=seg2"></script>
+<script src="/shared/js/segmentation.js?v=plain2"></script>
 <script>
 // =======================================================
 // 1. GLOBAL VARIABLES & CONSTANTS (Available to ALL functions)
 // =======================================================
 let cart = []; 
-const TAX_RATE = 0.12; // 12% Tax rate
+let TAX_RATE = 0.12;
+let SC_PWD_RATE = 0.20;
 const POINTS_TO_PESO_RATE_DEFAULT = 0.30;
 let POINTS_TO_PESO_RATE = POINTS_TO_PESO_RATE_DEFAULT;
 let taxLabel;
@@ -701,20 +713,64 @@ let pointsDiscountValue = 0; // authoritative peso value of points currently app
 // Declare variables that will hold the DOM elements
 let tbody, cartTable, totalDisplay, subtotalDisplay, taxDisplay, cashInput, changeDisplay, discountInput, discountApplied, confirmSale;
 let selectedCustomer = null;
+let selectedCustomerSegment = '';
+let segmentByCustomer = {};
 
 let currentOnlineOrderId = null;
+let currentOnlineOrderPay = null;
 let activePromos = []; // fetched once on load; matched against drug_id first, then category
 
+function customerCanUsePromo(promo) {
+    if (!promo || !promo.segment_label) return true;
+    return !!selectedCustomerSegment && promo.segment_label === selectedCustomerSegment;
+}
+
 function findPromoForItem(drugId, category) {
-    // Priority order: exact single-drug promo > multi-product ("Specific
-    // Products") promo that includes this drug > category-wide promo >
-    // storewide promo (scope='all' in add_promo.php, which leaves drug_id,
-    // category, AND drug_ids all empty).
-    return activePromos.find(p => p.drug_id !== null && String(p.drug_id) === String(drugId))
-        || activePromos.find(p => Array.isArray(p.drug_ids) && p.drug_ids.some(id => String(id) === String(drugId)))
-        || activePromos.find(p => p.drug_id === null && p.category && p.category === category)
-        || activePromos.find(p => p.drug_id === null && !p.category && (!Array.isArray(p.drug_ids) || p.drug_ids.length === 0))
+    // Priority: exact drug, then multi-product, then category, then a promo
+    // for the selected customer's segment, then a storewide promo.
+    const eligible = activePromos.filter(customerCanUsePromo);
+    const noProducts = (p) => p.drug_id === null && !p.category && (!Array.isArray(p.drug_ids) || p.drug_ids.length === 0);
+    return eligible.find(p => p.drug_id !== null && String(p.drug_id) === String(drugId))
+        || eligible.find(p => Array.isArray(p.drug_ids) && p.drug_ids.some(id => String(id) === String(drugId)))
+        || eligible.find(p => p.drug_id === null && p.category && p.category === category)
+        || eligible.find(p => noProducts(p) && p.segment_label)
+        || eligible.find(p => noProducts(p) && !p.segment_label)
         || null;
+}
+
+function refreshCustomerSegment() {
+    if (!selectedCustomer) {
+        selectedCustomerSegment = '';
+        return;
+    }
+    selectedCustomerSegment = segmentByCustomer[String(selectedCustomer.customer_id)] || '';
+    const span = document.getElementById('selectedCustomer');
+    if (span && selectedCustomer.name) {
+        span.textContent = selectedCustomerSegment
+            ? selectedCustomer.name + ' · ' + selectedCustomerSegment
+            : selectedCustomer.name;
+    }
+}
+
+function loadCustomerSegments() {
+    fetch('/api/cashier/segmentation', { credentials: 'same-origin' })
+        .then(res => res.json())
+        .then(data => {
+            const k = String(data.active_k || 3);
+            const variant = (data.variants || {})[k] || {};
+            const labels = variant.labels || [];
+            const members = variant.members || [];
+            const map = {};
+            members.forEach((group, i) => {
+                (group || []).forEach(member => {
+                    map[String(member.customer_id)] = labels[i] || '';
+                });
+            });
+            segmentByCustomer = map;
+            refreshCustomerSegment();
+            if (typeof updateCart === 'function') updateCart();
+        })
+        .catch(err => console.error('Failed to load customer segments:', err));
 }
 
 function computePromoDiscountPerUnit(promo, unitPrice) {
@@ -728,8 +784,34 @@ function computePromoDiscountPerUnit(promo, unitPrice) {
 
 fetch('/api/cashier/promos')
     .then(res => res.json())
-    .then(data => { activePromos = Array.isArray(data) ? data : []; })
+    .then(data => {
+        activePromos = Array.isArray(data) ? data : [];
+        if (typeof updateCart === 'function') updateCart();
+    })
     .catch(err => console.error('Failed to load active promos:', err));
+const loadSegmentsLater = () => loadCustomerSegments();
+if (window.requestIdleCallback) requestIdleCallback(loadSegmentsLater, { timeout: 1500 });
+else setTimeout(loadSegmentsLater, 400);
+
+function formatCheckoutPercent(rate) {
+    const n = Math.round(rate * 1000) / 10;
+    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function applyCheckoutRates(data) {
+    if (data && Number.isFinite(Number(data.vat_percent))) TAX_RATE = Number(data.vat_percent) / 100;
+    if (data && Number.isFinite(Number(data.sc_pwd_percent))) SC_PWD_RATE = Number(data.sc_pwd_percent) / 100;
+    const scLabel = document.getElementById('scPwdLabel');
+    if (scLabel) scLabel.textContent = `SC/PWD Discount (${formatCheckoutPercent(SC_PWD_RATE)}%)`;
+    const label = document.getElementById('taxLabel');
+    if (label) label.textContent = `Tax (${formatCheckoutPercent(TAX_RATE)}%):`;
+    if (typeof updateCart === 'function') updateCart();
+}
+
+fetch('/api/cashier/checkout-rates', { credentials: 'same-origin' })
+    .then(res => res.json())
+    .then(data => { if (data && data.success) applyCheckoutRates(data); })
+    .catch(err => console.error('Failed to load checkout rates:', err));
 
 fetch('/api/cashier/loyalty-settings', { credentials: 'same-origin' })
     .then(res => res.json())
@@ -792,73 +874,181 @@ window.updateCartQty = function(inputElement) {
 /**
  * Fetches and renders the list of pending online orders to the onlineOrdersBody table.
  */
-function fetchOnlineOrders() {
-    const onlineOrdersBody = document.getElementById('onlineOrdersBody');
-    const pendingOrdersBadge = document.getElementById('pendingOrdersBadge');
-    
-    if (!onlineOrdersBody || !pendingOrdersBadge) return; 
+function onlinePayLabel(order) {
+    const method = String(order.payment_method || 'cash').toLowerCase();
+    const name = method === 'gcash' ? 'GCash' : (method === 'maya' ? 'Maya' : 'Cash');
+    if (method !== 'gcash' && method !== 'maya') return name;
+    return name + (String(order.payment_status || '').toLowerCase() === 'paid' ? ' · Paid' : ' · Unpaid');
+}
 
-    // Display loading message
-    onlineOrdersBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">' + 
-                                 '<i class="fas fa-spinner fa-spin"></i> Loading online orders...</td></tr>';
-    
-    // Tiyakin na tama ang path papunta sa PHP file
-    fetch("/api/cashier/online-orders") 
+function dashEsc(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+const DASH_PAGE_SIZE = 5;
+let dashRecentPage = 1;
+let dashRecentRows = [];
+let dashRecentRange = '';
+let dashOrdersPage = 1;
+let dashOrdersRows = [];
+
+function paintDashPager(infoId, prevId, nextId, page, total) {
+    const pages = Math.max(1, Math.ceil(total / DASH_PAGE_SIZE) || 1);
+    if (page > pages) page = pages;
+    if (page < 1) page = 1;
+    const info = document.getElementById(infoId);
+    const prev = document.getElementById(prevId);
+    const next = document.getElementById(nextId);
+    if (info) info.textContent = 'Page ' + page + ' of ' + pages;
+    if (prev) prev.disabled = page <= 1 || !total;
+    if (next) next.disabled = page >= pages || !total;
+    return page;
+}
+
+function renderDashPendingOrders(orders) {
+    const body = document.getElementById('dashPendingOrdersBody');
+    if (!body) return;
+    if (Array.isArray(orders)) dashOrdersRows = orders;
+    const total = dashOrdersRows.length;
+    dashOrdersPage = paintDashPager('dashOrdersPageInfo', 'dashOrdersPrev', 'dashOrdersNext', dashOrdersPage, total);
+    if (!total) {
+        body.innerHTML = '<tr><td colspan="4" class="cs-empty">No pending online orders.</td></tr>';
+        return;
+    }
+    const start = (dashOrdersPage - 1) * DASH_PAGE_SIZE;
+    body.innerHTML = dashOrdersRows.slice(start, start + DASH_PAGE_SIZE).map((order) => {
+        const statusClass = String(order.status_class || '');
+        const ready = statusClass.includes('ready');
+        const orderId = Number(order.order_id);
+        const action = ready
+            ? `<button type="button" class="btn-complete" onclick="completeDashOrder(${orderId})"><i class="fas fa-check-double"></i> Complete</button>`
+            : `<button type="button" class="btn-process" onclick="reviewOrder(${orderId})"><i class="fas fa-check"></i> Process</button>`;
+        return `<tr>
+            <td>${dashEsc(order.customer_name)}<div class="cs-order-id">${dashEsc(order.display_id)}</div></td>
+            <td>${dashEsc(order.medicines || '—')}</td>
+            <td><span class="status ${dashEsc(statusClass)}">${dashEsc(order.status)}</span></td>
+            <td>${action}</td>
+        </tr>`;
+    }).join('');
+}
+
+window.dashOrdersGo = function(delta) {
+    dashOrdersPage += delta;
+    renderDashPendingOrders();
+};
+
+window.completeDashOrder = function(orderId) {
+    const nav = document.querySelector('.nav-item[data-page="pos-page"]');
+    const grid = document.getElementById('posInventoryBody');
+    const stamp = grid ? (grid.dataset.loaded || '') : '';
+    if (nav) nav.click();
+    const started = Date.now();
+    const waitForProducts = function() {
+        const body = document.getElementById('posInventoryBody');
+        const ready = body && body.dataset.loaded && body.dataset.loaded !== stamp && body.querySelector('.add-btn');
+        if (ready || Date.now() - started > 8000) {
+            loadOrderToCart(orderId);
+            return;
+        }
+        setTimeout(waitForProducts, 100);
+    };
+    setTimeout(waitForProducts, 40);
+};
+
+let onlineOrdersFingerprint = '';
+
+function onlineOrdersKey(orders) {
+    return JSON.stringify((orders || []).map((o) => [
+        o.order_id, o.status, o.status_class, o.payment_status, o.customer_name, o.display_id
+    ]));
+}
+
+function updatePendingOrdersBadge(orders) {
+    const pendingOrdersBadge = document.getElementById('pendingOrdersBadge');
+    if (!pendingOrdersBadge) return;
+    const pendingCount = (orders || []).filter((order) => {
+        const statusClass = String(order.status_class || '');
+        return statusClass.includes('pending') || statusClass.includes('processing') || statusClass.includes('ready');
+    }).length;
+    if (pendingCount > 0) {
+        pendingOrdersBadge.textContent = pendingCount;
+        pendingOrdersBadge.style.display = 'inline';
+    } else {
+        pendingOrdersBadge.style.display = 'none';
+    }
+}
+
+function paintOnlineOrdersTable(orders) {
+    const onlineOrdersBody = document.getElementById('onlineOrdersBody');
+    if (!onlineOrdersBody) return;
+    if (!orders.length) {
+        onlineOrdersBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">No online orders currently pending or ready.</td></tr>';
+        return;
+    }
+    onlineOrdersBody.innerHTML = orders.map((order) => {
+        const statusClass = String(order.status_class || '');
+        let actionButton = '-';
+        if (statusClass.includes('pending') || statusClass.includes('processing')) {
+            actionButton = `<button type="button" class="btn-review" onclick="reviewOrder('${order.order_id}')"
+                style="background:#f0ad4e; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">Review</button>`;
+        } else if (statusClass.includes('ready')) {
+            actionButton = `<button type="button" class="btn-complete" onclick="loadOrderToCart('${order.order_id}')"
+                style="background:#5cb85c; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">Load to Cart</button>`;
+        }
+        return `<tr>
+            <td>${dashEsc(order.display_id)}</td>
+            <td>${dashEsc(order.customer_name)}</td>
+            <td><span class="status ${dashEsc(statusClass)}" style="padding: 2px 8px; border-radius: 5px; font-size: 0.9em; background: #f4f4ff;">${dashEsc(order.status)}</span></td>
+            <td>${dashEsc(onlinePayLabel(order))}</td>
+            <td>${actionButton}</td>
+        </tr>`;
+    }).join('');
+}
+
+function fetchOnlineOrders(opts) {
+    const silent = !!(opts && opts.silent);
+    const onlineOrdersBody = document.getElementById('onlineOrdersBody');
+    const dashBody = document.getElementById('dashPendingOrdersBody');
+    const reviewModal = document.getElementById('orderReviewModal');
+    const reviewOpen = !!(reviewModal && (
+        reviewModal.classList.contains('open') ||
+        (reviewModal.style.display && reviewModal.style.display !== 'none')
+    ));
+
+    if (!onlineOrdersBody && !dashBody) return;
+    if (silent && reviewOpen) return;
+
+    if (onlineOrdersBody && !silent) {
+        onlineOrdersBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">' +
+                                     '<i class="fas fa-spinner fa-spin"></i> Loading online orders...</td></tr>';
+    }
+    if (dashBody && !silent && !dashOrdersRows.length) {
+        dashBody.innerHTML = '<tr><td colspan="4" class="cs-empty">Loading orders...</td></tr>';
+    }
+
+    fetch("/api/cashier/online-orders")
         .then(res => res.json())
         .then(data => {
-            onlineOrdersBody.innerHTML = ""; // Clear loading message
-            
-            if (data.success && data.orders.length > 0) {
-                let pendingCount = 0;
-                
-                data.orders.forEach(order => {
-                    const statusClass = order.status_class;
-                    let actionButton = '';
-                    
-                    if (statusClass.includes('pending') || statusClass.includes('processing')) {
-                        actionButton = `<button class="btn-review" onclick="reviewOrder('${order.order_id}')" 
-                                        style="background:#f0ad4e; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">
-                                            Review
-                                        </button>`;
-                        pendingCount++;
-                    } else if (statusClass.includes('ready')) {
-                        actionButton = `<button class="btn-complete" onclick="loadOrderToCart('${order.order_id}')"
-                                        style="background:#5cb85c; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">
-                                            Load to Cart
-                                        </button>`;
-                        pendingCount++; 
-                    } else {
-                        actionButton = '-';
-                    }
-
-                    const row = `
-                        <tr>
-                            <td>${order.display_id}</td>
-                            <td>${order.customer_name}</td>
-                            <td><span class="status ${statusClass}" style="padding: 2px 8px; border-radius: 5px; font-size: 0.9em; background: #f4f4ff;">${order.status}</span></td>
-                            <td>${actionButton}</td>
-                        </tr>
-                    `;
-                    onlineOrdersBody.innerHTML += row;
-                });
-                
-                // Update Badge
-                if (pendingCount > 0) {
-                    pendingOrdersBadge.textContent = pendingCount;
-                    pendingOrdersBadge.style.display = 'inline';
-                } else {
-                    pendingOrdersBadge.style.display = 'none';
-                }
-
-            } else {
-                onlineOrdersBody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px;">No online orders currently pending or ready.</td></tr>`;
-                pendingOrdersBadge.style.display = 'none';
-            }
+            const orders = data.success && Array.isArray(data.orders) ? data.orders : [];
+            const fp = onlineOrdersKey(orders);
+            updatePendingOrdersBadge(orders);
+            if (silent && fp === onlineOrdersFingerprint) return;
+            onlineOrdersFingerprint = fp;
+            renderDashPendingOrders(orders);
+            paintOnlineOrdersTable(orders);
         })
         .catch(err => {
             console.error("Error fetching online orders:", err);
-            onlineOrdersBody.innerHTML = `<tr><td colspan="4" style="color:red; text-align: center;">Failed to load online orders.</td></tr>`;
-            pendingOrdersBadge.style.display = 'none';
+            if (silent) return;
+            if (onlineOrdersBody) {
+                onlineOrdersBody.innerHTML = '<tr><td colspan="5" style="color:red; text-align: center;">Failed to load online orders.</td></tr>';
+            }
+            if (dashBody) {
+                dashBody.innerHTML = '<tr><td colspan="4" class="cs-empty">Failed to load online orders.</td></tr>';
+            }
+            updatePendingOrdersBadge([]);
         });
 }
 
@@ -881,8 +1071,7 @@ function switchPOSMode(mode) {
         ordersContent.style.display = 'block';
         modeProductsBtn.classList.remove('active-mode');
         modeOrdersBtn.classList.add('active-mode');
-        // I-fetch/i-render dito ang listahan ng orders sa onlineOrdersBody
-fetchOnlineOrders();
+        fetchOnlineOrders({ silent: !!onlineOrdersFingerprint });
 
 } else { // 'standard' mode
         standardContent.style.display = 'block';
@@ -933,6 +1122,7 @@ window.clearCart = function() {
     // Reset cash and change inputs
     if (cashInput) cashInput.value = '';
     if (changeDisplay) changeDisplay.textContent = '₱0.00';
+    clearQuickCashChoice();
 
     // Reset payment method back to Cash for the next customer.
     const paymentMethodSelectReset = document.getElementById('paymentMethodSelect');
@@ -943,6 +1133,7 @@ window.clearCart = function() {
     
     document.getElementById('selectedCustomer').textContent = 'Guest';
     selectedCustomer = null;
+    selectedCustomerSegment = '';
 
     // Reset the loyalty points box back to hidden/unchecked for the next
     // customer - updateCart() (called above) will also do this once
@@ -962,9 +1153,36 @@ window.clearCart = function() {
  * @param {object} saleData - Data ng bentahan (para sa items, totals).
  * @param {Window} printWindow - Ang pre-opened window object.
  */
+function storeReceiptCss() {
+    return `
+        body { font-family: 'Courier New', Courier, monospace; font-size: 11px; margin: 0; padding: 10px; }
+        .receipt { width: 300px; margin: 0 auto; }
+        .center { text-align: center; }
+        .right { text-align: right; }
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+        th, td { padding: 2px 0; }
+        .border-top { border-top: 1px dashed #000; }
+        .border-bottom { border-bottom: 1px dashed #000; }
+        .addr { margin: 4px 0 0; font-size: 10px; }
+        @media print { .no-print { display: none; } }
+    `;
+}
+
+function storeReceiptHeaderHtml() {
+    return '<div class="center"><h4>PMDS Drugstore</h4>' +
+        '<p class="addr">29 Alcalde Jose, Kapasigan, Pasig, 1600 Metro Manila</p></div>';
+}
+
+function shortTxnId(value) {
+    const s = String(value || '').trim();
+    const parts = /^TXN-\d+-(\d+)$/i.exec(s);
+    return parts ? ('TXN-' + parts[1]) : s;
+}
+
 function printReceipt(responseData, saleData, printWindow) {
     const transactionId = responseData.transaction_id || 'N/A';
-    const date = new Date().toLocaleString();
+    const txnDisplay = shortTxnId(transactionId);
+    const date = new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
     
     // ⭐ FIX #1: GUMAMIT NG TAMANG LOGIC PARA SA CUSTOMER DISPLAY ⭐
     let customerDisplay;
@@ -1017,31 +1235,15 @@ function printReceipt(responseData, saleData, printWindow) {
         <html>
         <head>
             <title>Receipt ${transactionId}</title>
-            <style>
-                body { font-family: 'Courier New', Courier, monospace; font-size: 11px; margin: 0; padding: 10px; }
-                .receipt { width: 280px; margin: 0 auto; }
-                .center { text-align: center; }
-                .right { text-align: right; }
-                table { width: 100%; border-collapse: collapse; margin-top: 5px; }
-                th, td { padding: 2px 0; }
-                .border-top { border-top: 1px dashed #000; }
-                .border-bottom { border-bottom: 1px dashed #000; }
-                @media print { 
-                    .no-print { display: none; } 
-                }
-            </style>
+            <style>${storeReceiptCss()}</style>
         </head>
         <body>
             <div class="receipt">
-                <div class="center">
-                    <h4>PHARMALINK SYSTEM</h4>
-                    <p>123 PLP St, Kapasigan, Pasig City<br>
-                    TIN: 000-000-000-000</p>
-                </div>
+                ${storeReceiptHeaderHtml()}
                 <div class="border-top"></div>
                 <p>Date: ${date}</p>
-                <p>Trans ID: ${transactionId}</p>
-                <p>${customerDisplay}</p> <!-- ⭐ FIX #2: GINAMIT NA ANG customerDisplay ⭐ -->
+                <p>Trans ID: ${txnDisplay}</p>
+                <p>${customerDisplay}</p>
                 <div class="border-bottom"></div>
                 <table>
                     <thead>
@@ -1068,12 +1270,10 @@ function printReceipt(responseData, saleData, printWindow) {
                     ${paymentLineHtml}
                 </table>
                 <div class="border-bottom"></div>
-                
                 <div class="center no-print" style="margin-top: 20px;">
                     <button onclick="window.print()" style="padding: 10px 20px; cursor: pointer;"><i class="fas fa-print"></i> Print Receipt</button>
                     <button onclick="window.close()" style="padding: 10px 20px; cursor: pointer;"><i class="fas fa-xmark"></i> Close</button>
                 </div>
-
                 <div class="center" style="margin-top: 10px;"><p>Thank you! Come again.</p></div>
             </div>
         </body>
@@ -1251,14 +1451,35 @@ function startPaymongoCheckout(forceNew) {
         .catch(() => setEwalletStatus('Could not reach PayMongo. Check internet and try again.'));
 }
 
-function sanitizeCashInput() {
+let quickCashChoice = null;
+
+function clearQuickCashChoice() {
+    quickCashChoice = null;
+    document.querySelectorAll('#posCashQuick [data-cash]').forEach((btn) => btn.classList.remove('is-active'));
+}
+
+function applyQuickCash(choice) {
+    if (!cashInput || !totalDisplay) return;
+    quickCashChoice = String(choice);
+    const total = parseFloat(String(totalDisplay.textContent).replace(/[₱,]/g, '')) || 0;
+    const value = quickCashChoice === 'exact' ? total : Number(quickCashChoice);
+    cashInput.value = (Number.isFinite(value) ? value : 0).toFixed(2);
+    document.querySelectorAll('#posCashQuick [data-cash]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-cash') === quickCashChoice);
+    });
+    sanitizeCashInput(true);
+}
+
+function sanitizeCashInput(fromQuick) {
     if (!cashInput) return;
     let raw = String(cashInput.value || '');
     if (raw.indexOf('-') !== -1) raw = raw.replace(/-/g, '');
     cashInput.value = raw;
     const n = parseFloat(cashInput.value);
     if (cashInput.value !== '' && !isNaN(n) && n < 0) cashInput.value = '0';
+    if (fromQuick !== true) clearQuickCashChoice();
     calculateChange();
+    savePosDraft();
 }
 
 // Toggles between the Cash/Change fields and the Reference-number field
@@ -1281,6 +1502,7 @@ function togglePaymentMethodFields() {
         methodLabel.textContent = labels[method] || 'e-wallet';
     }
     calculateChange();
+    savePosDraft();
 }
 
 window.removeItem = function(index) {
@@ -1331,6 +1553,9 @@ function updateCart() {
     
     // 1. Loop through cart to calculate base subtotal and build cart rows
     cart.forEach((item, index) => {
+        const matchedPromo = typeof findPromoForItem === 'function' ? findPromoForItem(item.drug_id, item.category) : null;
+        item.promo_name = matchedPromo ? matchedPromo.name : null;
+        item.promo_discount_per_unit = matchedPromo ? computePromoDiscountPerUnit(matchedPromo, item.price) : 0;
         const itemGrossSubtotal = item.price * item.qty;
         const promoDiscountPerUnit = item.promo_discount_per_unit || 0;
         const itemPromoDiscount = promoDiscountPerUnit * item.qty;
@@ -1378,7 +1603,7 @@ cartTable.innerHTML += row;
         vatExemptSale = subtotalBeforeDiscount / (1 + TAX_RATE);
 
         // Step 2: Compute 20% SC/PWD discount
-        scDiscount = vatExemptSale * 0.20;
+        scDiscount = vatExemptSale * SC_PWD_RATE;
 
         // Step 3: Amount collectible after SC discount
         totalAfterDiscount = vatExemptSale - scDiscount;
@@ -1433,6 +1658,7 @@ cartTable.innerHTML += row;
     discountApplied.textContent = '₱' + (scDiscount + discountAmount).toFixed(2);
     taxDisplay.textContent = '₱' + taxAmount.toFixed(2);
     totalDisplay.textContent = '₱' + finalTotal.toFixed(2);
+    if (quickCashChoice === 'exact' && cashInput) cashInput.value = finalTotal.toFixed(2);
 
     const pointsDiscountRow = document.getElementById("pointsDiscountRow");
     const pointsDiscountDisplay = document.getElementById("pointsDiscountDisplay");
@@ -1446,6 +1672,151 @@ cartTable.innerHTML += row;
     }
 
     calculateChange();
+    savePosDraft();
+}
+
+const POS_DRAFT_KEY = 'pharmalink.pos.cart';
+let posDraftReady = false;
+
+function savePosDraft() {
+    if (!posDraftReady) return;
+    try {
+        if (!cart.length) {
+            localStorage.removeItem(POS_DRAFT_KEY);
+            return;
+        }
+        const draft = {
+            items: cart.map((item) => ({
+                drug_id: item.drug_id,
+                lot_id: item.lot_id,
+                name: item.name,
+                price: item.price,
+                qty: item.qty,
+                max_stock: item.max_stock,
+                category: item.category || '',
+                promo_name: item.promo_name || null,
+                promo_discount_per_unit: item.promo_discount_per_unit || 0
+            })),
+            customer: selectedCustomer ? {
+                customer_id: selectedCustomer.customer_id,
+                name: selectedCustomer.name,
+                loyalty_points: selectedCustomer.loyalty_points
+            } : null,
+            discountPercent: discountInput ? discountInput.value : '0',
+            scPwd: !!document.getElementById('scPwdToggle')?.checked,
+            applyPoints: !!document.getElementById('applyPointsToggle')?.checked,
+            paymentMethod: document.getElementById('paymentMethodSelect')?.value || 'cash',
+            cash: cashInput ? cashInput.value : '',
+            quickCash: quickCashChoice,
+            onlineOrderId: currentOnlineOrderId,
+            onlineOrderPay: currentOnlineOrderPay
+        };
+        localStorage.setItem(POS_DRAFT_KEY, JSON.stringify(draft));
+    } catch (err) {
+        console.warn('Could not save the cart in this browser.', err);
+    }
+}
+
+function restorePosDraft() {
+    let draft = null;
+    try {
+        draft = JSON.parse(localStorage.getItem(POS_DRAFT_KEY) || 'null');
+    } catch (err) {
+        draft = null;
+    }
+    posDraftReady = true;
+    if (!draft || !Array.isArray(draft.items) || !draft.items.length) return;
+
+    cart = draft.items.filter((item) => item && item.lot_id != null && Number(item.qty) > 0).map((item) => ({
+        drug_id: item.drug_id,
+        lot_id: item.lot_id,
+        name: item.name || 'Item',
+        price: Number(item.price) || 0,
+        qty: Math.max(1, parseInt(item.qty, 10) || 1),
+        max_stock: parseInt(item.max_stock, 10) || 0,
+        category: item.category || '',
+        promo_name: item.promo_name || null,
+        promo_discount_per_unit: Number(item.promo_discount_per_unit) || 0
+    }));
+    if (!cart.length) return;
+
+    if (draft.customer && draft.customer.customer_id != null) {
+        selectedCustomer = {
+            customer_id: draft.customer.customer_id,
+            name: draft.customer.name || 'Customer',
+            loyalty_points: parseFloat(draft.customer.loyalty_points) || 0
+        };
+        refreshCustomerSegment();
+        const pointsSpan = document.getElementById('availablePointsDisplay');
+        if (pointsSpan) pointsSpan.textContent = selectedCustomer.loyalty_points.toFixed(2);
+    }
+    currentOnlineOrderId = draft.onlineOrderId != null ? draft.onlineOrderId : null;
+    currentOnlineOrderPay = draft.onlineOrderPay || null;
+
+    const scPwdToggle = document.getElementById('scPwdToggle');
+    if (scPwdToggle) scPwdToggle.checked = !!draft.scPwd;
+    if (discountInput && draft.discountPercent != null) discountInput.value = draft.discountPercent;
+    const applyPointsToggle = document.getElementById('applyPointsToggle');
+    if (applyPointsToggle) applyPointsToggle.checked = !!draft.applyPoints;
+
+    const paySelect = document.getElementById('paymentMethodSelect');
+    if (paySelect && ['cash', 'gcash', 'maya'].includes(draft.paymentMethod)) {
+        paySelect.value = draft.paymentMethod;
+    }
+    quickCashChoice = draft.quickCash || null;
+    updateCart();
+    if (quickCashChoice !== 'exact' && cashInput) cashInput.value = draft.cash || '';
+    document.querySelectorAll('#posCashQuick [data-cash]').forEach((btn) => {
+        btn.classList.toggle('is-active', !!quickCashChoice && btn.getAttribute('data-cash') === String(quickCashChoice));
+    });
+    if (typeof togglePaymentMethodFields === 'function') togglePaymentMethodFields();
+    syncCartStockVisuals();
+}
+
+function syncCartStockVisuals() {
+    if (!cart.length || !document.querySelector('.add-btn')) return;
+    let changed = false;
+    const notes = [];
+    const next = [];
+    cart.forEach((item) => {
+        const lotId = String(item.lot_id).replace(/"/g, '');
+        const btn = document.querySelector('.add-btn[data-lot-id="' + lotId + '"]');
+        if (!btn) {
+            notes.push((item.name || 'An item') + ' is no longer on the shelf and was removed.');
+            changed = true;
+            return;
+        }
+        const stock = parseInt(btn.dataset.stock, 10) || 0;
+        item.max_stock = stock;
+        const price = parseFloat(btn.dataset.price);
+        if (Number.isFinite(price) && Math.abs(price - Number(item.price)) > 0.001) {
+            item.price = price;
+            changed = true;
+        }
+        if (btn.dataset.name) item.name = btn.dataset.name;
+        if (stock <= 0) {
+            notes.push(item.name + ' is out of stock and was removed.');
+            changed = true;
+            return;
+        }
+        if (item.qty > stock) {
+            notes.push(item.name + ' was reduced to ' + stock + ' in stock.');
+            item.qty = stock;
+            changed = true;
+        }
+        next.push(item);
+        const row = btn.closest('tr');
+        if (row && row.cells.length > 5) row.cells[5].textContent = String(stock - item.qty);
+        const gone = item.qty >= stock;
+        btn.disabled = gone;
+        btn.style.opacity = gone ? '0.5' : '1';
+        btn.style.cursor = gone ? 'not-allowed' : 'pointer';
+    });
+    cart = next;
+    if (changed) {
+        updateCart();
+        if (notes.length) alert(notes.join('\n'));
+    }
 }
 
 
@@ -1483,8 +1854,20 @@ selectedCustomer = {
     loyalty_points: parseFloat(orderData.loyalty_points || 0) // ⭐ Para makita/magamit ang points kahit online order ang pinagmulan ⭐
 };
             currentOnlineOrderId = orderData.order_id;
-            
-document.getElementById('selectedCustomer').textContent = formattedCustomerName;
+            currentOnlineOrderPay = {
+                method: String(orderData.payment_method || 'cash').toLowerCase(),
+                status: String(orderData.payment_status || 'unpaid').toLowerCase(),
+                reference: orderData.payment_reference || ''
+            };
+            const loadedPay = document.getElementById('paymentMethodSelect');
+            if (loadedPay && ['cash', 'gcash', 'maya'].includes(currentOnlineOrderPay.method)) {
+                loadedPay.value = currentOnlineOrderPay.method;
+                if (typeof togglePaymentMethodFields === 'function') togglePaymentMethodFields();
+            }
+            refreshCustomerSegment();
+document.getElementById('selectedCustomer').textContent = selectedCustomerSegment
+    ? `${formattedCustomerName} · ${selectedCustomerSegment}`
+    : formattedCustomerName;
 const availablePointsSpan = document.getElementById('availablePointsDisplay');
 if (availablePointsSpan) availablePointsSpan.textContent = selectedCustomer.loyalty_points.toFixed(2);
             // 3. Add order items to the cart
@@ -1496,6 +1879,7 @@ if (availablePointsSpan) availablePointsSpan.textContent = selectedCustomer.loya
                 cart.push({
                     lot_id: lotId,
                     drug_id: item.drug_id,
+                    category: item.category || '',
                     name: item.brand_name + ' / ' + item.generic_name, 
                     price: parseFloat(item.price_per_unit), 
                     qty: orderedQty,
@@ -1546,11 +1930,7 @@ if (availablePointsSpan) availablePointsSpan.textContent = selectedCustomer.loya
         });
 }
 /**
- * [CONCEPTUAL] Opens a modal/screen to review a pending order (e.g., check prescription).
- * @param {string} orderId 
- */
-/**
- * Opens a modal/screen to review a pending order (e.g., check prescription).
+ * Opens a modal/screen to review a pending order.
  * @param {string} orderId - Ang ID ng online order.
  */
 window.reviewOrder = function(orderId) {
@@ -1579,17 +1959,8 @@ window.reviewOrder = function(orderId) {
 
             document.getElementById('reviewCustomerName').textContent = data.customer_name;
             document.getElementById('reviewOrderStatus').textContent = data.status;
-            
-            // Handle Prescription Display
-            const prescContainer = document.getElementById('prescriptionContainer');
-            const prescImage = document.getElementById('prescriptionImage');
-            if (data.prescription_path) {
-                prescImage.src = data.prescription_path;
-                prescContainer.style.display = 'block';
-                prescImage.onclick = () => window.open(data.prescription_path, '_blank');
-            } else {
-                prescContainer.style.display = 'none';
-            }
+            const reviewPay = document.getElementById('reviewPayment');
+            if (reviewPay) reviewPay.textContent = onlinePayLabel(data);
 
             itemsBody.innerHTML = '';
             let isReadyToProcess = true;
@@ -1741,9 +2112,9 @@ document.querySelectorAll('.nav-item').forEach(nav => {
 if (target === "pos-page") {
     console.log("POS page activated → Loading categories & POS inventory...");
     loadCategories();
-    loadPOSInventory();
-
-        }
+    loadPOSProducts();
+    if (typeof loadPOSInventory === 'function') loadPOSInventory();
+}
     });
 });
 
@@ -1788,6 +2159,11 @@ document.addEventListener("DOMContentLoaded", function() {
     // ===== INPUT EVENT BINDING =====
     discountInput.addEventListener("input", updateCart);
     cashInput.addEventListener("input", sanitizeCashInput);
+    document.getElementById('posCashQuick')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-cash]');
+        if (!btn) return;
+        applyQuickCash(btn.getAttribute('data-cash'));
+    });
     cashInput.addEventListener("keydown", function (e) {
         if (e.key === '-' || e.key === 'Minus' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault();
     });
@@ -1812,6 +2188,8 @@ document.addEventListener("DOMContentLoaded", function() {
     const applyPointsToggle = document.getElementById("applyPointsToggle");
     if (applyPointsToggle) applyPointsToggle.addEventListener("change", updateCart);
 
+    restorePosDraft();
+
     loadTransactionHistory();
 
     // Siyasatin ang IDs:
@@ -1834,13 +2212,14 @@ console.log("Dashboard Inputs Found. Setting defaults...");
         const endDateObj = new Date();
         const startDateObj = new Date();
         startDateObj.setDate(endDateObj.getDate() - 6);
-        const fmt = (d) => d.toISOString().split('T')[0];
+        const fmt = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
         startDateInput.value = fmt(startDateObj);
         endDateInput.value = fmt(endDateObj);
         
         // 2. Initial load ng dashboard data
         console.log("Calling handleDateFilter() for initial load...");
-        handleDateFilter(); 
+        handleDateFilter();
+        fetchOnlineOrders(); 
 
         // 3. Add listener for the button
         applyFilterBtn.addEventListener('click', handleDateFilter);
@@ -1854,7 +2233,7 @@ console.log("Dashboard Inputs Found. Setting defaults...");
         const endObj = new Date();
         const startObj = new Date();
         startObj.setDate(endObj.getDate() - 6);
-        const fmt = (d) => d.toISOString().split('T')[0];
+        const fmt = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
         srStart.value = fmt(startObj);
         srEnd.value = fmt(endObj);
     }
@@ -1862,11 +2241,15 @@ console.log("Dashboard Inputs Found. Setting defaults...");
     document.getElementById('srSearch')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadSalesReport(); });
     document.getElementById('srPrintBtn')?.addEventListener('click', printSalesReport);
     document.getElementById('srDetailClose')?.addEventListener('click', closeSalesReportDetail);
+    document.getElementById('srReprintBtn')?.addEventListener('click', () => {
+        if (!srLoadedDetail) return;
+        reprintSalesReceipt(srLoadedDetail.sale, srLoadedDetail.items);
+    });
     document.getElementById('srDetailModal')?.addEventListener('click', (e) => {
         if (e.target.id === 'srDetailModal') closeSalesReportDetail();
     });
 
-const calculatedTaxRate = (TAX_RATE * 100).toFixed(0); // e.g., 12
+const calculatedTaxRate = formatCheckoutPercent(TAX_RATE);
     taxLabel.textContent = `Tax (${calculatedTaxRate}%):`;
 
 // ===== LOAD PRODUCTS =====
@@ -1948,6 +2331,7 @@ document.querySelectorAll(".add-btn").forEach(btn => {
                 price,
                 qty: 1,
                 max_stock: maxStock, // Store the maximum stock for validation
+                category,
                 promo_name: matchedPromo ? matchedPromo.name : null,
                 promo_discount_per_unit: promoDiscountPerUnit,
             });
@@ -1969,10 +2353,11 @@ document.querySelectorAll(".add-btn").forEach(btn => {
         }
     });
 });
+        syncCartStockVisuals();
+        if (tbody) tbody.dataset.loaded = String(Date.now());
     })
     .catch(err => console.error("Error loading products:", err));
 }
-loadPOSProducts();
              // If fetch fails, this alert helps diagnose:
              // alert("Failed to load products. Check console for details.");
 
@@ -2003,16 +2388,17 @@ function addProductFromLookup(p, statusEl) {
         const drugId = p.drug_id;
         const matchedPromo = typeof findPromoForItem === 'function' ? findPromoForItem(drugId, category) : null;
         const promoDiscountPerUnit = matchedPromo ? computePromoDiscountPerUnit(matchedPromo, price) : 0;
-        cart.push({
-            drug_id: drugId,
-            lot_id: lotId,
-            name,
-            price,
-            qty: 1,
-            max_stock: maxStock,
-            promo_name: matchedPromo ? matchedPromo.name : null,
-            promo_discount_per_unit: promoDiscountPerUnit,
-        });
+            cart.push({
+                drug_id: drugId,
+                lot_id: lotId,
+                name,
+                price,
+                qty: 1,
+                max_stock: maxStock,
+                category,
+                promo_name: matchedPromo ? matchedPromo.name : null,
+                promo_discount_per_unit: promoDiscountPerUnit,
+            });
     }
     if (typeof updateCart === 'function') updateCart();
     const btn = document.querySelector(`.add-btn[data-lot-id="${lotId}"]`);
@@ -2085,7 +2471,7 @@ function openBarcodeScanner(mode = 'cart') {
             setTimeout(() => { barcodeScanCooldown = false; }, 2000); // debounce repeated frames of the same code
         }
     }).catch(err => {
-        if (statusEl) statusEl.textContent = '❌ Camera access failed: ' + err.message + ' (allow camera permission and use HTTPS or localhost).';
+        if (statusEl) statusEl.textContent = '❌ Camera access failed: ' + err.message;
     });
 }
 
@@ -2162,16 +2548,13 @@ function snapshotCartItems() {
 
 function beginEwalletPayment(ctx) {
     const samePaid = posEwallet.paid && posEwallet.checkoutId && Math.abs((posEwallet.amount || 0) - ctx.total) < 0.009;
-    const printWindow = openReceiptWindow(samePaid
-        ? "Payment received. Saving the sale..."
-        : "Waiting for the customer to scan the QR and pay...", true);
     const modalTotal = document.getElementById('ewalletModalTotal');
     if (modalTotal) modalTotal.textContent = ctx.total.toFixed(2);
     const methodLabel = document.getElementById('ewalletMethodLabel');
     if (methodLabel) methodLabel.textContent = ctx.paymentMethod === 'maya' ? 'Maya' : 'GCash';
     posEwallet.pending = {
         ...ctx,
-        printWindow,
+        printWindow: null,
         subtotal: parseFloat(subtotalDisplay.textContent.replace('₱', '')) || 0,
         pointsDiscountValue: pointsDiscountValue,
         items: snapshotCartItems()
@@ -2208,13 +2591,7 @@ function finishEwalletSale() {
         points_discount_value: pending.pointsDiscountValue,
         items: pending.items
     };
-    const printWindow = pending.printWindow;
-    if (printWindow && !printWindow.closed) {
-        printWindow.document.open();
-        printWindow.document.write("<html><body><p>Payment received. Saving the sale...</p></body></html>");
-        printWindow.document.close();
-    }
-    postCashierSale(saleData, printWindow, false, 0, pending.paymentMethod, paymentReference);
+    postCashierSale(saleData, null, false, 0, pending.paymentMethod, paymentReference);
 }
 document.getElementById('closeBarcodeScannerModal')?.addEventListener('click', closeBarcodeScanner);
 document.getElementById('barcodeScannerModal')?.addEventListener('click', (e) => {
@@ -2252,8 +2629,13 @@ confirmSale.addEventListener("click", () => {
     // Card payments are for the exact total - there's no physical change to
     // hand back - so cash_received is just set equal to the total, and we
     // capture an optional reference/transaction number instead.
-    const paymentMethod = document.getElementById('paymentMethodSelect')?.value || 'cash';
+    let paymentMethod = document.getElementById('paymentMethodSelect')?.value || 'cash';
+    const settlingOnline = currentOnlineOrderId !== null && currentOnlineOrderPay;
+    if (settlingOnline && ['cash', 'gcash', 'maya'].includes(currentOnlineOrderPay.method)) {
+        paymentMethod = currentOnlineOrderPay.method;
+    }
     const isCashPayment = paymentMethod === 'cash';
+    const onlineEwallet = settlingOnline && (paymentMethod === 'gcash' || paymentMethod === 'maya');
 
     let cash, change, paymentReference = null;
     if (isCashPayment) {
@@ -2268,9 +2650,10 @@ confirmSale.addEventListener("click", () => {
             alert("Insufficient cash. Required: ₱" + total.toFixed(2));
             return;
         }
-    } else if (total === 0) {
-        cash = 0;
+    } else if (total === 0 || onlineEwallet) {
+        cash = total;
         change = 0;
+        paymentReference = onlineEwallet ? (currentOnlineOrderPay.reference || null) : null;
     } else {
         cash = total;
         change = 0;
@@ -2310,6 +2693,7 @@ confirmSale.addEventListener("click", () => {
         change_amount: change, 
         payment_method: paymentMethod,
         payment_reference: paymentReference,
+        online_order_id: currentOnlineOrderId,
         paymongo_checkout_id: posEwallet.checkoutId,
         points_redeemed: pointsRedeemed,
         points_discount_value: pointsDiscountValue,
@@ -2413,7 +2797,8 @@ function postCashierSale(saleData, printWindow, isCashPayment, change, paymentMe
                         }
 
                         // I-reset ang global variable
-                        currentOnlineOrderId = null; 
+                        currentOnlineOrderId = null;
+                        currentOnlineOrderPay = null; 
                         
                     } else {
                         console.error("Failed to update Online Order status:", updateData.message);
@@ -2469,15 +2854,16 @@ navItems.forEach(item => {
                 console.log("POS page is now active → loading categories & inventory...");
                 // Tiyaking defined ang loadCategories() at loadPOSInventory()
                 loadCategories();
-                loadPOSInventory();
+                loadPOSProducts();
+                if (typeof loadPOSInventory === 'function') loadPOSInventory();
             }, 10); // small delay to allow rendering
         } 
         
         // ⭐ BAGONG DAGDAG: LOAD DASHBOARD DATA
         else if (target === "dashboard-page") {
             console.log("Dashboard page is now active → loading stats and charts...");
-            // Tiyaking defined ang handleDateFilter() at ang mga input IDs ay tama
-            handleDateFilter(); 
+            handleDateFilter();
+            fetchOnlineOrders();
         }
 
         // 🔧 FIX: the Customer Segmentation charts are NOT built at page
@@ -2514,23 +2900,47 @@ navItems.forEach(item => {
 
   let customers = [];
 
-  // Fetch customers from database
-  fetch("/api/cashier/customers")
-    .then(res => res.json())
-    .then(data => { customers = data; renderCustomerList(customers); })
-    .catch(err => console.error("Error loading customers:", err));
+  function asCustomerList(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.customers)) return data.customers;
+    return [];
+  }
 
-  // Open modal
-  selectBtn.addEventListener("click", () => {
+  function loadCustomers() {
+    return fetch("/api/cashier/customers", { credentials: "same-origin" })
+      .then((res) => res.json())
+      .then((data) => {
+        customers = asCustomerList(data);
+        filterCustomerList();
+        return customers;
+      })
+      .catch((err) => {
+        console.error("Error loading customers:", err);
+        customers = [];
+        customerList.innerHTML = "<li style='padding:8px;'>Could not load customers. Try again.</li>";
+        return customers;
+      });
+  }
+
+  loadCustomers();
+
+  function openCustomerModal() {
     modal.style.display = "flex";
+    modal.setAttribute("aria-hidden", "false");
     searchInput.value = "";
-    renderCustomerList(customers);
-    searchInput.focus();
-  });
+    customerList.innerHTML = "<li style='padding:8px;'>Loading customers...</li>";
+    loadCustomers().then(() => searchInput.focus());
+  }
 
-  // Close modal
-  closeModal.addEventListener("click", () => {
+  function closeCustomerModal() {
     modal.style.display = "none";
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  selectBtn.addEventListener("click", openCustomerModal);
+  closeModal.addEventListener("click", closeCustomerModal);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeCustomerModal();
   });
 
   function customerMatches(c, query) {
@@ -2556,13 +2966,14 @@ navItems.forEach(item => {
 
   // Render list
   function renderCustomerList(list) {
+    const rows = Array.isArray(list) ? list : [];
     customerList.innerHTML = "";
-    if (list.length === 0) {
-      customerList.innerHTML = "<li style='padding:5px;'>No customer found</li>";
+    if (rows.length === 0) {
+      customerList.innerHTML = "<li style='padding:8px;'>No customer found</li>";
       return;
     }
 
-    list.forEach(c => {
+    rows.forEach(c => {
       const li = document.createElement("li");
       li.dataset.customerId = c.customer_id;
       li.textContent = c.name;
@@ -2577,8 +2988,9 @@ navItems.forEach(item => {
             name: c.name,
             loyalty_points: parseFloat(c.loyalty_points || 0)
         };
-        selectedCustomerSpan.textContent = c.name;
-        modal.style.display = "none";
+        refreshCustomerSegment();
+        selectedCustomerSpan.textContent = selectedCustomerSegment ? `${c.name} · ${selectedCustomerSegment}` : c.name;
+        closeCustomerModal();
         const availablePointsSpan = document.getElementById('availablePointsDisplay');
         if (availablePointsSpan) availablePointsSpan.textContent = selectedCustomer.loyalty_points.toFixed(2);
         updateCart();
@@ -2604,29 +3016,12 @@ function renderDailySalesChart() {
                 type: 'line',
                 data: {
                     labels: data.labels,
-                    datasets: [{ label: 'Sales (₱)', data: data.data, borderColor: '#4BAA8B', backgroundColor: 'rgba(102,126,234,0.1)', fill: true, tension: 0.3 }]
+                    datasets: [{ label: 'Sales (₱)', data: data.data, borderColor: PharmaChart.sales, backgroundColor: PharmaChart.salesFill, fill: true, tension: 0.3 }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
             });
         })
         .catch(err => console.error('Failed to load daily sales:', err));
-}
-
-/**
- * Shared bar-chart look, matching the "Top Forecasted Items" chart style
- * used on the Admin > Sales Forecasting page - same color palette and same
- * left-to-right gradient-fill bars, so bar charts look consistent across
- * the whole system instead of each page inventing its own colors.
- */
-window.CHART_PALETTE = ['#4BAA8B', '#4BAA8B', '#FFC857', '#FFC857', '#FFC857', '#4BAA8B'];
-window.chartBarGradient = function (ctx, color) {
-    color = color || CHART_PALETTE[0]; // guard: Chart.js can resolve this before a real index/color exists
-    const chartArea = ctx.chart.chartArea;
-    if (!chartArea) return color;
-    const g = ctx.chart.ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-    g.addColorStop(0, color + 'cc');
-    g.addColorStop(1, color);
-    return g;
 }
 
 /**
@@ -2677,7 +3072,7 @@ function renderTopMedicinesChart(start, end) {
                     datasets: [{
                         label: 'Quantity Sold',
                         data: quantities,
-                        backgroundColor: (c) => chartBarGradient(c, CHART_PALETTE[(c.dataIndex ?? 0) % CHART_PALETTE.length]),
+                        backgroundColor: PharmaChart.sales,
                         borderRadius: 6,
                         borderSkipped: false,
                         maxBarThickness: 28,
@@ -2690,7 +3085,18 @@ function renderTopMedicinesChart(start, end) {
                     animation: { duration: 600, easing: 'easeOutQuart' },
                     scales: {
                         x: { beginAtZero: true, title: { display: true, text: 'Units Sold' }, grid: { color: '#eef2f7' } },
-                        y: { grid: { display: false }, ticks: { color: '#4BAA8B', font: { size: 12 } } }
+                        y: {
+                            grid: { display: false },
+                            ticks: {
+                                color: '#4BAA8B',
+                                font: { size: 11 },
+                                callback: function (value) {
+                                    const label = String(this.getLabelForValue(value) || '');
+                                    const max = window.innerWidth < 720 ? 16 : 28;
+                                    return label.length > max ? label.slice(0, max - 1) + '…' : label;
+                                }
+                            }
+                        }
                     },
                     plugins: {
                         legend: { display: false },
@@ -2736,12 +3142,54 @@ function updateDashboardStats(start, end) {
 }
 
 /**
- * Fetches and renders the 5 most recent transactions.
- * Gumagamit ng start at end date mula sa filter.
+ * Fetches sales in the dashboard date range and shows five per page.
  */
-function loadRecentTransactions(start, end) {
-    const tableBody = document.getElementById('recentTransactionsBody'); // Titingnan natin ito mamaya
+function recentTxRow(t) {
+    const statusClass = String(t.status || '').toLowerCase().replace(/\s+/g, '-');
+    const transactionDate = t.date_display || new Date(t.date_created).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'Asia/Manila'
+    });
+    return `<tr>
+        <td>${dashEsc(transactionDate)}</td>
+        <td>${dashEsc(t.time_display)}</td>
+        <td>${dashEsc(t.customer_name)}</td>
+        <td>₱${dashEsc(t.total_amount)}</td>
+        <td><span class="status ${dashEsc(statusClass)}">${dashEsc(t.status)}</span></td>
+    </tr>`;
+}
+
+function renderRecentTransactions() {
+    const tableBody = document.getElementById('recentTransactionsBody');
     if (!tableBody) return;
+    const total = dashRecentRows.length;
+    dashRecentPage = paintDashPager('recentTxPageInfo', 'recentTxPrev', 'recentTxNext', dashRecentPage, total);
+    if (!total) {
+        tableBody.innerHTML = '<tr><td colspan="5" class="cs-empty">No transactions found for this period.</td></tr>';
+        return;
+    }
+    const start = (dashRecentPage - 1) * DASH_PAGE_SIZE;
+    tableBody.innerHTML = dashRecentRows.slice(start, start + DASH_PAGE_SIZE).map(recentTxRow).join('');
+}
+
+window.dashRecentGo = function(delta) {
+    dashRecentPage += delta;
+    renderRecentTransactions();
+};
+
+function loadRecentTransactions(start, end) {
+    const tableBody = document.getElementById('recentTransactionsBody');
+    if (!tableBody) return;
+    const range = String(start || '') + '|' + String(end || '');
+    if (range !== dashRecentRange) {
+        dashRecentRange = range;
+        dashRecentPage = 1;
+    }
+    if (!dashRecentRows.length) {
+        tableBody.innerHTML = '<tr><td colspan="5" class="cs-empty">Loading transactions...</td></tr>';
+    }
 
     const apiEndpoint = `/api/cashier/recent-transactions?startDate=${start}&endDate=${end}`;
 
@@ -2751,36 +3199,13 @@ function loadRecentTransactions(start, end) {
             return response.json();
         })
         .then(transactions => {
-            let html = '';
-            
-if (transactions.length === 0) {
-                html = '<tr><td colspan="5" class="cs-empty">No transactions found for this period.</td></tr>';
-            } else {
-                transactions.forEach(t => {
-                    const statusClass = t.status.toLowerCase().replace(' ', '-');
-
-const transactionDate = new Date(t.date_created).toLocaleDateString('en-US', {
-                        month: 'short', 
-                        day: 'numeric', 
-                        year: 'numeric' // O '2-digit' kung gusto mo 25
-                    });
-
-                    html += `
-                        <tr>
-                            <td>${transactionDate}</td> 
-                            <td>${t.time_display}</td>
-                            <td>${t.customer_name}</td>
-                            <td>₱${t.total_amount}</td>
-                            <td><span class="status ${statusClass}">${t.status}</span></td>
-                        </tr>
-                    `;
-                });
-            }
-            tableBody.innerHTML = html;
+            dashRecentRows = Array.isArray(transactions) ? transactions : [];
+            renderRecentTransactions();
         })
         .catch(error => {
             console.error('Error loading recent transactions:', error);
-tableBody.innerHTML = '<tr><td colspan="5" style="color: red;">Failed to load data.</td></tr>';        });
+            tableBody.innerHTML = '<tr><td colspan="5" style="color: red;">Failed to load data.</td></tr>';
+        });
 }
 
 // SA LOOB NG IYONG JS CODE
@@ -2849,7 +3274,7 @@ function loadSalesReport() {
             body.innerHTML = logs.map((t) => {
                 const pay = String(t.payment_method || 'cash').toLowerCase();
                 return '<tr>' +
-                    '<td>' + srEsc(t.transaction_id) + '</td>' +
+                    '<td title="' + srEsc(t.transaction_id) + '">' + srEsc(shortTxnId(t.transaction_id)) + (t.order_no ? '<div style="font-size:0.8em;color:#64748b;">' + srEsc(t.order_no) + '</div>' : '') + '</td>' +
                     '<td>' + srEsc(t.date) + '</td>' +
                     '<td>' + srEsc(t.time) + '</td>' +
                     '<td>' + srEsc(t.customer_name) + '</td>' +
@@ -2875,12 +3300,79 @@ function closeSalesReportDetail() {
     modal.hidden = true;
 }
 
+let srLoadedDetail = null;
+
+function reprintSalesReceipt(sale, items) {
+    const width = 300;
+    const height = 500;
+    const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+    const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+    const printWindow = window.open('', '_blank', 'width=' + width + ',height=' + height + ',left=' + left + ',top=' + top);
+    if (!printWindow) {
+        alert('Allow pop-ups to reprint the receipt.');
+        return;
+    }
+    const method = String(sale.payment_method || 'cash').toLowerCase();
+    const labels = { cash: 'CASH', gcash: 'GCASH', maya: 'MAYA', card: 'CARD', bank: 'BANK TRANSFER' };
+    const methodName = labels[method] || method.toUpperCase();
+    const money = (n) => '₱' + Number(n || 0).toFixed(2);
+    const itemsHtml = (items || []).map((it) => {
+        const qty = Number(it.quantity || 0);
+        const price = Number(it.price || 0);
+        return '<tr>' +
+            '<td style="text-align:left;">' + qty + ' x ' + money(price) + '</td>' +
+            '<td style="text-align:left;">' + srEsc(it.name || 'Item') + '</td>' +
+            '<td style="text-align:right;">' + money(it.subtotal != null ? it.subtotal : price * qty) + '</td>' +
+            '</tr>';
+    }).join('');
+    const points = Number(sale.points_redeemed || 0);
+    const pointsLine = points > 0
+        ? '<tr><td class="right">Points Redeemed:</td><td class="right">' + points.toFixed(2) + ' (' + money(sale.points_discount_value) + ')</td></tr>'
+        : '';
+    const paymentLine = method === 'cash'
+        ? '<tr><td class="right">CASH:</td><td class="right">' + money(sale.cash_received) + '</td></tr>' +
+          '<tr><td class="right">CHANGE:</td><td class="right">' + money(sale.change_amount) + '</td></tr>'
+        : '<tr><td class="right">PAYMENT METHOD:</td><td class="right">' + srEsc(methodName) + '</td></tr>' +
+          (sale.payment_reference ? '<tr><td class="right">REF NO.:</td><td class="right">' + srEsc(sale.payment_reference) + '</td></tr>' : '');
+    const customer = sale.customer_name && sale.customer_name !== 'Guest'
+        ? 'Customer: ' + sale.customer_name
+        : 'Customer: Guest';
+    const receiptHtml = '<html><head><title>Receipt ' + srEsc(sale.transaction_id || '') + '</title>' +
+        '<style>' + storeReceiptCss() + '</style></head><body><div class="receipt">' +
+        storeReceiptHeaderHtml() +
+        '<div class="border-top"></div>' +
+        '<p>Date: ' + srEsc(sale.date || '') + '</p>' +
+        '<p>Trans ID: ' + srEsc(shortTxnId(sale.transaction_id || '')) + '</p>' +
+        (sale.order_no ? '<p>Order: ' + srEsc(sale.order_no) + '</p>' : '') +
+        '<p>' + srEsc(customer) + '</p>' +
+        '<div class="border-bottom"></div>' +
+        '<table><thead><tr><th style="text-align:left;width:30%;">QTY/Price</th><th style="text-align:left;">Description</th><th style="text-align:right;width:25%;">Amount</th></tr></thead><tbody>' +
+        itemsHtml + '</tbody></table><div class="border-top"></div><table>' +
+        '<tr><td class="right">Subtotal:</td><td class="right">' + money(sale.subtotal) + '</td></tr>' +
+        '<tr><td class="right">Discount:</td><td class="right">' + money(sale.discount_amount) + '</td></tr>' +
+        '<tr><td class="right">VAT:</td><td class="right">' + money(sale.tax_amount) + '</td></tr>' +
+        pointsLine +
+        '<tr class="border-top"><td class="right"><strong>TOTAL DUE:</strong></td><td class="right"><strong>' + money(sale.total_amount) + '</strong></td></tr>' +
+        paymentLine +
+        '</table><div class="border-bottom"></div>' +
+        '<div class="center no-print" style="margin-top:20px;">' +
+        '<button onclick="window.print()" style="padding:10px 20px;cursor:pointer;">Print Receipt</button> ' +
+        '<button onclick="window.close()" style="padding:10px 20px;cursor:pointer;">Close</button></div>' +
+        '<div class="center" style="margin-top:10px;"><p>Thank you! Come again.</p></div></div></body></html>';
+    printWindow.document.write(receiptHtml);
+    printWindow.document.close();
+    printWindow.focus();
+}
+
 function openSalesReportDetail(saleId) {
     const modal = document.getElementById('srDetailModal');
     const title = document.getElementById('srDetailTitle');
     const box = document.getElementById('srDetailBody');
+    const reprintBtn = document.getElementById('srReprintBtn');
     if (!modal || !box) return;
     modal.hidden = false;
+    srLoadedDetail = null;
+    if (reprintBtn) reprintBtn.disabled = true;
     if (title) title.textContent = 'Transaction';
     box.innerHTML = '<p>Loading...</p>';
     fetch('/api/cashier/sales-report/' + encodeURIComponent(saleId), { credentials: 'same-origin' })
@@ -2891,7 +3383,12 @@ function openSalesReportDetail(saleId) {
                 return;
             }
             const s = data.sale;
-            if (title) title.textContent = s.transaction_id;
+            srLoadedDetail = { sale: s, items: data.items || [] };
+            if (reprintBtn) reprintBtn.disabled = false;
+            if (title) {
+                title.textContent = shortTxnId(s.transaction_id);
+                title.title = s.transaction_id || '';
+            }
             const itemRows = (data.items || []).map((it) =>
                 '<tr><td>' + srEsc(it.name) + (it.promo_name ? ' <small>' + srEsc(it.promo_name) + '</small>' : '') +
                 '</td><td>' + it.quantity + '</td><td>₱' + Number(it.price).toFixed(2) +
@@ -2899,6 +3396,7 @@ function openSalesReportDetail(saleId) {
             ).join('') || '<tr><td colspan="4">No line items.</td></tr>';
             box.innerHTML =
                 '<p><strong>Date:</strong> ' + srEsc(s.date) + '</p>' +
+                (s.order_no ? '<p><strong>Order:</strong> ' + srEsc(s.order_no) + '</p>' : '') +
                 '<p><strong>Customer:</strong> ' + srEsc(s.customer_name) + '</p>' +
                 '<p><strong>Cashier:</strong> ' + srEsc(s.cashier_name) + '</p>' +
                 '<p><strong>Payment:</strong> ' + srEsc(srPayLabel(s.payment_method)) +
@@ -2935,17 +3433,19 @@ function printSalesReport() {
 // (or by this same cashier) is reflected without a manual refresh.
 setInterval(() => {
     const dashboardPage = document.getElementById('dashboard-page');
-    const isVisible = dashboardPage && dashboardPage.style.display !== 'none' && dashboardPage.classList.contains('active');
+    const isVisible = dashboardPage && dashboardPage.classList.contains('active');
     if (isVisible) handleDateFilter();
-}, 15000);
+}, 60000);
 
 
 // ===== REAL-TIME ONLINE ORDERS QUEUE =====
-// Polls the online orders list + badge every 10s so a new customer checkout,
-// or a status change made from another cashier terminal, shows up automatically.
 setInterval(() => {
-    fetchOnlineOrders();
-}, 10000);
+    const ordersPage = document.getElementById('online-orders-page') || document.getElementById('orders-page');
+    const dashboardPage = document.getElementById('dashboard-page');
+    const ordersOpen = ordersPage && ordersPage.classList.contains('active');
+    const dashOpen = dashboardPage && dashboardPage.classList.contains('active');
+    if (ordersOpen || dashOpen) fetchOnlineOrders({ silent: true });
+}, 30000);
 
 // ===== REAL-TIME POS STOCK =====
 // The POS product/stock grid was previously only reloaded right after this
@@ -2965,7 +3465,7 @@ setInterval(() => {
     if (isTyping) return;
 
     loadPOSProducts();
-}, 15000);
+}, 60000);
 
 // === Category filter ===
 document.getElementById('categoryFilter').addEventListener('change', function() {
@@ -3119,7 +3619,7 @@ document.getElementById('searchInput').addEventListener('input', function() {
               if (nameHeader) nameHeader.textContent = `${saved.first_name} ${saved.last_name}`.trim();
 
               const headerWelcome = document.getElementById("headerWelcomeName");
-              if (headerWelcome) headerWelcome.textContent = `Welcome, ${saved.first_name} ${saved.last_name || ''}`.replace(/\s+/g, ' ').trim();
+              if (headerWelcome) headerWelcome.textContent = `Welcome, ${(saved.first_name || '').trim() || 'Cashier'}`;
           } else {
               cMsg.style.color = "#e74c3c";
               cMsg.textContent = response.message || "Update failed.";
@@ -3209,8 +3709,7 @@ document.getElementById('searchInput').addEventListener('input', function() {
 
 
 
-<script src="/assets/theme.js?v=spa-hash1"></script>
-<script src="/assets/activity-clicks.js?v=click1"></script>
+<script src="/assets/theme.js?v=load1"></script>
 </body>
 
 </html>

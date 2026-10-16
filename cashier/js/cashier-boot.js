@@ -7,26 +7,27 @@
     ready(async function () {
         try {
             const meRes = await fetch('/api/auth/me', { credentials: 'same-origin' });
-            if (!meRes.ok) {
+            if (meRes.status === 401) {
                 window.location.href = '/';
                 return;
             }
-            const me = await meRes.json();
-            const role = String(me.role || '').toLowerCase();
-            if (!me.success || (role !== 'cashier/pharmacist' && role !== 'admin')) {
-                window.location.href = '/';
-                return;
+            if (meRes.ok) {
+                const me = await meRes.json();
+                const role = String(me.role || '').toLowerCase();
+                if (!me.success || (role !== 'cashier/pharmacist' && role !== 'admin')) {
+                    window.location.href = '/';
+                    return;
+                }
+                let staff = me.staff || {};
+                try {
+                    const profileRes = await fetch('/api/cashier/profile', { credentials: 'same-origin' });
+                    const profile = await profileRes.json();
+                    if (profile.success && profile.staff) staff = profile.staff;
+                } catch (err) {}
+                applyProfile(staff, me.firstName, me.lastName, me.profile_image || staff.profile_image);
+                // Live clock is owned by theme.js so Admin and Cashier stay in sync.
             }
-            let staff = me.staff || {};
-            try {
-                const profileRes = await fetch('/api/cashier/profile', { credentials: 'same-origin' });
-                const profile = await profileRes.json();
-                if (profile.success && profile.staff) staff = profile.staff;
-            } catch (err) {}
-            applyProfile(staff, me.firstName, me.lastName, me.profile_image || staff.profile_image);
-            startLiveClock();
         } catch (err) {
-            window.location.href = '/';
             return;
         }
 
@@ -56,8 +57,9 @@
 
     function applyProfile(staff, firstName, lastName, profileImage) {
         const name = personName(staff, firstName, lastName, 'Cashier');
+        const first = String(staff.first_name || firstName || '').replace(/\s+/g, ' ').trim() || 'Cashier';
         const welcome = document.getElementById('headerWelcomeName');
-        if (welcome) welcome.textContent = 'Welcome, ' + name;
+        if (welcome) welcome.textContent = 'Welcome, ' + first;
         const fields = ['first_name', 'middle_name', 'last_name', 'email', 'phone_number', 'address'];
         fields.forEach((id) => {
             const el = document.getElementById(id);
@@ -85,19 +87,6 @@
         document.querySelectorAll('#profile-page .p-input').forEach((input) => {
             window.profileOriginal[input.id] = input.value;
         });
-    }
-
-    function startLiveClock() {
-        const el = document.getElementById('live-clock');
-        if (!el) return;
-        const tick = () => {
-            el.textContent = new Date().toLocaleString('en-PH', {
-                weekday: 'long', year: 'numeric', month: 'short', day: 'numeric',
-                hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
-            });
-        };
-        tick();
-        setInterval(tick, 1000);
     }
 
     function fillSegmentationKpis(charts) {

@@ -1,19 +1,6 @@
 (function () {
-    const SEGMENT_COLORS = ['#3b5b92', '#3f8f7a', '#c08a3e', '#7a6aa8', '#b25c5c'];
-    if (!window.CHART_PALETTE) {
-        window.CHART_PALETTE = ['#4BAA8B', '#4BAA8B', '#FFC857', '#FFC857', '#FFC857', '#4BAA8B'];
-    }
-    if (!window.chartBarGradient) {
-        window.chartBarGradient = function (ctx, color) {
-            color = color || window.CHART_PALETTE[0];
-            const chartArea = ctx.chart && ctx.chart.chartArea;
-            if (!chartArea) return color;
-            const g = ctx.chart.ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-            g.addColorStop(0, color + 'cc');
-            g.addColorStop(1, color);
-            return g;
-        };
-    }
+    const SEGMENT_COLORS = (window.PharmaChart && window.PharmaChart.segments) || ['#1E3A34', '#24544C', '#4BAA8B', '#7BC4A8', '#C5E6D8'];
+    const SALES_COLOR = (window.PharmaChart && window.PharmaChart.sales) || '#4BAA8B';
 
     const shadowPlugin = {
         id: 'softShadow',
@@ -124,9 +111,13 @@
         segmentationDataLoading = true;
         const badge = document.getElementById('segmentEngineBadge');
         if (badge) {
-            badge.innerHTML = canManage()
-                ? '<i class="fas fa-spinner fa-spin"></i> Running K-Means clustering...'
-                : '<i class="fas fa-spinner fa-spin"></i> Loading Admin segment snapshot...';
+            if (!canManage()) {
+                badge.innerHTML = '';
+                badge.style.display = 'none';
+            } else {
+                badge.style.display = '';
+                badge.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Grouping customers...';
+            }
         }
 
         return fetch('/api/cashier/segmentation', { credentials: 'same-origin' })
@@ -147,7 +138,12 @@
             })
             .catch((err) => {
                 console.error('[PharmaLink] Failed to load segmentation data:', err);
-                if (badge) badge.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Failed to load segmentation data.';
+                if (badge) {
+                    badge.style.display = canManage() ? '' : 'none';
+                    badge.innerHTML = canManage()
+                        ? '<i class="fas fa-triangle-exclamation"></i> Failed to load segmentation data.'
+                        : '';
+                }
             })
             .finally(() => { segmentationDataLoading = false; });
     }
@@ -187,13 +183,13 @@
     function renderSegmentEngineBadge(n) {
         const el = document.getElementById('segmentEngineBadge');
         if (!el) return;
-        if (segmentEngine === 'kmeans') {
-            const score = segmentSilhouette[n];
-            const scoreText = (score !== undefined && score !== null) ? ` &middot; Silhouette Score: <strong>${score}</strong>` : '';
-            el.innerHTML = `<i class="fas fa-brain" style="color:#4BAA8B;"></i> K-Means Clustering (scikit-learn)${scoreText}`;
-        } else {
-            el.innerHTML = `<i class="fas fa-info-circle"></i> Quantile-based grouping (fallback - K-Means unavailable on this server)`;
+        if (!canManage()) {
+            el.innerHTML = '';
+            el.style.display = 'none';
+            return;
         }
+        el.style.display = '';
+        el.innerHTML = '<i class="fas fa-users" style="color:#4BAA8B;"></i> Grouped by how often they buy and how much they spend.';
     }
 
     function applySegmentCount(n) {
@@ -382,7 +378,7 @@
                     datasets: [{
                         label: 'Number of Orders',
                         data: window.CASHIER_FREQ_DATA || [],
-                        backgroundColor: (c) => window.chartBarGradient(c, window.CHART_PALETTE[(c.dataIndex ?? 0) % window.CHART_PALETTE.length]),
+                        backgroundColor: SALES_COLOR,
                         borderRadius: 6,
                         borderSkipped: false,
                         maxBarThickness: 26
@@ -414,7 +410,7 @@
                     datasets: [{
                         label: 'Total Spending (₱)',
                         data: window.CASHIER_SPEND_DATA || [],
-                        backgroundColor: (c) => window.chartBarGradient(c, window.CHART_PALETTE[(c.dataIndex ?? 0) % window.CHART_PALETTE.length]),
+                        backgroundColor: SALES_COLOR,
                         borderRadius: 6,
                         borderSkipped: false,
                         maxBarThickness: 26
@@ -534,11 +530,10 @@
 
     function paintViewOnlyChrome() {
         const sub = document.querySelector('#customer-segmentation-page .subtitle');
-        if (sub) {
-            sub.textContent = canManage()
-                ? 'You run the grouping here (how many segments) and can distribute loyalty points. Cashiers only see the result you set.'
-                : 'Read-only. These groups are set by Admin - you can view members, not change clustering or points.';
+        if (sub && canManage()) {
+            sub.textContent = 'You run the grouping here (how many segments) and can distribute loyalty points. Cashiers only see the result you set.';
         }
+        if (sub && !canManage()) sub.remove();
         const h2 = document.querySelector('#customer-segmentation-page .dashboard-header h2');
         if (h2 && !canManage() && !h2.querySelector('.cs-seg-viewonly')) {
             const badge = document.createElement('span');
@@ -552,6 +547,11 @@
         if (wrap) {
             wrap.style.display = canManage() ? '' : 'none';
             if (canManage()) wrap.title = 'Cashiers will see this number of groups.';
+        }
+        const engineBadge = document.getElementById('segmentEngineBadge');
+        if (engineBadge && !canManage()) {
+            engineBadge.innerHTML = '';
+            engineBadge.style.display = 'none';
         }
         let lock = document.getElementById('segActiveKLabel');
         if (!canManage()) {

@@ -1,4 +1,6 @@
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, File, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -26,24 +28,48 @@ def _ensure_staff_notification_reads() -> None:
             )
 
 
+_MANILA = ZoneInfo("Asia/Manila")
+
+
+def _staff_dt_manila(val):
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        if val.tzinfo is None:
+            val = val.replace(tzinfo=timezone.utc)
+        return val.astimezone(_MANILA)
+    return None
+
+
 def _fmt_staff_dt(val) -> str:
+    dt = _staff_dt_manila(val)
+    if dt is not None:
+        return dt.strftime("%b %d, %Y %I:%M %p")
     if val is None:
         return ""
-    if hasattr(val, "strftime"):
-        return val.strftime("%b %d, %Y %I:%M %p")
     return str(val)
 
 
-def _staff_nav(atype: str) -> tuple[str, str]:
+def _iso_staff_dt(val) -> str:
+    dt = _staff_dt_manila(val)
+    if dt is None:
+        return ""
+    return dt.isoformat()
+
+
+def _staff_nav(atype: str, title: str = "") -> tuple[str, str]:
     t = (atype or "").lower()
+    label = (title or "").lower()
     if t == "auto_po":
         return "deliveries", ""
+    if t in {"online_order", "order_paid"}:
+        return "orders", ""
     if t == "expired":
         return "inventory", "all"
-    if t in {"expiring", "expiring_30"}:
+    if t in {"expiring", "expiring_30", "expiring_90"}:
+        if t == "expiring_90" or "90" in label:
+            return "inventory", "expiring"
         return "inventory", "expiring30"
-    if t == "expiring_90":
-        return "inventory", "expiring"
     if t in {"low", "low_stock", "out", "out_of_stock"}:
         return "inventory", "low"
     return "dashboard", ""
@@ -58,6 +84,10 @@ def _icon_for(atype: str) -> str:
         return "fa-triangle-exclamation"
     if atype == "auto_po":
         return "fa-cart-plus"
+    if atype == "online_order":
+        return "fa-bag-shopping"
+    if atype == "order_paid":
+        return "fa-circle-check"
     if atype == "expired":
         return "fa-ban"
     return "fa-bell"
@@ -73,11 +103,20 @@ _NOTE_TITLES = {
     "out": "Out of stock",
     "out_of_stock": "Out of stock",
     "auto_po": "Automatic purchase order",
+    "online_order": "New online order",
+    "order_paid": "Payment received",
 }
 
 
-def _pack_note(notif_key: str, atype: str, message: str, date: str = "", title: str = "") -> dict:
-    target, inv_filter = _staff_nav(atype)
+def _pack_note(
+    notif_key: str,
+    atype: str,
+    message: str,
+    date: str = "",
+    title: str = "",
+    date_iso: str = "",
+) -> dict:
+    target, inv_filter = _staff_nav(atype, title)
     kind = atype or "alert"
     raw = (title or "").strip()
     friendly = _NOTE_TITLES.get(kind, "Alert")
@@ -92,6 +131,7 @@ def _pack_note(notif_key: str, atype: str, message: str, date: str = "", title: 
         "title": display_title,
         "message": message,
         "date": date,
+        "date_iso": date_iso,
         "target": target,
         "inv_filter": inv_filter,
     }
@@ -107,9 +147,7 @@ def _unread_staff_notes(user_id: int) -> tuple[int, list[dict]]:
           ON r.user_id = %s AND r.notif_key = ('a:' || a.alert_id::text)
         WHERE a.created_at >= (NOW() - INTERVAL '14 days')
           AND r.notif_key IS NULL
-        ORDER BY
-            CASE a.severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
-            a.created_at DESC
+        ORDER BY a.created_at DESC
         LIMIT 40
         """,
         (user_id,),
@@ -143,6 +181,7 @@ def _unread_staff_notes(user_id: int) -> tuple[int, list[dict]]:
                     row["message"],
                     _fmt_staff_dt(row.get("created_at")),
                     row.get("title") or "",
+                    _iso_staff_dt(row.get("created_at")),
                 )
             )
         return unread_count, notes
@@ -210,7 +249,7 @@ def _unread_staff_notes(user_id: int) -> tuple[int, list[dict]]:
             _pack_note(
                 key,
                 "expiring",
-                f"Expiring soon: {row['generic_name']} ({row['brand_name']}), lot {row['lot_number']} - {row['days_left']} day(s) left.",
+                f"Expiring soon: {row['generic_name']} ({row['brand_name']}), {row['lot_number']} - {row['days_left']} day(s) left.",
             )
         )
     return len(notes), notes

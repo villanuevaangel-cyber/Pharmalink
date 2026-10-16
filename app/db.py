@@ -1,12 +1,15 @@
 import os
+import threading
+import time
 from contextlib import contextmanager
 
 import psycopg2
 from psycopg2.extensions import TRANSACTION_STATUS_INERROR
 from psycopg2.extras import RealDictCursor
-from psycopg2.pool import SimpleConnectionPool
+from psycopg2.pool import PoolError, ThreadedConnectionPool
 
-_pool: SimpleConnectionPool | None = None
+_pool: ThreadedConnectionPool | None = None
+_pool_lock = threading.Lock()
 
 
 def _allow_explicit_ids(conn) -> None:
@@ -80,18 +83,41 @@ def _fix_sales_customer_fk(conn) -> None:
 
 def init_pool() -> None:
     global _pool
-    if _pool is not None:
-        return
-    _pool = SimpleConnectionPool(
-        minconn=1,
-        maxconn=16,
-        host=os.getenv("SUPABASE_DB_HOST"),
-        port=os.getenv("SUPABASE_DB_PORT", "5432"),
-        dbname=os.getenv("SUPABASE_DB_NAME", "postgres"),
-        user=os.getenv("SUPABASE_DB_USER"),
-        password=os.getenv("SUPABASE_DB_PASSWORD"),
-        sslmode=os.getenv("SUPABASE_DB_SSLMODE", "require"),
-    )
+    with _pool_lock:
+        if _pool is not None:
+            return
+        _open_pool()
+
+
+def _open_pool() -> None:
+    global _pool
+    last_error = None
+    for _attempt in range(1):
+        try:
+            _pool = ThreadedConnectionPool(
+                minconn=3,
+                maxconn=8,
+                host=os.getenv("SUPABASE_DB_HOST"),
+                port=os.getenv("SUPABASE_DB_PORT", "5432"),
+                dbname=os.getenv("SUPABASE_DB_NAME", "postgres"),
+                user=os.getenv("SUPABASE_DB_USER"),
+                password=os.getenv("SUPABASE_DB_PASSWORD"),
+                sslmode=os.getenv("SUPABASE_DB_SSLMODE", "require"),
+                connect_timeout=8,
+                gssencmode="disable",
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=3,
+            )
+            break
+        except Exception as exc:
+            last_error = exc
+            _pool = None
+            import time
+            time.sleep(3)
+    if _pool is None:
+        raise last_error
     conn = _pool.getconn()
     try:
         _allow_explicit_ids(conn)
@@ -135,25 +161,63 @@ def init_pool() -> None:
             ensure_loyalty_settings(conn)
         except Exception:
             conn.rollback()
+        try:
+            from app.checkout_rates import ensure_checkout_rates
+            ensure_checkout_rates(conn)
+        except Exception:
+            conn.rollback()
+        try:
+            from app.push import ensure_push_schema
+            ensure_push_schema(conn)
+        except Exception:
+            conn.rollback()
     finally:
         _pool.putconn(conn)
+
+
+def _discard(conn) -> None:
+    try:
+        _pool.putconn(conn, close=True)
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 @contextmanager
 def get_conn():
     if _pool is None:
         init_pool()
-    conn = _pool.getconn()
+    deadline = time.monotonic() + 3
+    while True:
+        try:
+            conn = _pool.getconn()
+            break
+        except PoolError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
     try:
+        if conn.closed:
+            raise psycopg2.OperationalError("connection already closed")
         yield conn
+        if conn.closed:
+            return
         if conn.get_transaction_status() == TRANSACTION_STATUS_INERROR:
             conn.rollback()
         else:
             conn.commit()
     except Exception:
-        conn.rollback()
+        try:
+            if not conn.closed:
+                conn.rollback()
+        except Exception:
+            pass
+        _discard(conn)
+        conn = None
         raise
-    finally:
+    else:
         _pool.putconn(conn)
 
 

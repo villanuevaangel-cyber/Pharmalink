@@ -204,14 +204,165 @@
       .forEach(attachRipple);
   }
 
+  function urlBase64ToUint8Array(base64String) {
+    var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    var raw = atob(base64);
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  function hidePushBanner() {
+    var banner = document.getElementById("phPushBanner");
+    if (banner) banner.remove();
+  }
+
+  function showPushBanner() {
+    if (document.getElementById("phPushBanner") || !document.querySelector(".notification")) return;
+    var bar = document.createElement("div");
+    bar.id = "phPushBanner";
+    bar.className = "ph-push-banner";
+    bar.innerHTML = "<span>Get alerts even when this tab is closed.</span>";
+    var enable = document.createElement("button");
+    enable.type = "button";
+    enable.className = "ph-push-enable";
+    enable.textContent = "Turn on notifications";
+    var later = document.createElement("button");
+    later.type = "button";
+    later.className = "ph-push-later";
+    later.textContent = "Not now";
+    bar.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+    bar.addEventListener("click", function (e) { e.stopPropagation(); });
+    later.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      hidePushBanner();
+    });
+    enable.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (enable.dataset.busy === "1") return;
+      enable.dataset.busy = "1";
+      enable.textContent = "Waiting for Allow...";
+      subscribeForPush(true).then(function (ok) {
+        enable.dataset.busy = "";
+        if (ok) {
+          hidePushBanner();
+          return;
+        }
+        enable.textContent = "Turn on notifications";
+        var note = bar.querySelector("span");
+        if (note && window.Notification && Notification.permission === "denied") {
+          note.textContent = "Notifications are blocked. Click the lock icon beside the address and set Notifications to Allow.";
+        }
+      });
+    });
+    bar.appendChild(enable);
+    bar.appendChild(later);
+    document.body.appendChild(bar);
+  }
+
+  function subscribeForPush(ask) {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      return Promise.resolve(false);
+    }
+    var permission = Notification.permission;
+    if (permission === "denied") return Promise.resolve(false);
+    if (permission !== "granted" && !ask) return Promise.resolve(false);
+    var ready = permission === "granted" ? Promise.resolve("granted") : Notification.requestPermission();
+    return ready.then(function (result) {
+      if (result !== "granted") return false;
+      return navigator.serviceWorker.register("/sw.js").then(function (reg) {
+        return fetch("/api/push/vapid", { credentials: "same-origin" })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (data) {
+            if (!data || !data.publicKey) return false;
+            return reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(data.publicKey)
+            });
+          })
+          .then(function (sub) {
+            if (!sub) return false;
+            return fetch("/api/push/subscribe", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(sub)
+            }).then(function (res) { return res.ok; });
+          });
+      });
+    }).catch(function () { return false; });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     bindAllButtons(document);
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (regs) {
-        regs.forEach(function (reg) { reg.unregister(); });
-      }).catch(function () {});
-    }
+    openPushDestination();
+    if (!("serviceWorker" in navigator) || !document.querySelector(".notification")) return;
+    navigator.serviceWorker.register("/sw.js").catch(function () {});
+    if (!("Notification" in window) || Notification.permission === "denied") return;
+    fetch("/api/push/vapid", { credentials: "same-origin" }).then(function (res) {
+      if (!res.ok) return;
+      if (Notification.permission === "granted") subscribeForPush(false);
+      else showPushBanner();
+    }).catch(function () {});
   });
+
+  function openCustomerOrder(orderId) {
+    var nav = document.querySelector('.nav-item[data-target="orders"]');
+    if (nav) nav.click();
+    if (!orderId) return;
+    var tries = 0;
+    var timer = setInterval(function () {
+      tries += 1;
+      if (typeof window.showOrderDetails === "function") {
+        clearInterval(timer);
+        window.showOrderDetails(orderId);
+      } else if (tries > 25) {
+        clearInterval(timer);
+      }
+    }, 200);
+  }
+
+  function openStaffPush(target, filter) {
+    if (target === "orders" && typeof window.switchPOSMode === "function") {
+      var posNav = document.querySelector('.nav-item[data-page="pos-page"]');
+      if (posNav) posNav.click();
+      setTimeout(function () { window.switchPOSMode("orders"); }, 200);
+      return;
+    }
+    var adminNav = document.querySelector('.nav-item[data-target="' + target + '"]');
+    if (adminNav) {
+      adminNav.click();
+      if (target === "inventory" && filter && typeof window.applyInventoryCardFilter === "function") {
+        setTimeout(function () { window.applyInventoryCardFilter(filter); }, 350);
+      }
+    }
+  }
+
+  function openPushDestination(detail) {
+    var params = new URLSearchParams(window.location.search);
+    var notice = detail && detail.target ? "" : (params.get("notice") || "");
+    var orderId = detail && detail.orderId ? Number(detail.orderId) : Number(params.get("order") || 0);
+    var target = (detail && detail.target) || "";
+    var filter = (detail && detail.filter) || params.get("filter") || "";
+    if (!target && (notice === "order" || notice === "orders")) target = "orders";
+    if (!target && filter && window.location.hash.indexOf("inventory") !== -1) target = "inventory";
+    if (document.querySelector('.nav-item[data-target="orders"]') && (notice === "order" || orderId)) {
+      openCustomerOrder(orderId);
+      return;
+    }
+    if (target) openStaffPush(target, filter);
+  }
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", function (event) {
+      var data = event.data || {};
+      if (data.type !== "pharmalink-push") return;
+      openPushDestination(data);
+    });
+  }
 
   // Re-bind when the app injects new DOM (common in these SPA-style pages)
   const observer = new MutationObserver((mutations) => {
@@ -256,6 +407,33 @@
     msgObserver.observe(document.body, { childList: true });
   });
 
+  var PH_TZ = 'Asia/Manila';
+
+  function phManilaClockText() {
+    return new Date().toLocaleString('en-PH', {
+      timeZone: PH_TZ,
+      weekday: 'long',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var el = document.getElementById('live-clock');
+    if (!el || el.getAttribute('data-ph-clock') === '1') return;
+    el.setAttribute('data-ph-clock', '1');
+    function tickClock() {
+      el.textContent = phManilaClockText();
+    }
+    tickClock();
+    setInterval(tickClock, 1000);
+  });
+
   /* ---- 4. Staff (Admin/Cashier) notification bell ----
      Purely additive: only runs if #staffNotificationBell exists on the
      page (Admin & Cashier portals). Polls get_notifications_staff.php
@@ -269,6 +447,8 @@
       if (type === 'low_stock' || type === 'low') return 'fa-box-open';
       if (type === 'out_of_stock' || type === 'out') return 'fa-circle-xmark';
       if (type === 'auto_po') return 'fa-cart-plus';
+      if (type === 'online_order') return 'fa-bag-shopping';
+      if (type === 'order_paid') return 'fa-circle-check';
       if (type === 'expired') return 'fa-ban';
       return 'fa-triangle-exclamation';
     }
@@ -282,6 +462,14 @@
     var notesByKey = {};
 
     function goToStaffNotification(target, invFilter) {
+      if (target === 'orders') {
+        var posNav = document.querySelector('.nav-item[data-page="pos-page"]');
+        if (posNav) posNav.click();
+        if (typeof window.switchPOSMode === 'function') {
+          setTimeout(function () { window.switchPOSMode('orders'); }, 200);
+        }
+        return;
+      }
       var adminNav = document.querySelector('.nav-item[data-target="' + target + '"]');
       if (adminNav) {
         adminNav.click();
@@ -342,9 +530,16 @@
       if (type === 'low_stock' || type === 'low') return 'Low stock';
       if (type === 'out_of_stock' || type === 'out') return 'Out of stock';
       if (type === 'expired') return 'Expired lot';
-      if (type === 'expiring_30' || type === 'expiring') return 'Near expiry (30 days)';
+      if (type === 'expiring_30') return 'Near expiry (30 days)';
       if (type === 'expiring_90') return 'Near expiry (90 days)';
+      if (type === 'expiring') {
+        if ((raw || '').indexOf('90') !== -1) return 'Near expiry (90 days)';
+        if ((raw || '').indexOf('30') !== -1) return 'Near expiry (30 days)';
+        return raw || 'Near expiry';
+      }
       if (type === 'auto_po') return 'Automatic purchase order';
+      if (type === 'online_order') return 'New online order';
+      if (type === 'order_paid') return 'Payment received';
       if (raw && raw.toLowerCase() !== 'out' && raw.toLowerCase() !== 'low') return raw;
       return 'Alert';
     }
@@ -365,6 +560,7 @@
     }
 
     var lastUnreadCount = 0;
+    var seenNotifKeys = null;
 
     function applyBadge(count) {
       lastUnreadCount = Math.max(0, Number(count) || 0);
@@ -415,27 +611,88 @@
         });
     }
 
+    function formatNotifWhen(iso, fallback) {
+      if (!iso) return fallback || '';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return fallback || '';
+      var sec = Math.round((Date.now() - d.getTime()) / 1000);
+      var clockOpts = { timeZone: PH_TZ, hour: 'numeric', minute: '2-digit', hour12: true };
+      var clock = d.toLocaleTimeString('en-PH', clockOpts);
+      if (sec < 45) return 'Just now · ' + clock;
+      if (sec < 3600) {
+        var mins = Math.max(1, Math.floor(sec / 60));
+        var ago = mins === 1 ? '1 minute ago' : mins + ' minutes ago';
+        return ago + ' · ' + clock;
+      }
+      var manilaNow = new Date(new Date().toLocaleString('en-US', { timeZone: PH_TZ }));
+      var manilaThen = new Date(d.toLocaleString('en-US', { timeZone: PH_TZ }));
+      var startToday = new Date(manilaNow);
+      startToday.setHours(0, 0, 0, 0);
+      if (manilaThen >= startToday) return 'Today, ' + clock;
+      var startY = new Date(startToday);
+      startY.setDate(startY.getDate() - 1);
+      if (manilaThen >= startY) return 'Yesterday, ' + clock;
+      return d.toLocaleString('en-PH', {
+        timeZone: PH_TZ,
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    }
+
+    function isFreshNotif(n) {
+      var t = Date.parse((n && n.date_iso) || '') || 0;
+      if (!t) return false;
+      return (Date.now() - t) < 5 * 60 * 1000;
+    }
+
     function render(notifications) {
       notesByKey = {};
-      (notifications || []).forEach(function (n) {
-        if (n && n.notif_key) notesByKey[n.notif_key] = n;
+      notifications = (notifications || []).slice().sort(function (a, b) {
+        var ta = Date.parse((a && a.date_iso) || '') || 0;
+        var tb = Date.parse((b && b.date_iso) || '') || 0;
+        return tb - ta;
       });
+      var keysNow = {};
+      var arrived = {};
+      notifications.forEach(function (n) {
+        if (!n || !n.notif_key) return;
+        notesByKey[n.notif_key] = n;
+        keysNow[n.notif_key] = true;
+        if (seenNotifKeys === null) {
+          if (isFreshNotif(n)) arrived[n.notif_key] = true;
+        } else if (!seenNotifKeys[n.notif_key]) {
+          arrived[n.notif_key] = true;
+        } else if (isFreshNotif(n)) {
+          arrived[n.notif_key] = true;
+        }
+      });
+      seenNotifKeys = keysNow;
+      var hasNew = Object.keys(arrived).length > 0;
+      bell.classList.toggle('has-new', hasNew);
       if (!notifications || notifications.length === 0) {
         dropdown.innerHTML = '<div class="staff-notif-empty">No new alerts. You are all caught up!</div>';
         return;
       }
       dropdown.innerHTML = notifications.map(function (n) {
-        var dateLine = n.date
-          ? '<br><small style="color:#9ca3af;">' + escHtml(n.date) + '</small>'
+        var when = formatNotifWhen(n.date_iso, n.date);
+        var isNew = !!arrived[n.notif_key];
+        var dateLine = when
+          ? '<br><small class="staff-notif-when" style="color:#9ca3af;" data-iso="' + escHtml(n.date_iso || '') + '">' + escHtml(when) + '</small>'
           : '';
-        return '<div class="staff-notif-item ' + escHtml(n.type) + '"' +
+        var newMark = isNew ? '<span class="staff-notif-new">NEW</span>' : '';
+        return '<div class="staff-notif-item ' + escHtml(n.type) + (isNew ? ' is-new' : '') + '"' +
                ' data-notif-key="' + escHtml(n.notif_key) + '"' +
                ' data-target="' + escHtml(n.target || 'inventory') + '"' +
                ' data-inv-filter="' + escHtml(n.inv_filter || '') + '"' +
                ' role="button" tabindex="0">' +
                '<i class="fas ' + iconFor(n.type) + '"></i>' +
-               '<span>' + escHtml(n.message) + dateLine + '</span></div>';
+               '<span>' + escHtml(n.message) + newMark + dateLine + '</span></div>';
       }).join('');
+      dropdown.scrollTop = 0;
 
       dropdown.querySelectorAll('.staff-notif-item[data-notif-key]').forEach(function (item) {
         item.addEventListener('click', function (e) {
@@ -463,6 +720,14 @@
       });
     }
 
+    function tickNotifTimes() {
+      dropdown.querySelectorAll('.staff-notif-when[data-iso]').forEach(function (el) {
+        var iso = el.getAttribute('data-iso') || '';
+        if (!iso) return;
+        el.textContent = formatNotifWhen(iso, el.textContent);
+      });
+    }
+
     function refresh() {
       fetch('/api/staff/notifications', { credentials: 'same-origin' })
         .then(function (res) { return res.json(); })
@@ -487,6 +752,7 @@
 
     refresh();
     setInterval(refresh, 30000);
+    setInterval(tickNotifTimes, 1000);
   });
 
   /* ---- 5. Logout Yes / No confirm (Admin, Cashier, Customer) ---- */
@@ -615,5 +881,42 @@
       return;
     }
     window.phRestorePortalHash();
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var header = document.querySelector('.header');
+    var sidebar = document.querySelector('.sidebar');
+    if (!header || !sidebar || document.getElementById('navToggle')) return;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'navToggle';
+    btn.className = 'nav-toggle';
+    btn.setAttribute('aria-label', 'Open menu');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = '<i class="fas fa-bars"></i>';
+    header.insertBefore(btn, header.firstChild);
+    var backdrop = document.createElement('div');
+    backdrop.className = 'nav-backdrop';
+    document.body.appendChild(backdrop);
+    function setOpen(open) {
+      document.body.classList.toggle('nav-open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+      var icon = btn.querySelector('i');
+      if (icon) icon.className = open ? 'fas fa-xmark' : 'fas fa-bars';
+    }
+    btn.addEventListener('click', function () {
+      setOpen(!document.body.classList.contains('nav-open'));
+    });
+    backdrop.addEventListener('click', function () { setOpen(false); });
+    sidebar.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('.nav-item')) setOpen(false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') setOpen(false);
+    });
+    window.addEventListener('resize', function () {
+      if (window.innerWidth > 900) setOpen(false);
+    });
   });
 })();

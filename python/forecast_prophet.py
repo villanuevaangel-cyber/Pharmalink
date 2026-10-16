@@ -108,9 +108,12 @@ def main():
     range_start = payload['range_start']
     daily_sales = payload.get('daily_sales', [])
     items = payload.get('items', {})
+    # Reorder only needs each medicine's predicted units. Skip the store-wide
+    # peso model and forecast every drug that was sent, not just the top 12.
+    reorder_mode = payload.get('purpose') == 'reorder'
 
     days_with_sales = len({row['date'] for row in daily_sales})
-    if days_with_sales < MIN_DAYS_WITH_DATA:
+    if not reorder_mode and days_with_sales < MIN_DAYS_WITH_DATA:
         print(json.dumps({
             'success': True,
             'insufficient_data': True,
@@ -120,13 +123,43 @@ def main():
         }))
         return
 
+    if reorder_mode:
+        item_rows = []
+        for drug_id, info in items.items():
+            series_rows = info.get('series') or []
+            days_with_item_sales = len({pt['date'] for pt in series_rows})
+            predicted_qty = None
+            item_engine = 'insufficient'
+            if days_with_item_sales >= MIN_DAYS_WITH_DATA:
+                try:
+                    item_series = zero_fill(series_rows, 'qty', range_start, today)
+                    item_forecast = fit_and_forecast(item_series, period)
+                    predicted_qty = int(round(float(item_forecast['yhat'].sum())))
+                    item_engine = 'prophet'
+                except Exception:
+                    predicted_qty = None
+                    item_engine = 'failed'
+            item_rows.append({
+                'drug_id': int(drug_id),
+                'predicted_qty': predicted_qty,
+                'engine': item_engine,
+            })
+        print(json.dumps({
+            'success': True,
+            'insufficient_data': False,
+            'period': period,
+            'engine': 'prophet',
+            'items': item_rows,
+        }))
+        return
+
     sales_series = zero_fill(daily_sales, 'total', range_start, today)
     qty_series = zero_fill(daily_sales, 'qty', range_start, today)
 
     sales_forecast = fit_and_forecast(sales_series, period)
     qty_forecast = fit_and_forecast(qty_series, period)
 
-    forecast_labels = [d.strftime('%b %-d') for d in sales_forecast['ds']]
+    forecast_labels = [f"{d.strftime('%b')} {int(d.day)}" for d in sales_forecast['ds']]
     forecast_values = [round(float(v), 2) for v in sales_forecast['yhat']]
     forecast_lower = [round(float(v), 2) for v in sales_forecast['yhat_lower']]
     forecast_upper = [round(float(v), 2) for v in sales_forecast['yhat_upper']]

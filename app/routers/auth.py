@@ -68,6 +68,7 @@ def login(body: LoginBody, request: Request):
     password = body.password
     if not username or not password:
         return JSONResponse({"success": False, "message": "Username and password are required."})
+    account_id = int(username) if username.isdigit() else -1
 
     staff = fetch_one(
         """
@@ -76,9 +77,12 @@ def login(body: LoginBody, request: Request):
         JOIN role r ON u.role_id = r.role_id
         LEFT JOIN staff_info s ON s.user_id = u.user_id
         WHERE u.is_active = 1 AND r.role_name != 'Customer'
-          AND (u.username = %s OR LOWER(COALESCE(s.email, '')) = LOWER(%s))
+          AND (
+                LOWER(u.username) = LOWER(%s)
+             OR (%s >= 0 AND (u.user_id = %s OR s.staff_id = %s))
+          )
         """,
-        (username, username),
+        (username, account_id, account_id, account_id),
     )
     if staff and verify_password(password, staff["password"]):
         request.session.clear()
@@ -98,9 +102,12 @@ def login(body: LoginBody, request: Request):
         """
         SELECT customer_id, first_name, last_name, password FROM customers
         WHERE is_active = 1
-          AND (username = %s OR LOWER(username) = LOWER(%s) OR LOWER(COALESCE(email, '')) = LOWER(%s))
+          AND (
+                LOWER(COALESCE(username, '')) = LOWER(%s)
+             OR (%s >= 0 AND customer_id = %s)
+          )
         """,
-        (username, username, username),
+        (username, account_id, account_id),
     )
     if customer and verify_password(password, customer["password"]):
         import secrets
@@ -243,7 +250,7 @@ def register(body: RegisterBody):
                 write_activity_log(
                     cur,
                     "Register",
-                    f"Created customer account '{username}'.",
+                    f"Created a customer account for {first_name} {last_name}.",
                     actor=f"{first_name} {last_name}".strip(),
                 )
         return {"success": True, "message": "Registration successful! You can now log in."}
@@ -318,10 +325,15 @@ def forgot_password(body: ForgotBody, request: Request):
         """
         SELECT customer_id, first_name, email
         FROM customers
-        WHERE customer_id = %s AND LOWER(COALESCE(email, '')) = LOWER(%s) AND is_active = 1
+        WHERE is_active = 1
+          AND LOWER(COALESCE(email, '')) = LOWER(%s)
+          AND (
+                customer_id = %s
+             OR LOWER(COALESCE(username, '')) = LOWER(%s)
+          )
         LIMIT 1
         """,
-        (account_id, email),
+        (email, account_id, employee_id),
     )
 
     target_email = None

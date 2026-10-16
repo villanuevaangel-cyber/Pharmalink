@@ -5,6 +5,7 @@
     }
 
     ready(async function () {
+        const productsReady = loadProducts();
         const meRes = await fetch('/api/auth/me', { credentials: 'same-origin' });
         let me = null;
         if (meRes.ok) {
@@ -23,7 +24,7 @@
 
             const fullName = [me.firstName, me.lastName].filter(Boolean).join(' ').trim() || 'Customer';
             const welcome = document.getElementById('headerWelcomeName');
-            if (welcome) welcome.textContent = 'Welcome, ' + fullName;
+            if (welcome) welcome.textContent = 'Welcome, ' + (String(me.firstName || '').trim() || 'Customer');
             const homeName = document.getElementById('homeFirstName');
             if (homeName) homeName.textContent = me.firstName || fullName;
             if (me.profile_image) applyAvatar(me.profile_image);
@@ -31,7 +32,7 @@
             setupGuestShop();
         }
 
-        await loadProducts();
+        await productsReady;
         if (!window.CUSTOMER_GUEST) {
             await loadProfile();
             initProfileForm();
@@ -40,7 +41,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=rx-table2';
+        script.src = '/customer/js/customer.js?v=txn-short1';
         document.body.appendChild(script);
     });
 
@@ -93,16 +94,25 @@
                 grid.innerHTML = '<p class="shop-empty">No products available right now.</p>';
                 return;
             }
+            const esc = (value) => String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;');
             grid.innerHTML = products.map((p) => {
                 const displayName = `${p.brand_name} / ${p.generic_name} ${p.dosage} ${p.form}`.trim();
+                const sortName = `${p.brand_name || ''} ${p.generic_name || ''}`.trim() || displayName;
                 const stock = parseInt(p.current_stock, 10) || 0;
+                const price = Number(p.price) || 0;
                 const stockClass = stock <= 0 ? 'shop-stock-out' : (stock <= 10 ? 'shop-stock-low' : 'shop-stock-ok');
-                return `<div class="product" data-category="${p.category}" data-name-search="${displayName}">
-                    <span class="shop-cat">${p.category}</span>
-                    <h4>${p.brand_name}</h4>
-                    <p class="shop-meta">${p.generic_name} · ${p.dosage} · ${p.form}</p>
+                const generic = String(p.generic_name || '').trim();
+                return `<div class="product" data-category="${esc(p.category)}" data-name-search="${esc(displayName)}" data-sort-name="${esc(sortName)}" data-price="${price}" data-stock="${stock}">
+                    <span class="shop-cat">${esc(p.category)}</span>
+                    <h4>${esc(p.brand_name)}</h4>
+                    <p class="shop-generic">${generic ? esc(generic) : '&nbsp;'}</p>
+                    <p class="shop-spec">${esc(p.dosage)} · ${esc(p.form)}</p>
+                    <div class="shop-card-actions">
                     <div class="shop-card-foot">
-                        <p class="shop-price">₱${Number(p.price).toFixed(2)}</p>
+                        <p class="shop-price">₱${price.toFixed(2)}</p>
                         <p class="shop-stock ${stockClass}">${stock} in stock</p>
                     </div>
                     <button type="button" class="add-btn"
@@ -113,6 +123,7 @@
                         data-stock="${stock}">
                         <i class="fas fa-cart-plus"></i> Add to Cart
                     </button>
+                    </div>
                 </div>`;
             }).join('');
         } catch (err) {
@@ -141,7 +152,7 @@
         const nameEl = document.getElementById('profileCardName');
         if (nameEl) nameEl.textContent = `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Customer';
         const welcome = document.getElementById('headerWelcomeName');
-        if (welcome) welcome.textContent = 'Welcome, ' + (`${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Customer');
+        if (welcome) welcome.textContent = 'Welcome, ' + (String(c.first_name || '').trim() || 'Customer');
         const userEl = document.getElementById('profileUsername');
         if (userEl) userEl.textContent = c.username || 'customer';
         const typeEl = document.getElementById('profileType');
@@ -279,7 +290,7 @@
                     const cardName = document.getElementById('profileCardName');
                     if (cardName) cardName.textContent = fullName;
                     const headerWelcome = document.getElementById('headerWelcomeName');
-                    if (headerWelcome) headerWelcome.textContent = 'Welcome, ' + fullName;
+                    if (headerWelcome) headerWelcome.textContent = 'Welcome, ' + (String(form.first_name.value || '').trim() || 'Customer');
                     const homeName = document.getElementById('homeFirstName');
                     if (homeName) homeName.textContent = form.first_name.value || 'Customer';
                     if (data.profile_image) originalPreview = applyAvatar(data.profile_image + '?t=' + Date.now());

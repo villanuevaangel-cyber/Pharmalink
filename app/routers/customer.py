@@ -3,19 +3,22 @@ import os
 import subprocess
 import tempfile
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, File, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from psycopg2.extras import RealDictCursor
 
 from app.activity import write_activity_log
+from app.automation import _upsert_alert
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import session_user_id
 from app.payments import CUSTOMER_EWALLET_KEYS, CUSTOMER_PAYMENT_KEYS, normalize_payment_method
-from app.paymongo import PayMongoError, create_checkout_session, require_paid_checkout
-from app.stock import match_prescription_to_stock, sync_stock_status_for_drug
+from app.paymongo import PayMongoError, create_qrph_payment, require_paid_checkout, retrieve_payment
+from app.rx_files import RX_DIR, rx_file_response, rx_file_type, rx_filename, rx_filepath
+from app.stock import allocate_expiring_first, drug_id_for_lot, match_prescription_to_stock, restore_order_stock, sellable_quantity, sync_stock_status_for_drug
 from app.profile_photos import (
     ALLOWED_EXT,
     customer_photo_url,
@@ -42,15 +45,38 @@ def _fmt_money(value) -> str:
     return f"{float(value or 0):.2f}"
 
 
-def _fmt_dt(value, fmt: str) -> str:
+_MANILA = ZoneInfo("Asia/Manila")
+
+
+def _dt_manila(value):
     if value is None:
-        return ""
+        return None
     if isinstance(value, str):
         try:
             value = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
-            return value
-    return value.strftime(fmt)
+            return None
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(_MANILA)
+
+
+def _fmt_dt(value, fmt: str) -> str:
+    dt = _dt_manila(value)
+    if dt is not None:
+        return dt.strftime(fmt)
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _iso_dt(value) -> str:
+    dt = _dt_manila(value)
+    if dt is None:
+        return ""
+    return dt.isoformat()
 
 
 @router.get("/home-stats")
@@ -71,21 +97,31 @@ def home_stats(request: Request):
         """
         SELECT COUNT(sale_id) AS total_orders, SUM(total_amount) AS total_spent
         FROM sales
-        WHERE customer_id = %s AND status = 'completed'
+        WHERE customer_id = %s AND status = 'completed' AND online_order_id IS NULL
         """,
         (customer_id,),
     )
     points = fetch_one("SELECT loyalty_points FROM customers WHERE customer_id = %s", (customer_id,))
     recent = fetch_all(
         """
-        SELECT order_id, order_date, order_status, total_amount, payment_method, kind FROM (
-            SELECT order_id, order_date, order_status, total_amount,
-                   COALESCE(payment_method, 'cash') AS payment_method, 'online'::text AS kind
-            FROM customer_orders WHERE customer_id = %s
+        SELECT order_id, order_date, order_status, total_amount, payment_method, kind, transaction_id FROM (
+            SELECT co.order_id, co.order_date, co.order_status, co.total_amount,
+                   COALESCE(co.payment_method, 'cash') AS payment_method, 'online'::text AS kind,
+                   s.transaction_id
+            FROM customer_orders co
+            LEFT JOIN LATERAL (
+                SELECT transaction_id
+                FROM sales
+                WHERE online_order_id = co.order_id
+                  AND LOWER(COALESCE(status, '')) = 'completed'
+                ORDER BY date_created DESC
+                LIMIT 1
+            ) s ON TRUE
+            WHERE co.customer_id = %s
             UNION ALL
             SELECT sale_id, date_created, INITCAP(status), total_amount,
-                   COALESCE(payment_method, 'cash'), 'walkin'::text
-            FROM sales WHERE customer_id = %s AND status = 'completed'
+                   COALESCE(payment_method, 'cash'), 'walkin'::text, transaction_id
+            FROM sales WHERE customer_id = %s AND status = 'completed' AND online_order_id IS NULL
         ) combined
         ORDER BY order_date DESC
         LIMIT 20
@@ -95,6 +131,7 @@ def home_stats(request: Request):
     transaction_logs = [
         {
             "order_id": int(r["order_id"]),
+            "transaction_id": (r.get("transaction_id") or "").strip(),
             "order_date": _fmt_dt(r["order_date"], "%b %d, %Y %I:%M %p"),
             "order_status": r["order_status"],
             "total_amount": _fmt_money(r["total_amount"]),
@@ -126,7 +163,7 @@ def home_stats(request: Request):
             FROM sales_items si
             JOIN sales s ON si.sale_id = s.sale_id
             JOIN drugs_master dm ON si.drug_id = dm.drug_id
-            WHERE s.customer_id = %s AND s.status = 'completed'
+            WHERE s.customer_id = %s AND s.status = 'completed' AND s.online_order_id IS NULL
         ) purchased
         GROUP BY item_name, generic_name
         ORDER BY SUM(qty) DESC, MAX(order_date) DESC
@@ -332,8 +369,8 @@ def list_orders(request: Request, type: str = "online", start_date: str = "", en
 
     if type in ("walkin", "all"):
         sql = """
-            SELECT sale_id AS order_id, date_created AS order_date, total_amount, status AS order_status, payment_method
-            FROM sales WHERE customer_id = %s AND status = 'completed'
+            SELECT sale_id AS order_id, transaction_id, date_created AS order_date, total_amount, status AS order_status, payment_method
+            FROM sales WHERE customer_id = %s AND status = 'completed' AND online_order_id IS NULL
         """
         params = [customer_id]
         if start_date and end_date:
@@ -343,6 +380,7 @@ def list_orders(request: Request, type: str = "online", start_date: str = "", en
         for r in fetch_all(sql, params):
             rows.append({
                 "order_id": int(r["order_id"]),
+                "transaction_id": (r.get("transaction_id") or "").strip(),
                 "order_date": _fmt_dt(r["order_date"], "%b %d, %Y %I:%M %p"),
                 "order_sort": _fmt_dt(r["order_date"], "%Y-%m-%d %H:%M:%S"),
                 "total_amount": _fmt_money(r["total_amount"]),
@@ -351,20 +389,35 @@ def list_orders(request: Request, type: str = "online", start_date: str = "", en
                 "kind": "walkin",
             })
     if type in ("online", "all"):
-        sql = "SELECT order_id, order_date, total_amount, order_status, payment_method FROM customer_orders WHERE customer_id = %s"
+        sql = """
+            SELECT co.order_id, co.order_date, co.total_amount, co.order_status,
+                   co.payment_method, co.payment_status, s.transaction_id
+            FROM customer_orders co
+            LEFT JOIN LATERAL (
+                SELECT transaction_id
+                FROM sales
+                WHERE online_order_id = co.order_id
+                  AND LOWER(COALESCE(status, '')) = 'completed'
+                ORDER BY date_created DESC
+                LIMIT 1
+            ) s ON TRUE
+            WHERE co.customer_id = %s
+        """
         params = [customer_id]
         if start_date and end_date:
-            sql += " AND order_date::date BETWEEN %s AND %s"
+            sql += " AND co.order_date::date BETWEEN %s AND %s"
             params.extend([start_date, end_date])
-        sql += " ORDER BY order_date DESC"
+        sql += " ORDER BY co.order_date DESC"
         for r in fetch_all(sql, params):
             rows.append({
                 "order_id": int(r["order_id"]),
+                "transaction_id": (r.get("transaction_id") or "").strip(),
                 "order_date": _fmt_dt(r["order_date"], "%b %d, %Y %I:%M %p"),
                 "order_sort": _fmt_dt(r["order_date"], "%Y-%m-%d %H:%M:%S"),
                 "total_amount": _fmt_money(r["total_amount"]),
                 "order_status": r["order_status"],
                 "payment_method": r.get("payment_method") or "cash",
+                "payment_status": r.get("payment_status") or "unpaid",
                 "kind": "online",
             })
     if type == "all":
@@ -391,7 +444,7 @@ def order_details(order_id: int, request: Request, kind: str = "online"):
     if str(kind).lower() == "walkin":
         sale = fetch_one(
             """
-            SELECT sale_id, customer_id, status, payment_method, total_amount
+            SELECT sale_id, transaction_id, customer_id, status, payment_method, total_amount
             FROM sales WHERE sale_id = %s AND status = 'completed'
             """,
             (order_id,),
@@ -415,6 +468,7 @@ def order_details(order_id: int, request: Request, kind: str = "online"):
         return {
             "success": True,
             "order_id": order_id,
+            "transaction_id": (sale.get("transaction_id") or "").strip(),
             "kind": "walkin",
             "customer_name": customer_name,
             "customer_id": customer_id,
@@ -425,7 +479,10 @@ def order_details(order_id: int, request: Request, kind: str = "online"):
         }
 
     header = fetch_one(
-        "SELECT customer_id, order_status, payment_method FROM customer_orders WHERE order_id = %s",
+        """
+        SELECT customer_id, order_status, payment_method, payment_status, payment_reference, total_amount
+        FROM customer_orders WHERE order_id = %s
+        """,
         (order_id,),
     )
     if not header:
@@ -444,42 +501,204 @@ def order_details(order_id: int, request: Request, kind: str = "online"):
         """,
         (order_id,),
     )
+    sale = fetch_one(
+        """
+        SELECT transaction_id
+        FROM sales
+        WHERE online_order_id = %s AND LOWER(COALESCE(status, '')) = 'completed'
+        ORDER BY date_created DESC
+        LIMIT 1
+        """,
+        (order_id,),
+    )
     return {
         "success": True,
         "order_id": order_id,
+        "transaction_id": ((sale or {}).get("transaction_id") or "").strip(),
         "kind": "online",
         "customer_name": customer_name,
         "customer_id": header["customer_id"],
         "loyalty_points": loyalty,
         "status": header["order_status"],
         "payment_method": header.get("payment_method") or "cash",
+        "payment_status": header.get("payment_status") or "unpaid",
         "items": [dict(i) for i in items],
     }
 
 
-def _paymongo_base_url() -> str:
-    return (os.getenv("PAYMONGO_BASE_URL") or "http://127.0.0.1:8080").rstrip("/")
+def _order_for_customer(order_id: int, customer_id: int):
+    header = fetch_one(
+        """
+        SELECT order_id, customer_id, order_status, total_amount, payment_method,
+               payment_status, payment_reference
+        FROM customer_orders
+        WHERE order_id = %s
+        """,
+        (order_id,),
+    )
+    if not header or int(header["customer_id"]) != int(customer_id):
+        return None
+    return header
 
 
-def _quote_online_total(items) -> float:
-    server_total = 0.0
-    for item in items:
-        lot_id = int(item.get("lot_id") or 0)
-        qty = int(item.get("quantity") or 0)
-        if lot_id <= 0 or qty <= 0:
-            raise ValueError("Invalid item in cart.")
-        lot = fetch_one(
-            "SELECT current_stock, price FROM inventory_lots WHERE lot_inventory_id = %s AND is_active = 1",
-            (lot_id,),
-        )
-        if not lot:
-            raise ValueError("One of the items in your cart is no longer available.")
-        if int(lot["current_stock"]) < qty:
-            raise ValueError(
-                f"Not enough stock left for one of your items (only {lot['current_stock']} available). Please update your cart."
+def _mark_order_paid(order_id: int, reference: str, payment_method: str = "") -> None:
+    changed = False
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                UPDATE customer_orders
+                SET payment_status = 'paid',
+                    payment_reference = COALESCE(NULLIF(%s, ''), payment_reference)
+                WHERE order_id = %s
+                  AND COALESCE(payment_status, 'unpaid') <> 'paid'
+                RETURNING order_id, customer_id
+                """,
+                (reference or "", order_id),
             )
-        server_total += float(lot["price"] or item.get("price_per_unit") or 0) * qty
-    return round(server_total, 2)
+            row = cur.fetchone()
+            changed = bool(row)
+            if changed:
+                label = {"gcash": "GCash", "maya": "Maya"}.get(str(payment_method or "").lower(), "E-wallet")
+                _upsert_alert(
+                    cur,
+                    "order_paid",
+                    f"order:{order_id}:paid",
+                    "info",
+                    "Payment received",
+                    f"{label} payment received for order #{order_id}. It can be released at pickup.",
+                )
+    if not changed:
+        return
+    try:
+        from app.push import queue_customer_push
+        paid = fetch_one("SELECT customer_id FROM customer_orders WHERE order_id = %s", (order_id,))
+        customer_id = int((paid or {}).get("customer_id") or 0)
+        if customer_id:
+            label = {"gcash": "GCash", "maya": "Maya"}.get(str(payment_method or "").lower(), "E-wallet")
+            queue_customer_push(
+                customer_id,
+                f"Payment received for order #{order_id}",
+                f"Your {label} payment was received. You can pick the order up at the store.",
+                order_id,
+            )
+    except Exception:
+        pass
+
+
+def _payment_payload(header: dict, *, qr_image: str = "", message: str = "", expired: bool = False) -> dict:
+    method = str(header.get("payment_method") or "cash").lower()
+    status = str(header.get("payment_status") or "unpaid").lower()
+    paid = status == "paid"
+    return {
+        "success": True,
+        "order_id": int(header["order_id"]),
+        "payment_method": method,
+        "payment_status": "paid" if paid else "unpaid",
+        "paid": paid,
+        "payable": method in CUSTOMER_EWALLET_KEYS and not paid and str(header.get("order_status") or "") == "Ready for Pickup",
+        "amount": round(float(header.get("total_amount") or 0), 2),
+        "qr_image": qr_image or "",
+        "expired": expired,
+        "message": message,
+    }
+
+
+def _sync_order_payment(header: dict, *, create: bool) -> dict:
+    method = str(header.get("payment_method") or "cash").lower()
+    order_status = str(header.get("order_status") or "")
+    if method not in CUSTOMER_EWALLET_KEYS:
+        return _payment_payload(header, message="Cash is collected when you pick up the order.")
+    if str(header.get("payment_status") or "").lower() == "paid":
+        return _payment_payload(header, message="Payment received. You can pick this up at the store.")
+
+    reference = str(header.get("payment_reference") or "").strip()
+    if reference:
+        try:
+            session = retrieve_payment(reference)
+        except PayMongoError:
+            session = None
+        if session and session.get("paid"):
+            paid_ref = session.get("reference") or reference
+            _mark_order_paid(int(header["order_id"]), paid_ref, method)
+            header = dict(header)
+            header["payment_status"] = "paid"
+            header["payment_reference"] = paid_ref
+            return _payment_payload(header, message="Payment received. You can pick this up at the store.")
+        if session and session.get("qr_image") and order_status == "Ready for Pickup":
+            return _payment_payload(header, qr_image=session["qr_image"])
+        if session and not session.get("qr_image"):
+            header = dict(header)
+            expired = True
+        else:
+            expired = False
+    else:
+        expired = False
+
+    if order_status != "Ready for Pickup":
+        return _payment_payload(
+            header,
+            message="You can pay after the cashier marks this order Ready for Pickup.",
+        )
+    if not create:
+        return _payment_payload(
+            header,
+            expired=expired or not reference,
+            message="The QR code expired. A new one is being prepared.",
+        )
+    try:
+        session = create_qrph_payment(
+            amount=float(header.get("total_amount") or 0),
+            description=f"PharmaLink order #{header['order_id']}",
+            metadata={
+                "kind": "online",
+                "order_id": str(header["order_id"]),
+                "method": method,
+            },
+        )
+    except PayMongoError as exc:
+        return _payment_payload(header, message=str(exc))
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE customer_orders
+                SET payment_reference = %s, payment_status = 'unpaid'
+                WHERE order_id = %s AND COALESCE(payment_status, 'unpaid') <> 'paid'
+                """,
+                (session["id"], int(header["order_id"])),
+            )
+    header = dict(header)
+    header["payment_reference"] = session["id"]
+    return _payment_payload(header, qr_image=session.get("qr_image") or "")
+
+
+@router.get("/orders/{order_id}/payment")
+def order_payment_status(order_id: int, request: Request):
+    customer_id = require_customer(request)
+    if customer_id is None:
+        return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
+    header = _order_for_customer(order_id, customer_id)
+    if not header:
+        return JSONResponse({"success": False, "message": "Order not found."}, status_code=404)
+    try:
+        return _sync_order_payment(header, create=False)
+    except PayMongoError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=exc.status_code)
+
+
+@router.post("/orders/{order_id}/payment")
+def order_payment_qr(order_id: int, request: Request):
+    customer_id = require_customer(request)
+    if customer_id is None:
+        return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
+    header = _order_for_customer(order_id, customer_id)
+    if not header:
+        return JSONResponse({"success": False, "message": "Order not found."}, status_code=404)
+    try:
+        return _sync_order_payment(header, create=True)
+    except PayMongoError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=exc.status_code)
 
 
 @router.post("/ewallet/checkout")
@@ -487,36 +706,13 @@ async def customer_ewallet_checkout(request: Request):
     customer_id = require_customer(request)
     if customer_id is None:
         return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
-    payload = await request.json()
-    items = payload.get("items") or []
-    if not items:
-        return JSONResponse({"success": False, "message": "Your cart is empty."}, status_code=400)
-    method = str(payload.get("payment_method") or "").strip().lower()
-    if method not in CUSTOMER_EWALLET_KEYS:
-        return JSONResponse({"success": False, "message": "Choose GCash or Maya for e-wallet checkout."}, status_code=400)
-    order_token = str(payload.get("order_token") or "").strip()
-    if not order_token or order_token == "no_token":
-        return JSONResponse({"success": False, "message": "Missing order token. Please refresh the page and try again."}, status_code=400)
-    try:
-        amount = _quote_online_total(items)
-        session = create_checkout_session(
-            amount=amount,
-            channel=method,
-            description=f"PharmaLink order {method.upper()}",
-            success_url=f"{_paymongo_base_url()}/api/customer/ewallet/complete",
-            cancel_url=f"{_paymongo_base_url()}/customer/customer.html#products",
-            metadata={"kind": "online", "customer_id": str(customer_id), "method": method},
-        )
-    except PayMongoError as exc:
-        return JSONResponse({"success": False, "message": str(exc)}, status_code=exc.status_code)
-    except ValueError as exc:
-        return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
-    request.session["ewallet_items"] = items
-    request.session["ewallet_token"] = order_token
-    request.session["ewallet_method"] = method
-    request.session["ewallet_checkout_id"] = session["id"]
-    request.session["ewallet_amount"] = amount
-    return {"success": True, "checkout_url": session["checkout_url"], "id": session["id"], "amount": amount}
+    return JSONResponse(
+        {
+            "success": False,
+            "message": "Place the order first. GCash and Maya are paid with a QR code after the cashier marks the order Ready for Pickup.",
+        },
+        status_code=400,
+    )
 
 
 @router.get("/ewallet/complete")
@@ -594,25 +790,26 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
                     qty = int(item.get("quantity") or 0)
                     if lot_id <= 0 or qty <= 0:
                         raise ValueError("Invalid item in cart.")
-                    cur.execute(
-                        "SELECT current_stock, price FROM inventory_lots WHERE lot_inventory_id = %s AND is_active = 1 FOR UPDATE",
-                        (lot_id,),
-                    )
+                    drug_id = drug_id_for_lot(cur, lot_id)
+                    if sellable_quantity(cur, drug_id) < qty:
+                        available = sellable_quantity(cur, drug_id)
+                        raise ValueError(
+                            f"Not enough stock left for one of your items (only {available} available). Please update your cart."
+                        )
+                    cur.execute("SELECT price FROM inventory_lots WHERE lot_inventory_id = %s", (lot_id,))
                     lot = cur.fetchone()
                     if not lot:
                         raise ValueError("One of the items in your cart is no longer available.")
-                    if int(lot["current_stock"]) < qty:
-                        raise ValueError(
-                            f"Not enough stock left for one of your items (only {lot['current_stock']} available). Please update your cart."
-                        )
                     unit_price = float(lot["price"] or item.get("price_per_unit") or 0)
                     server_total += unit_price * qty
 
                 payment_reference = None
-                if payment_method in CUSTOMER_EWALLET_KEYS:
-                    checkout_id = str(payload.get("paymongo_checkout_id") or request.session.get("ewallet_checkout_id") or "").strip()
+                payment_status = "unpaid"
+                checkout_id = str(payload.get("paymongo_checkout_id") or "").strip()
+                if payment_method in CUSTOMER_EWALLET_KEYS and checkout_id:
                     paid = require_paid_checkout(checkout_id, server_total, payment_method)
                     payment_reference = paid.get("reference") or checkout_id
+                    payment_status = "paid"
 
                 order_id = next_id(cur, "customer_orders", "order_id")
                 cur.execute("SAVEPOINT order_header")
@@ -620,10 +817,11 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
                     cur.execute(
                         """
                         INSERT INTO customer_orders
-                            (order_id, customer_id, order_date, order_status, total_amount, is_read, order_token, payment_method)
-                        VALUES (%s, %s, NOW(), 'Pending', %s, 0, %s, %s)
+                            (order_id, customer_id, order_date, order_status, total_amount, is_read, order_token,
+                             payment_method, payment_status, payment_reference)
+                        VALUES (%s, %s, NOW(), 'Pending', %s, 0, %s, %s, %s, %s)
                         """,
-                        (order_id, customer_id, server_total, order_token, payment_method),
+                        (order_id, customer_id, server_total, order_token, payment_method, payment_status, payment_reference),
                     )
                 except Exception:
                     cur.execute("ROLLBACK TO SAVEPOINT order_header")
@@ -636,34 +834,57 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
                     )
 
                 for item in items:
-                    drug_id = int(item.get("drug_id") or 0)
                     lot_id = int(item.get("lot_id") or 0)
                     qty = int(item.get("quantity") or 0)
+                    drug_id = drug_id_for_lot(cur, lot_id)
                     cur.execute("SELECT price FROM inventory_lots WHERE lot_inventory_id = %s", (lot_id,))
                     row = cur.fetchone()
                     unit_price = float(row["price"] if row else item.get("price_per_unit") or 0)
-                    detail_id = next_id(cur, "order_details", "detail_id")
-                    cur.execute(
-                        """
-                        INSERT INTO order_details (detail_id, order_id, drug_id, lot_inventory_id, quantity, price_per_unit)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                        """,
-                        (detail_id, order_id, drug_id, lot_id, qty, unit_price),
-                    )
-                    cur.execute(
-                        "UPDATE inventory_lots SET current_stock = current_stock - %s WHERE lot_inventory_id = %s",
-                        (qty, lot_id),
-                    )
-                    if drug_id > 0:
-                        affected.add(drug_id)
+                    parts = allocate_expiring_first(cur, drug_id, qty)
+                    for part in parts:
+                        detail_id = next_id(cur, "order_details", "detail_id")
+                        cur.execute(
+                            """
+                            INSERT INTO order_details (detail_id, order_id, drug_id, lot_inventory_id, quantity, price_per_unit)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            """,
+                            (detail_id, order_id, drug_id, part["lot_id"], part["qty"], unit_price),
+                        )
+                    affected.add(drug_id)
 
                 for drug_id in affected:
                     sync_stock_status_for_drug(cur, drug_id)
+
+                cur.execute(
+                    "SELECT first_name, last_name FROM customers WHERE customer_id = %s",
+                    (customer_id,),
+                )
+                person = cur.fetchone() or {}
+                who = f"{person.get('first_name') or ''} {person.get('last_name') or ''}".strip() or "A customer"
+                _upsert_alert(
+                    cur,
+                    "online_order",
+                    f"order:{order_id}",
+                    "warning",
+                    "New online order",
+                    f"New online order #{order_id} from {who}. Total ₱{server_total:.2f}.",
+                )
 
                 details = f"Online order #{order_id} placed - total ₱{server_total:.2f}."
                 if payment_reference:
                     details += f" Paid via {payment_method} ({payment_reference})."
                 write_activity_log(cur, "Online Order", details, request=request)
+
+        try:
+            from app.push import queue_customer_push
+            queue_customer_push(
+                int(customer_id),
+                f"Order #{order_id} received",
+                "The cashier will confirm your order. We will notify you when it is Ready for Pickup.",
+                order_id,
+            )
+        except Exception:
+            pass
 
         import secrets
         request.session["order_token"] = secrets.token_hex(32)
@@ -676,6 +897,91 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
         }
     except PayMongoError as exc:
         return JSONResponse({"success": False, "message": str(exc)}, status_code=exc.status_code)
+    except ValueError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
+
+
+def _order_already_sold(cur, order_id: int) -> bool:
+    cur.execute("SAVEPOINT sold_check")
+    try:
+        cur.execute(
+            """
+            SELECT sale_id FROM sales
+            WHERE online_order_id = %s AND LOWER(COALESCE(status, '')) = 'completed'
+            LIMIT 1
+            """,
+            (order_id,),
+        )
+        return cur.fetchone() is not None
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT sold_check")
+        return False
+
+
+@router.post("/orders/{order_id}/cancel")
+def cancel_pending_order(request: Request, order_id: int):
+    customer_id = require_customer(request)
+    if customer_id is None:
+        return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT order_id, customer_id, order_status
+                    FROM customer_orders
+                    WHERE order_id = %s
+                    FOR UPDATE
+                    """,
+                    (order_id,),
+                )
+                order = cur.fetchone()
+                if not order:
+                    return JSONResponse({"success": False, "message": "Order not found."}, status_code=404)
+                if int(order["customer_id"] or 0) != int(customer_id):
+                    return JSONResponse({"success": False, "message": "Order not found."}, status_code=404)
+                status = str(order["order_status"] or "")
+                if status != "Pending":
+                    return JSONResponse(
+                        {"success": False, "message": "Only a pending order can be cancelled."},
+                        status_code=409,
+                    )
+                if _order_already_sold(cur, order_id):
+                    return JSONResponse(
+                        {"success": False, "message": "This order was already sold."},
+                        status_code=409,
+                    )
+                cur.execute(
+                    """
+                    UPDATE customer_orders
+                    SET order_status = 'Cancelled', is_read = 0
+                    WHERE order_id = %s AND order_status = 'Pending'
+                    """,
+                    (order_id,),
+                )
+                if cur.rowcount != 1:
+                    return JSONResponse(
+                        {"success": False, "message": "Only a pending order can be cancelled."},
+                        status_code=409,
+                    )
+                restore_order_stock(cur, order_id)
+                _upsert_alert(
+                    cur,
+                    "online_order",
+                    f"order:{order_id}:cancel",
+                    "info",
+                    "Order cancelled",
+                    f"Customer cancelled order #{order_id}. The items are back in stock.",
+                )
+                write_activity_log(
+                    cur,
+                    "Cancel Order",
+                    f"Customer cancelled pending order #{order_id}. Stock was returned.",
+                    request=request,
+                )
+        return {"success": True, "message": "Order cancelled. The items are back in stock."}
     except ValueError as exc:
         return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
     except Exception as exc:
@@ -711,9 +1017,9 @@ def prescriptions(request: Request):
                             item["availability_summary"] = []
                     elif not summary:
                         item["availability_summary"] = []
-                filename = Path(str(item.get("filename") or "")).name
-                filepath = ROOT / "uploads" / "prescriptions" / filename
-                ext = filepath.suffix.lower().lstrip(".")
+                filename = rx_filename(item.get("filename"))
+                filepath = rx_filepath(filename)
+                ext = rx_file_type(filename)
                 size = filepath.stat().st_size if filepath.is_file() else None
                 created = item.get("created_at")
                 item["created_at_label"] = _fmt_dt(created, "%b %d, %Y %I:%M %p")
@@ -727,15 +1033,6 @@ def prescriptions(request: Request):
     return {"success": True, "prescriptions": out}
 
 
-_RX_MEDIA = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-    ".pdf": "application/pdf",
-}
-
-
 @router.get("/prescriptions/{prescription_id}/file")
 def prescription_file(request: Request, prescription_id: int):
     customer_id = require_customer(request)
@@ -747,17 +1044,7 @@ def prescription_file(request: Request, prescription_id: int):
     )
     if not row or not row.get("filename"):
         return JSONResponse({"success": False, "message": "Prescription not found."}, status_code=404)
-    filename = Path(str(row["filename"])).name
-    filepath = ROOT / "uploads" / "prescriptions" / filename
-    if not filepath.is_file():
-        return JSONResponse({"success": False, "message": "File is no longer available."}, status_code=404)
-    media = _RX_MEDIA.get(filepath.suffix.lower(), "application/octet-stream")
-    return FileResponse(
-        filepath,
-        media_type=media,
-        filename=filename,
-        content_disposition_type="inline",
-    )
+    return rx_file_response(row["filename"])
 
 
 def _ocr_image_for_engine(image_path: Path) -> Path:
@@ -839,6 +1126,31 @@ def _extract_prescription_text(image_path: Path) -> str | None:
     return _run_rapidocr(image_path)
 
 
+def _pdf_page_images(pdf_path: Path, max_pages: int = 4) -> list[Path] | None:
+    """Render PDF pages to PNG so the same OCR engines can read e-prescriptions."""
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        return None
+    try:
+        doc = pdfium.PdfDocument(str(pdf_path))
+        page_count = len(doc)
+        if page_count <= 0:
+            return []
+        out = []
+        tmpdir = Path(tempfile.gettempdir())
+        for index in range(min(page_count, max_pages)):
+            page = doc[index]
+            bitmap = page.render(scale=2)
+            image = bitmap.to_pil().convert("RGB")
+            dest = tmpdir / f"pharmalink_rxpdf_{os.getpid()}_{pdf_path.stem}_{index}.png"
+            image.save(dest, "PNG")
+            out.append(dest)
+        return out
+    except Exception:
+        return None
+
+
 @router.post("/prescriptions")
 async def upload_prescription(request: Request, prescription_file: UploadFile = File(...)):
     customer_id = require_customer(request)
@@ -854,7 +1166,7 @@ async def upload_prescription(request: Request, prescription_file: UploadFile = 
     if len(content) > 5 * 1024 * 1024:
         return {"success": False, "message": "File must be under 5MB."}
 
-    dest_dir = ROOT / "uploads" / "prescriptions"
+    dest_dir = RX_DIR
     dest_dir.mkdir(parents=True, exist_ok=True)
     filename = f"rx_{customer_id}_{int(time.time())}.{ext}"
     filepath = dest_dir / filename
@@ -872,12 +1184,30 @@ async def upload_prescription(request: Request, prescription_file: UploadFile = 
             availability_summary: list = []
             ocr_status = "failed"
             if ext == "pdf":
-                ocr_status = "skipped_pdf"
+                pages = _pdf_page_images(filepath)
+                if pages is None:
+                    ocr_status = "skipped_pdf"
+                    extracted_text = None
+                else:
+                    chunks = []
+                    engine_missing = False
+                    for page in pages:
+                        text = _extract_prescription_text(page)
+                        if text is None:
+                            engine_missing = True
+                            break
+                        if text.strip():
+                            chunks.append(text.strip())
+                    if engine_missing:
+                        ocr_status = "unavailable"
+                    else:
+                        extracted_text = "\n".join(chunks)
             else:
                 extracted_text = _extract_prescription_text(filepath)
+            if ocr_status != "skipped_pdf":
                 if extracted_text is None:
                     ocr_status = "unavailable"
-                elif extracted_text.strip() == "":
+                elif str(extracted_text).strip() == "":
                     ocr_status = "failed"
                 else:
                     availability_summary = match_prescription_to_stock(cur, extracted_text)
@@ -890,13 +1220,13 @@ async def upload_prescription(request: Request, prescription_file: UploadFile = 
             write_activity_log(
                 cur,
                 "Upload Prescription",
-                f"Uploaded prescription #{prescription_id} ({filename}); OCR {ocr_status}.",
+                f"Uploaded a prescription ({filename}). Reading status: {ocr_status}.",
                 request=request,
             )
 
     messages = {
         "unavailable": "Prescription uploaded, but OCR is not installed on this server.",
-        "skipped_pdf": "Prescription uploaded. PDF files are stored for pharmacist review (OCR only reads images).",
+        "skipped_pdf": "Prescription uploaded. The PDF is saved for the pharmacist; the text could not be converted for OCR on this server.",
         "failed": "Prescription uploaded, but the text could not be read clearly. A pharmacist will review it manually.",
         "completed": (
             "Prescription uploaded and read successfully."
@@ -922,24 +1252,29 @@ def notifications(request: Request):
         return {"count": 0, "notifications": []}
     rows = fetch_all(
         """
-        SELECT order_id, order_status, order_date
+        SELECT order_id, order_status, order_date, updated_at, payment_method
         FROM customer_orders
         WHERE customer_id = %s
-          AND (order_status = 'Ready for Pickup' OR order_status = 'Completed')
+          AND order_status IN ('Processing', 'Ready for Pickup', 'Completed', 'Cancelled')
           AND is_read = 0
-        ORDER BY order_date DESC
+        ORDER BY COALESCE(updated_at, order_date) DESC
         """,
         (customer_id,),
     )
-    notes = [
-        {
-            "order_id": r["order_id"],
-            "message": f"Order #{r['order_id']} status updated to: {r['order_status']}",
-            "status": r["order_status"],
-            "date": _fmt_dt(r["order_date"], "%b %d, %Y %I:%M %p"),
-        }
-        for r in rows
-    ]
+    from app.routers.cashier import customer_status_note
+
+    notes = []
+    for r in rows:
+        when = r.get("updated_at") or r.get("order_date")
+        notes.append(
+            {
+                "order_id": r["order_id"],
+                "message": f"Order #{r['order_id']}: {customer_status_note(r['order_status'], r.get('payment_method') or '')}",
+                "status": r["order_status"],
+                "date": _fmt_dt(when, "%b %d, %Y %I:%M %p"),
+                "date_iso": _iso_dt(when),
+            }
+        )
     return {"count": len(notes), "notifications": notes}
 
 
@@ -961,15 +1296,29 @@ def mark_read(request: Request, order_id: int = 0):
 def products(request: Request):
     rows = fetch_all(
         """
+        WITH avail AS (
+            SELECT drug_id, lot_inventory_id, price, current_stock, expiration_date
+            FROM inventory_lots
+            WHERE is_active = 1
+              AND expiration_date >= CURRENT_DATE
+              AND current_stock > 0
+        )
         SELECT dm.drug_id, dm.category, dm.brand_name, dm.generic_name,
-               dm.dosage, dm.form, il.price, il.lot_inventory_id, il.current_stock
+               dm.dosage, dm.form, first_lot.price, first_lot.lot_inventory_id,
+               sums.on_hand AS current_stock
         FROM drugs_master dm
-        JOIN inventory_lots il ON dm.drug_id = il.drug_id
-        WHERE il.current_stock > 0
-          AND il.is_active = 1
-          AND il.expiration_date >= CURRENT_DATE
-          AND dm.is_active = 1
-        ORDER BY il.expiration_date ASC
+        JOIN (
+            SELECT drug_id, SUM(current_stock) AS on_hand
+            FROM avail
+            GROUP BY drug_id
+        ) sums ON sums.drug_id = dm.drug_id
+        JOIN (
+            SELECT DISTINCT ON (drug_id) drug_id, lot_inventory_id, price
+            FROM avail
+            ORDER BY drug_id, expiration_date ASC, lot_inventory_id ASC
+        ) first_lot ON first_lot.drug_id = dm.drug_id
+        WHERE dm.is_active = 1
+        ORDER BY dm.generic_name ASC, dm.brand_name ASC
         """
     )
     products = []

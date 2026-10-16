@@ -1,4 +1,5 @@
 import csv
+import html
 import io
 import json
 import math
@@ -8,11 +9,12 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import psycopg2
 from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import Response
 from psycopg2.extras import RealDictCursor
 
-from app.activity import actor_display_name, write_activity_log
+from app.activity import actor_display_name, log_event, write_activity_log
 from app.automation import (
     apply_received_lot,
     compute_reorder_suggestions,
@@ -23,7 +25,9 @@ from app.automation import (
 )
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin
+from app.checkout_rates import get_checkout_rates, save_checkout_rate
 from app.loyalty import get_loyalty_settings, save_loyalty_peso
+from app.mailer import send_mail
 from app.report_files import pdf_bytes, workbook_bytes
 from app.routers.admin import _jsonable, _log, _row, _rows, _unauthorized
 from app.stock import sync_stock_status_for_drug
@@ -54,7 +58,7 @@ def list_promos(request: Request):
     rows = fetch_all(
         """
         SELECT p.promo_id, p.name, p.discount_type, p.discount_value, p.drug_id, p.category,
-               p.start_date, p.end_date, p.is_active, p.created_by, p.created_at,
+               p.segment_label, p.start_date, p.end_date, p.is_active, p.created_by, p.created_at,
                d.generic_name, d.brand_name
         FROM promos p
         LEFT JOIN drugs_master d ON p.drug_id = d.drug_id
@@ -79,6 +83,7 @@ def list_promos(request: Request):
             status = "Active"
         item["status"] = status
         item["products"] = []
+        item["drug_ids"] = []
         out.append(item)
         promo_ids.append(int(item["promo_id"]))
     if promo_ids:
@@ -91,78 +96,188 @@ def list_promos(request: Request):
             (promo_ids,),
         )
         by_promo = {}
+        by_ids = {}
         for link in links:
+            pid = int(link["promo_id"])
             label = f"{link['generic_name']}" + (f" ({link['brand_name']})" if link.get("brand_name") else "")
-            by_promo.setdefault(int(link["promo_id"]), []).append(label.strip())
+            by_promo.setdefault(pid, []).append(label.strip())
+            by_ids.setdefault(pid, []).append(int(link["drug_id"]))
         for item in out:
             names = by_promo.get(int(item["promo_id"]), [])
             item["products"] = names
+            item["drug_ids"] = by_ids.get(int(item["promo_id"]), [])
             if names:
                 item["scope"] = ", ".join(names) if len(names) <= 2 else f"{names[0]}, {names[1]} +{len(names) - 2} more"
             elif item.get("drug_id"):
                 item["scope"] = f"{item.get('generic_name') or ''}" + (
                     f" ({item['brand_name']})" if item.get("brand_name") else ""
                 )
+            elif item.get("segment_label"):
+                item["scope"] = f"Segment: {item['segment_label']}"
             else:
                 item["scope"] = item.get("category") or "Storewide"
+    else:
+        for item in out:
+            item["drug_ids"] = []
     return out
 
 
-@router.post("/promos")
-async def add_promo(request: Request):
-    if not require_admin(request):
-        return _unauthorized()
-    data = await request.json()
+def _parse_promo_body(data, *, require_future_dates):
     name = str(data.get("name") or "").strip()
     discount_type = "fixed" if data.get("discount_type") == "fixed" else "percent"
     discount_value = float(data["discount_value"]) if data.get("discount_value") is not None else None
     scope = data.get("scope") or "all"
     start_date = data.get("start_date") or ""
     end_date = data.get("end_date") or ""
-    category = drug_id = None
+    category = drug_id = segment_label = None
     drug_ids = []
-    if scope == "category":
+    if scope == "segment":
+        segment_label = str(data.get("segment_label") or "").strip()
+        if not segment_label:
+            return None, {"success": False, "message": "Please select a customer segment."}
+    elif scope == "category":
         category = str(data.get("category") or "").strip()
         if not category:
-            return {"success": False, "message": "Please select a category."}
+            return None, {"success": False, "message": "Please select a category."}
     elif scope == "drug":
         drug_id = int(data.get("drug_id") or 0)
         if not drug_id:
-            return {"success": False, "message": "Please select a drug."}
+            return None, {"success": False, "message": "Please select a drug."}
     elif scope == "drugs":
         drug_ids = [int(x) for x in (data.get("drug_ids") or []) if int(x) > 0]
         drug_ids = list(dict.fromkeys(drug_ids))
         if not drug_ids:
-            return {"success": False, "message": "Please select at least one product."}
+            return None, {"success": False, "message": "Please select at least one product."}
     if not name or discount_value is None or discount_value <= 0 or not start_date or not end_date:
-        return {"success": False, "message": "Name, a positive discount value, and both dates are required."}
+        return None, {"success": False, "message": "Name, a positive discount value, and both dates are required."}
     start = _parse_iso_date(start_date)
     end = _parse_iso_date(end_date)
     if not start or not end:
-        return {"success": False, "message": "Start and end dates are invalid."}
-    today = _manila_today()
-    if start < today or end < today:
-        return {"success": False, "message": "Promo dates cannot be in the past."}
+        return None, {"success": False, "message": "Start and end dates are invalid."}
+    if require_future_dates:
+        today = _manila_today()
+        if start < today or end < today:
+            return None, {"success": False, "message": "Promo dates cannot be in the past."}
     if end < start:
-        return {"success": False, "message": "End date cannot be before the start date."}
+        return None, {"success": False, "message": "End date cannot be before the start date."}
     if discount_type == "percent" and discount_value > 100:
-        return {"success": False, "message": "A percent discount cannot exceed 100%."}
+        return None, {"success": False, "message": "A percent discount cannot exceed 100%."}
+    return {
+        "name": name,
+        "discount_type": discount_type,
+        "discount_value": discount_value,
+        "scope": scope,
+        "start_date": start_date,
+        "end_date": end_date,
+        "category": category,
+        "drug_id": drug_id,
+        "segment_label": segment_label,
+        "drug_ids": drug_ids,
+    }, None
+
+
+def _promo_scope_note(fields):
+    if fields["scope"] == "segment":
+        return f" for the {fields['segment_label']} segment"
+    if fields["scope"] == "drugs":
+        return f" on {len(fields['drug_ids'])} products"
+    return ""
+
+
+@router.post("/promos")
+async def add_promo(request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    fields, err = _parse_promo_body(await request.json(), require_future_dates=True)
+    if err:
+        return err
     admin_name = request.session.get("user_first_name") or "Admin"
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             promo_id = next_id(cur, "promos", "promo_id")
             cur.execute(
                 """
-                INSERT INTO promos (promo_id, name, discount_type, discount_value, drug_id, category, start_date, end_date, is_active, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
+                INSERT INTO promos (promo_id, name, discount_type, discount_value, drug_id, category, segment_label, start_date, end_date, is_active, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
                 """,
-                (promo_id, name, discount_type, discount_value, drug_id, category, start_date, end_date, admin_name),
+                (
+                    promo_id,
+                    fields["name"],
+                    fields["discount_type"],
+                    fields["discount_value"],
+                    fields["drug_id"],
+                    fields["category"],
+                    fields["segment_label"],
+                    fields["start_date"],
+                    fields["end_date"],
+                    admin_name,
+                ),
             )
-            if scope == "drugs":
-                for did in drug_ids:
+            if fields["scope"] == "drugs":
+                for did in fields["drug_ids"]:
                     cur.execute("INSERT INTO promo_drugs (promo_id, drug_id) VALUES (%s, %s)", (promo_id, did))
-            note = f" - {len(drug_ids)} selected products" if scope == "drugs" else ""
-            _log(cur, request, "Create Promo", f"Created promo '{name}' ({discount_type} {discount_value}) from {start_date} to {end_date}{note}.")
+            amount = (
+                f"{fields['discount_value']:g}% off"
+                if fields["discount_type"] == "percent"
+                else f"₱{fields['discount_value']:g} off"
+            )
+            _log(
+                cur,
+                request,
+                "Create Promo",
+                f"Created promo {fields['name']}: {amount}, {fields['start_date']} to {fields['end_date']}{_promo_scope_note(fields)}.",
+            )
+    return {"success": True, "promo_id": promo_id}
+
+
+@router.put("/promos/{promo_id}")
+async def update_promo(request: Request, promo_id: int):
+    if not require_admin(request):
+        return _unauthorized()
+    if promo_id <= 0:
+        return {"success": False, "message": "Promo ID is required."}
+    existing = fetch_one("SELECT promo_id FROM promos WHERE promo_id = %s", (promo_id,))
+    if not existing:
+        return {"success": False, "message": "Promo not found."}
+    fields, err = _parse_promo_body(await request.json(), require_future_dates=False)
+    if err:
+        return err
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                UPDATE promos
+                SET name = %s, discount_type = %s, discount_value = %s, drug_id = %s,
+                    category = %s, segment_label = %s, start_date = %s, end_date = %s
+                WHERE promo_id = %s
+                """,
+                (
+                    fields["name"],
+                    fields["discount_type"],
+                    fields["discount_value"],
+                    fields["drug_id"],
+                    fields["category"],
+                    fields["segment_label"],
+                    fields["start_date"],
+                    fields["end_date"],
+                    promo_id,
+                ),
+            )
+            cur.execute("DELETE FROM promo_drugs WHERE promo_id = %s", (promo_id,))
+            if fields["scope"] == "drugs":
+                for did in fields["drug_ids"]:
+                    cur.execute("INSERT INTO promo_drugs (promo_id, drug_id) VALUES (%s, %s)", (promo_id, did))
+            amount = (
+                f"{fields['discount_value']:g}% off"
+                if fields["discount_type"] == "percent"
+                else f"₱{fields['discount_value']:g} off"
+            )
+            _log(
+                cur,
+                request,
+                "Update Promo",
+                f"Updated promo {fields['name']}: {amount}, {fields['start_date']} to {fields['end_date']}{_promo_scope_note(fields)}.",
+            )
     return {"success": True, "promo_id": promo_id}
 
 
@@ -193,6 +308,31 @@ async def update_loyalty_settings(request: Request):
                 "Update Loyalty Points",
                 f"Set loyalty discount to ₱{settings['peso_per_point']:.2f} off per point.",
             )
+    return {"success": True, **settings}
+
+
+@router.get("/checkout-rates")
+def get_checkout_rates_admin(request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    return {"success": True, **get_checkout_rates()}
+
+
+@router.post("/checkout-rates")
+async def update_checkout_rates(request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    data = await request.json()
+    kind = str(data.get("kind") or "").strip()
+    try:
+        settings = save_checkout_rate(kind, data.get("percent"))
+    except (TypeError, ValueError) as exc:
+        return {"success": False, "message": str(exc) if str(exc) else "Enter a percent from 0 to 100."}
+    label = "Senior / PWD discount" if kind == "sc_pwd" else "VAT"
+    saved = settings["sc_pwd_percent"] if kind == "sc_pwd" else settings["vat_percent"]
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            _log(cur, request, "Update Checkout Rate", f"Set {label} to {saved:.2f}%.")
     return {"success": True, **settings}
 
 
@@ -228,7 +368,10 @@ def list_pos(request: Request, status: str = ""):
         JOIN suppliers s ON po.supplier_id = s.supplier_id
     """
     params = []
-    if status:
+    status = (status or "").strip()
+    if status.lower() == "open":
+        sql += " WHERE po.status IN ('Pending', 'Partially Received')"
+    elif status:
         sql += " WHERE po.status = %s"
         params.append(status)
     sql += " ORDER BY po.created_at DESC"
@@ -282,7 +425,7 @@ def po_details(po_id: int, request: Request):
     for row in fetch_all(
         """
         SELECT poi.po_item_id, poi.drug_id, poi.quantity_ordered, poi.quantity_received, poi.unit_cost,
-               d.generic_name, d.brand_name, d.dosage, d.form, d.category, d.barcode
+               d.generic_name, d.brand_name, d.dosage, d.form, d.category, d.barcode, d.cost_price AS catalog_cost
         FROM purchase_order_items poi JOIN drugs_master d ON poi.drug_id = d.drug_id
         WHERE poi.po_id = %s ORDER BY poi.po_item_id ASC
         """,
@@ -320,6 +463,8 @@ def po_details(po_id: int, request: Request):
             cost = last.get("price")
         if cost is None:
             cost = item.get("unit_cost")
+        if cost is None:
+            cost = item.get("catalog_cost")
         item["last_cost_price"] = float(cost) if cost not in (None, "") else None
     deliveries = []
     delivery_ids = []
@@ -370,12 +515,18 @@ async def create_po(request: Request):
     for it in data.get("items") or []:
         drug_id = int(it.get("drug_id") or 0)
         qty = int(it.get("quantity_ordered") or 0)
-        unit_cost = float(it["unit_cost"]) if it.get("unit_cost") not in (None, "") else None
-        if drug_id and qty > 0:
-            items.append((drug_id, qty, unit_cost))
+        if not drug_id:
+            continue
+        if qty < 1:
+            return {"success": False, "message": "Boxes ordered must be at least 1."}
+        items.append((drug_id, qty))
     if not items:
-        return {"success": False, "message": "Please add at least one item with a valid quantity."}
-    if not fetch_one("SELECT supplier_id FROM suppliers WHERE supplier_id = %s AND status = 'Active'", (supplier_id,)):
+        return {"success": False, "message": "Please add at least one item with a quantity of 1 or more."}
+    supplier = fetch_one(
+        "SELECT supplier_id, supplier_name FROM suppliers WHERE supplier_id = %s AND status = 'Active'",
+        (supplier_id,),
+    )
+    if not supplier:
         return {"success": False, "message": "Please select an active supplier."}
     admin_name = request.session.get("user_first_name") or "Admin"
     order_date = _parse_iso_date(data.get("order_date")) or _manila_today()
@@ -396,15 +547,321 @@ async def create_po(request: Request):
                 """,
                 (po_id, supplier_id, order_date, expected_date, notes, admin_name),
             )
-            for drug_id, qty, unit_cost in items:
+            for drug_id, qty in items:
                 item_id = next_id(cur, "purchase_order_items", "po_item_id")
                 cur.execute(
-                    "INSERT INTO purchase_order_items (po_item_id, po_id, drug_id, quantity_ordered, unit_cost) VALUES (%s, %s, %s, %s, %s)",
-                    (item_id, po_id, drug_id, qty, unit_cost),
+                    "INSERT INTO purchase_order_items (po_item_id, po_id, drug_id, quantity_ordered, unit_cost) VALUES (%s, %s, %s, %s, NULL)",
+                    (item_id, po_id, drug_id, qty),
                 )
             po_number = f"PO-{po_id:05d}"
-            _log(cur, request, "Create Purchase Order", f"Created {po_number} with {len(items)} item(s).")
+            _log(
+                cur,
+                request,
+                "Create Purchase Order",
+                f"Created {po_number} for {supplier['supplier_name']} with {len(items)} item(s).",
+            )
     return {"success": True, "po_id": po_id, "po_number": po_number}
+
+
+def _esc(value) -> str:
+    return html.escape("" if value is None else str(value), quote=True)
+
+
+def _date_text(value) -> str:
+    if value is None or value == "":
+        return ""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()[:10]
+    return str(value)[:10]
+
+
+def _po_email_subject(po_number: str) -> str:
+    return f"Purchase order {po_number}"
+
+
+def _po_email_html(po_number, supplier_name, _to_email, order_date, expected_date, notes, lines) -> str:
+    """One document for the on-screen preview and the message that is sent."""
+    body_rows = []
+    for line in lines:
+        qty = int(line["quantity"])
+        body_rows.append(
+            "<tr>"
+            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('generic_name') or '—')}</td>"
+            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('brand_name') or '—')}</td>"
+            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('dosage') or '—')}</td>"
+            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;text-align:right;\">{qty}</td>"
+            "</tr>"
+        )
+    rows = "".join(body_rows) or (
+        "<tr><td colspan=\"4\" style=\"padding:8px;\">No items</td></tr>"
+    )
+    th = "padding:8px;text-align:left;font-size:12px;"
+    thr = "padding:8px;text-align:right;font-size:12px;"
+    greeting_name = (supplier_name or "").strip() or "Supplier"
+    return (
+        "<div style=\"font-family:Arial,sans-serif;color:#1E3A34;font-size:14px;line-height:1.45;\">"
+        f"<p style=\"margin:0 0 8px;\">Good day, {_esc(greeting_name)}.</p>"
+        "<p style=\"margin:0 0 16px;\">Please see the purchase order below.</p>"
+        f"<h2 style=\"margin:0 0 12px;font-size:20px;\">{_esc(po_number)}</h2>"
+        f"<p style=\"margin:0 0 4px;\"><strong>Supplier:</strong> {_esc(supplier_name or '—')}</p>"
+        f"<p style=\"margin:0 0 4px;\"><strong>Order date:</strong> {_esc(order_date or '—')}</p>"
+        f"<p style=\"margin:0 0 4px;\"><strong>Expected date:</strong> {_esc(expected_date or '—')}</p>"
+        f"<p style=\"margin:0 0 14px;\"><strong>Notes:</strong> {_esc(notes or '—')}</p>"
+        "<table style=\"width:100%;border-collapse:collapse;\">"
+        "<thead><tr style=\"background:#1E3A34;color:#ffffff;\">"
+        f"<th style=\"{th}\">Generic name</th>"
+        f"<th style=\"{th}\">Brand</th>"
+        f"<th style=\"{th}\">Dosage</th>"
+        f"<th style=\"{thr}\">Boxes</th>"
+        "</tr></thead><tbody>"
+        f"{rows}</tbody></table>"
+        "<p style=\"margin:12px 0 0;\">Please send the cost per box with the delivery.</p>"
+        "</div>"
+    )
+
+
+def _email_preview_payload(po_number, supplier_name, to_email, order_date, expected_date, notes, lines) -> dict:
+    cleaned = (to_email or "").strip()
+    html_doc = _po_email_html(
+        po_number, supplier_name, cleaned, order_date, expected_date, notes, lines
+    )
+    if cleaned:
+        return {
+            "success": True,
+            "can_send": True,
+            "to": cleaned,
+            "subject": _po_email_subject(po_number),
+            "po_number": po_number,
+            "html": html_doc,
+            "message": "",
+        }
+    return {
+        "success": True,
+        "can_send": False,
+        "to": "",
+        "subject": _po_email_subject(po_number),
+        "po_number": po_number,
+        "html": html_doc,
+        "message": "This supplier has no email. Add it on the supplier record.",
+    }
+
+
+def _lines_for_items(raw_items) -> tuple[list, str | None]:
+    wanted = []
+    for it in raw_items or []:
+        drug_id = int(it.get("drug_id") or 0)
+        qty = int(it.get("quantity_ordered") or it.get("quantity") or 0)
+        if not drug_id:
+            continue
+        if qty < 1:
+            return [], "Boxes ordered must be at least 1."
+        wanted.append((drug_id, qty))
+    if not wanted:
+        return [], "Add at least one medicine and enter at least 1 box."
+    ids = list(dict.fromkeys(drug_id for drug_id, _ in wanted))
+    drugs = {
+        int(row["drug_id"]): row
+        for row in fetch_all(
+            "SELECT drug_id, generic_name, brand_name, dosage FROM drugs_master WHERE drug_id = ANY(%s)",
+            (ids,),
+        )
+    }
+    lines = []
+    for drug_id, qty in wanted:
+        drug = drugs.get(drug_id)
+        if not drug:
+            return [], "One of the items is not in the catalog."
+        lines.append({
+            "generic_name": drug.get("generic_name") or "",
+            "brand_name": drug.get("brand_name") or "",
+            "dosage": drug.get("dosage") or "",
+            "quantity": qty,
+        })
+    return lines, None
+
+
+def _next_po_number() -> str:
+    row = fetch_one("SELECT COALESCE(MAX(po_id), 0) + 1 AS nid FROM purchase_orders")
+    nid = int(row["nid"] if isinstance(row, dict) else row[0])
+    return f"PO-{nid:05d}"
+
+
+@router.post("/purchase-orders/email-preview")
+async def preview_purchase_order_email(request: Request):
+    """Build the email document only. Nothing is saved or sent."""
+    if not require_admin(request):
+        return _unauthorized()
+    data = await request.json()
+    try:
+        po_id = int(data.get("po_id") or 0)
+    except (TypeError, ValueError):
+        return {"success": False, "message": "Invalid purchase order."}
+    if po_id:
+        po = fetch_one(
+            """
+            SELECT po.po_id, po.order_date, po.expected_date, po.notes, s.supplier_name, s.email
+            FROM purchase_orders po JOIN suppliers s ON po.supplier_id = s.supplier_id
+            WHERE po.po_id = %s
+            """,
+            (po_id,),
+        )
+        if not po:
+            return {"success": False, "message": "Purchase order not found."}
+        po = _row(po)
+        raw_items = []
+        for row in fetch_all(
+            """
+            SELECT poi.drug_id, poi.quantity_ordered, poi.unit_cost
+            FROM purchase_order_items poi
+            WHERE poi.po_id = %s ORDER BY poi.po_item_id ASC
+            """,
+            (po_id,),
+        ):
+            item = _row(row)
+            raw_items.append(item)
+        lines, err = _lines_for_items(raw_items)
+        if err:
+            return {"success": False, "message": err}
+        return _email_preview_payload(
+            f"PO-{int(po['po_id']):05d}",
+            po.get("supplier_name") or "",
+            po.get("email") or "",
+            _date_text(po.get("order_date")),
+            _date_text(po.get("expected_date")),
+            (po.get("notes") or "").strip(),
+            lines,
+        )
+
+    supplier_id = int(data.get("supplier_id") or 0)
+    if not supplier_id:
+        return {"success": False, "message": "Please select a supplier."}
+    supplier = fetch_one(
+        "SELECT supplier_id, supplier_name, email FROM suppliers WHERE supplier_id = %s AND status = 'Active'",
+        (supplier_id,),
+    )
+    if not supplier:
+        return {"success": False, "message": "Please select an active supplier."}
+    order_date = _parse_iso_date(data.get("order_date")) or _manila_today()
+    expected_date = _parse_iso_date(data.get("expected_date"))
+    today = _manila_today()
+    if order_date < today:
+        return {"success": False, "message": "Order date cannot be in the past."}
+    if expected_date and expected_date < today:
+        return {"success": False, "message": "Expected date cannot be in the past."}
+    lines, err = _lines_for_items(data.get("items") or [])
+    if err:
+        return {"success": False, "message": err}
+    return _email_preview_payload(
+        _next_po_number(),
+        supplier["supplier_name"],
+        supplier.get("email") or "",
+        order_date.isoformat(),
+        expected_date.isoformat() if expected_date else "",
+        str(data.get("notes") or "").strip(),
+        lines,
+    )
+
+
+def _plain_email_problem(reason: str) -> str:
+    text = (reason or "").strip()
+    low = text.lower()
+    if "no email" in low:
+        return "This supplier has no email address yet. Add it on the supplier record."
+    if any(token in low for token in (
+        "unreachable", "errno", "timed out", "timeout", "connection", "network",
+        "getaddrinfo", "refused", "reset",
+    )):
+        return "The internet connection failed, so the email was not sent. Try again."
+    if any(token in low for token in ("smtp", "auth", "login", "not configured", "password", "credential")):
+        return "The store email is not set up, so the message was not sent."
+    if not text or low == "sent" or "traceback" in low or "exception" in low:
+        return "The email was not sent. Try again."
+    return text
+
+
+def _mail_fail_message(po_number, sent=None, extra=""):
+    reason = extra or ((sent or {}).get("message") or "").strip()
+    return f"{po_number} is still Pending. {_plain_email_problem(reason)}"
+
+
+@router.post("/purchase-orders/{po_id}/email")
+def email_purchase_order(po_id: int, request: Request):
+    """Email the saved purchase order. Rebuilds the document on the server."""
+    if not require_admin(request):
+        return _unauthorized()
+    try:
+        result = send_saved_purchase_order(po_id, actor=actor_display_name(request, "Admin"))
+    except Exception as exc:
+        return {
+            "success": False,
+            "email_sent": False,
+            "message": "The email was not sent. Try again.",
+        }
+    if result.get("email_sent"):
+        return {"success": True, **result}
+    if (result.get("message") or "") == "Purchase order not found.":
+        return {"success": False, "email_sent": False, **result}
+    if "no email" in (result.get("message") or "").lower():
+        return {"success": False, "email_sent": False, **result}
+    return {"success": True, **result}
+
+
+def send_saved_purchase_order(po_id: int, actor: str = "System") -> dict:
+    """Email a saved purchase order. Status stays Pending."""
+    po = fetch_one(
+        """
+        SELECT po.po_id, po.order_date, po.expected_date, po.notes, s.supplier_name, s.email
+        FROM purchase_orders po JOIN suppliers s ON po.supplier_id = s.supplier_id
+        WHERE po.po_id = %s
+        """,
+        (po_id,),
+    )
+    if not po:
+        return {"email_sent": False, "message": "Purchase order not found."}
+    po = _row(po)
+    raw_items = [_row(row) for row in fetch_all(
+        """
+        SELECT poi.drug_id, poi.quantity_ordered, poi.unit_cost
+        FROM purchase_order_items poi
+        WHERE poi.po_id = %s ORDER BY poi.po_item_id ASC
+        """,
+        (po_id,),
+    )]
+    lines, err = _lines_for_items(raw_items)
+    po_number = f"PO-{int(po['po_id']):05d}"
+    if err:
+        log_event("Email Purchase Order", f"Could not email {po_number}. {_plain_email_problem(err)}", actor=actor)
+        return {"email_sent": False, "po_number": po_number, "message": _mail_fail_message(po_number, extra=err)}
+    payload = _email_preview_payload(
+        po_number,
+        po.get("supplier_name") or "",
+        po.get("email") or "",
+        _date_text(po.get("order_date")),
+        _date_text(po.get("expected_date")),
+        (po.get("notes") or "").strip(),
+        lines,
+    )
+    if not payload.get("can_send"):
+        log_event("Email Purchase Order", f"Could not email {po_number}. This supplier has no email address yet.", actor=actor)
+        return {
+            "email_sent": False,
+            "po_number": po_number,
+            "message": "This supplier has no email. Add it on the supplier record. The purchase order stays Pending.",
+        }
+    sent = send_mail(payload["to"], payload["subject"], payload["html"])
+    if sent.get("success"):
+        log_event("Email Purchase Order", f"Emailed {po_number} to {payload['to']}.", actor=actor)
+        return {"email_sent": True, "po_number": po_number, "message": f"Emailed {po_number} to {payload['to']}."}
+    log_event(
+        "Email Purchase Order",
+        f"Could not email {po_number}. {_plain_email_problem(sent.get('message') or '')}",
+        actor=actor,
+    )
+    return {
+        "email_sent": False,
+        "po_number": po_number,
+        "message": _mail_fail_message(po_number, sent),
+    }
 
 
 @router.post("/deliveries/receive")
@@ -421,12 +878,27 @@ async def receive_delivery(request: Request):
     )}
     if not po_items:
         return {"success": False, "message": "Purchase order not found or has no items."}
+    remaining = {
+        pid: max(0, int(row["quantity_ordered"] or 0) - int(row["quantity_received"] or 0))
+        for pid, row in po_items.items()
+    }
     to_receive = []
     for it in data.get("items") or []:
         po_item_id = int(it.get("po_item_id") or 0)
         qty = int(it.get("quantity_received") or 0)
         if qty <= 0 or po_item_id not in po_items:
             continue
+        if qty < 1:
+            return {"success": False, "message": "Quantity must be at least 1."}
+        if qty > remaining.get(po_item_id, 0):
+            return {"success": False, "message": "Quantity cannot exceed the ordered amount still outstanding on this purchase order."}
+        remaining[po_item_id] = remaining[po_item_id] - qty
+        try:
+            pcs_per_box = int(it.get("pieces_per_box") or 0)
+        except (TypeError, ValueError):
+            pcs_per_box = 0
+        if pcs_per_box < 1:
+            return {"success": False, "message": "Each received item needs pieces per box (at least 1)."}
         lot_number = str(it.get("lot_number") or "").strip()
         expiration_date = it.get("expiration_date") or ""
         if not lot_number or not expiration_date:
@@ -436,17 +908,19 @@ async def receive_delivery(request: Request):
             return {"success": False, "message": "Each received item needs a valid expiration date."}
         if exp < _manila_today():
             return {"success": False, "message": "Expiration date cannot be in the past."}
-        cost_val = float(it["cost_price"]) if it.get("cost_price") not in (None, "") else None
-        if cost_val is None or cost_val <= 0:
-            return {"success": False, "message": "Each received item needs a unit cost. Selling price is computed from category markup."}
+        cost_box = float(it["cost_price"]) if it.get("cost_price") not in (None, "") else None
+        if cost_box is None or cost_box <= 0:
+            return {"success": False, "message": "Each received item needs a cost per box. Selling price per piece is computed from markup."}
+        cost_piece = round(cost_box / pcs_per_box, 4)
         to_receive.append({
             "po_item_id": po_item_id,
             "drug_id": int(po_items[po_item_id]["drug_id"]),
             "lot_number": lot_number,
             "expiration_date": expiration_date,
             "quantity_received": qty,
+            "stock_qty": qty * pcs_per_box,
             "price": 0,
-            "cost_price": cost_val,
+            "cost_price": cost_piece,
         })
     if not to_receive:
         return {"success": False, "message": "Please enter at least one item with a quantity, lot number, and expiration date."}
@@ -457,64 +931,65 @@ async def receive_delivery(request: Request):
     if delivery_date < _manila_today():
         return {"success": False, "message": "Delivery date cannot be in the past."}
     admin_name = request.session.get("user_first_name") or "Admin"
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            delivery_id = next_id(cur, "deliveries", "delivery_id")
-            cur.execute(
-                "INSERT INTO deliveries (delivery_id, po_id, delivery_date, received_by, reference_number, notes) VALUES (%s, %s, %s, %s, %s, %s)",
-                (delivery_id, po_id, delivery_date, admin_name, reference, str(data.get("notes") or "").strip() or None),
-            )
-            created = 0
-            updated = 0
-            affected = set()
-            for it in to_receive:
-                try:
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                delivery_id = next_id(cur, "deliveries", "delivery_id")
+                cur.execute(
+                    "INSERT INTO deliveries (delivery_id, po_id, delivery_date, received_by, reference_number, notes) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (delivery_id, po_id, delivery_date, admin_name, reference, str(data.get("notes") or "").strip() or None),
+                )
+                created = 0
+                updated = 0
+                affected = set()
+                for it in to_receive:
                     lot_id, action = apply_received_lot(
                         cur,
                         it["drug_id"],
                         it["lot_number"],
                         it["expiration_date"],
-                        it["quantity_received"],
+                        it["stock_qty"],
                         it["price"],
                         it["cost_price"],
                         po_id,
                     )
-                except Exception:
-                    continue
-                if action == "created":
-                    created += 1
-                else:
-                    updated += 1
-                di_id = next_id(cur, "delivery_items", "delivery_item_id")
+                    if action == "created":
+                        created += 1
+                    else:
+                        updated += 1
+                    di_id = next_id(cur, "delivery_items", "delivery_item_id")
+                    cur.execute(
+                        "INSERT INTO delivery_items (delivery_item_id, delivery_id, po_item_id, lot_inventory_id, quantity_received) VALUES (%s, %s, %s, %s, %s)",
+                        (di_id, delivery_id, it["po_item_id"], lot_id, it["quantity_received"]),
+                    )
+                    cur.execute(
+                        "UPDATE purchase_order_items SET quantity_received = quantity_received + %s WHERE po_item_id = %s",
+                        (it["quantity_received"], it["po_item_id"]),
+                    )
+                    affected.add(it["drug_id"])
+                for drug_id in affected:
+                    sync_stock_status_for_drug(cur, drug_id)
                 cur.execute(
-                    "INSERT INTO delivery_items (delivery_item_id, delivery_id, po_item_id, lot_inventory_id, quantity_received) VALUES (%s, %s, %s, %s, %s)",
-                    (di_id, delivery_id, it["po_item_id"], lot_id, it["quantity_received"]),
+                    "SELECT SUM(quantity_ordered) AS ordered, SUM(quantity_received) AS received FROM purchase_order_items WHERE po_id = %s",
+                    (po_id,),
                 )
-                cur.execute(
-                    "UPDATE purchase_order_items SET quantity_received = quantity_received + %s WHERE po_item_id = %s",
-                    (it["quantity_received"], it["po_item_id"]),
+                totals = cur.fetchone()
+                ordered = int(totals["ordered"] or 0)
+                received = int(totals["received"] or 0)
+                new_status = "Pending" if received <= 0 else ("Received" if received >= ordered else "Partially Received")
+                cur.execute("UPDATE purchase_orders SET status = %s WHERE po_id = %s", (new_status, po_id))
+                po_number = f"PO-{po_id:05d}"
+                _log(
+                    cur,
+                    request,
+                    "Receive Delivery",
+                    f"Received {po_number}. {created} new stock row(s). {updated} row(s) already had this lot number and expiration, so those pieces were added there. Status is now {new_status}.",
                 )
-                affected.add(it["drug_id"])
-            if created == 0 and updated == 0:
-                return {"success": False, "message": "No items could be received. Check lot numbers and try again."}
-            for drug_id in affected:
-                sync_stock_status_for_drug(cur, drug_id)
-            cur.execute(
-                "SELECT SUM(quantity_ordered) AS ordered, SUM(quantity_received) AS received FROM purchase_order_items WHERE po_id = %s",
-                (po_id,),
-            )
-            totals = cur.fetchone()
-            ordered = int(totals["ordered"] or 0)
-            received = int(totals["received"] or 0)
-            new_status = "Pending" if received <= 0 else ("Received" if received >= ordered else "Partially Received")
-            cur.execute("UPDATE purchase_orders SET status = %s WHERE po_id = %s", (new_status, po_id))
-            po_number = f"PO-{po_id:05d}"
-            _log(
-                cur,
-                request,
-                "Receive Delivery",
-                f"Received delivery for {po_number}: {created} new lot(s), {updated} existing lot(s) topped up (prices/stock of other lots not overwritten). New PO status: {new_status}.",
-            )
+    except psycopg2.Error:
+        return {
+            "success": False,
+            "message": "This delivery could not be saved. Check the lot number and expiration date, then try again.",
+        }
     return {
         "success": True,
         "delivery_id": delivery_id,
@@ -528,33 +1003,42 @@ async def receive_delivery(request: Request):
 def sales_analytics(request: Request, year: int = 0):
     if not require_admin(request):
         return _unauthorized()
-    year = year or date.today().year
-    if year < 2000 or year > 2100:
-        year = date.today().year
-    monthly_rows = {
-        int(r["m"]): float(r["total"] or 0)
-        for r in fetch_all(
-            """
-            SELECT EXTRACT(MONTH FROM date_created) AS m, COALESCE(SUM(total_amount), 0) AS total
-            FROM sales WHERE EXTRACT(YEAR FROM date_created) = %s AND status = 'completed'
-            GROUP BY EXTRACT(MONTH FROM date_created)
-            """,
-            (year,),
-        )
-    }
+    month_rows = fetch_all(
+        """
+        SELECT date_trunc('month', date_created)::date AS month_start,
+               COALESCE(SUM(total_amount), 0) AS total
+        FROM sales
+        WHERE status = 'completed' AND date_created IS NOT NULL
+        GROUP BY 1
+        ORDER BY 1
+        """
+    )
+    by_month = {}
+    for row in month_rows:
+        start = row["month_start"]
+        if isinstance(start, datetime):
+            start = start.date()
+        start = date(start.year, start.month, 1)
+        by_month[start] = float(row["total"] or 0)
     monthly_labels = []
     monthly_data = []
-    for m in range(1, 13):
-        monthly_labels.append(datetime(year, m, 1).strftime("%b %Y"))
-        monthly_data.append(monthly_rows.get(m, 0))
+    if by_month:
+        cursor = min(by_month)
+        last = max(by_month)
+        while cursor <= last:
+            monthly_labels.append(cursor.strftime("%b %Y"))
+            monthly_data.append(by_month.get(cursor, 0.0))
+            if cursor.month == 12:
+                cursor = date(cursor.year + 1, 1, 1)
+            else:
+                cursor = date(cursor.year, cursor.month + 1, 1)
     cat_rows = fetch_all(
         """
         SELECT d.category, COALESCE(SUM(si.quantity), 0) AS total_qty
         FROM sales_items si JOIN sales s ON si.sale_id = s.sale_id JOIN drugs_master d ON si.drug_id = d.drug_id
-        WHERE EXTRACT(YEAR FROM s.date_created) = %s AND s.status = 'completed'
+        WHERE s.status = 'completed'
         GROUP BY d.category ORDER BY total_qty DESC LIMIT 8
-        """,
-        (year,),
+        """
     )
     seasonal_rows = {
         int(r["m"]): float(r["total"] or 0)
@@ -567,31 +1051,58 @@ def sales_analytics(request: Request, year: int = 0):
         )
     }
     month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    seasonal_labels = month_names
-    seasonal_data = [seasonal_rows.get(m, 0) for m in range(1, 13)]
     return {
-        "year": year,
+        "year": int(year or 0),
         "monthly_labels": monthly_labels,
         "monthly_data": monthly_data,
         "category_labels": [str(r["category"] or "Other").title() for r in cat_rows],
         "category_data": [int(r["total_qty"] or 0) for r in cat_rows],
-        "seasonal_labels": seasonal_labels,
-        "seasonal_data": seasonal_data,
+        "seasonal_labels": month_names,
+        "seasonal_data": [seasonal_rows.get(m, 0) for m in range(1, 13)],
     }
 
 
 @router.get("/activity-logs")
-def activity_logs(request: Request, limit: int = 20, offset: int = 0):
+def activity_logs(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+    days: int = 0,
+    start: str = "",
+    end: str = "",
+    q: str = "",
+):
     if not require_admin(request):
         return _unauthorized()
     limit = max(1, min(200, int(limit)))
     offset = max(0, int(offset))
-    total_row = fetch_one("SELECT COUNT(*) AS n FROM activity_logs")
+    where = ["action <> 'UI Click'", "action NOT ILIKE %s"]
+    params: list = ["%click%"]
+    start_s = str(start or "").strip()[:10]
+    end_s = str(end or "").strip()[:10]
+    if start_s and end_s and start_s > end_s:
+        start_s, end_s = end_s, start_s
+    if start_s and end_s:
+        where.append("date::date BETWEEN %s AND %s")
+        params.extend([start_s, end_s])
+    elif int(days or 0) > 0:
+        span = max(1, min(365, int(days)))
+        where.append("date::date >= (CURRENT_DATE - (%s - 1))")
+        params.append(span)
+    query = " ".join(str(q or "").split())[:80]
+    if query:
+        like = f"%{query}%"
+        where.append("(admin_name ILIKE %s OR action ILIKE %s OR details ILIKE %s)")
+        params.extend([like, like, like])
+    clause = " WHERE " + " AND ".join(where)
+    total_row = fetch_one("SELECT COUNT(*) AS n FROM activity_logs" + clause, tuple(params))
     total = int((total_row or {}).get("n") or 0)
     logs = []
     for row in fetch_all(
-        "SELECT date, admin_name, action, details FROM activity_logs ORDER BY date DESC LIMIT %s OFFSET %s",
-        (limit, offset),
+        "SELECT date, admin_name, action, details FROM activity_logs"
+        + clause
+        + " ORDER BY date DESC LIMIT %s OFFSET %s",
+        tuple(params) + (limit, offset),
     ):
         dt = row["date"]
         if hasattr(dt, "strftime"):
@@ -689,6 +1200,74 @@ def expiring(request: Request, days: int = 30):
     return {"days": days, "count": len(items), "total_value_at_risk": round(total, 2), "items": items}
 
 
+@router.get("/capital-at-risk")
+def capital_at_risk(request: Request):
+    """Money already paid for stock that is expired or expires within 30 days."""
+    if not require_admin(request):
+        return _unauthorized()
+    items = []
+    expired_cost = soon_cost = 0.0
+    expired_units = soon_units = 0
+    for row in fetch_all(
+        """
+        SELECT l.lot_inventory_id, l.lot_number, l.expiration_date, l.current_stock,
+               COALESCE(l.cost_price, 0) AS unit_cost,
+               d.generic_name, d.brand_name, d.dosage, d.form,
+               COALESCE(s.supplier_name, '') AS supplier_name,
+               (l.expiration_date - CURRENT_DATE) AS days_left,
+               CASE WHEN l.expiration_date < CURRENT_DATE THEN 'expired' ELSE 'soon' END AS bucket
+        FROM inventory_lots l
+        JOIN drugs_master d ON l.drug_id = d.drug_id
+        LEFT JOIN suppliers s ON s.supplier_id = l.supplier
+        WHERE l.current_stock > 0
+          AND (
+                l.expiration_date < CURRENT_DATE
+                OR (
+                    l.is_active = 1
+                    AND l.expiration_date >= CURRENT_DATE
+                    AND l.expiration_date <= (CURRENT_DATE + INTERVAL '30 days')
+                )
+          )
+        ORDER BY (COALESCE(l.cost_price, 0) * l.current_stock) DESC, l.expiration_date ASC, d.generic_name ASC
+        """
+    ):
+        qty = int(row["current_stock"] or 0)
+        unit_cost = round(float(row["unit_cost"] or 0), 2)
+        capital = round(qty * unit_cost, 2)
+        bucket = row["bucket"]
+        if bucket == "expired":
+            expired_cost += capital
+            expired_units += qty
+        else:
+            soon_cost += capital
+            soon_units += qty
+        items.append({
+            "lot_inventory_id": int(row["lot_inventory_id"]),
+            "generic_name": row["generic_name"],
+            "brand_name": row["brand_name"] or "",
+            "dosage": row["dosage"] or "",
+            "form": row["form"] or "",
+            "lot_number": row["lot_number"] or "",
+            "supplier_name": row["supplier_name"] or "",
+            "expiration_date": _jsonable(row["expiration_date"]),
+            "days_left": int(row["days_left"] or 0),
+            "bucket": bucket,
+            "current_stock": qty,
+            "unit_cost": unit_cost,
+            "capital": capital,
+        })
+    return {
+        "days": 30,
+        "count": len(items),
+        "expired_cost": round(expired_cost, 2),
+        "expired_units": expired_units,
+        "soon_cost": round(soon_cost, 2),
+        "soon_units": soon_units,
+        "total_capital": round(expired_cost + soon_cost, 2),
+        "items": items,
+    }
+
+
 @router.get("/reorder-suggestions")
 def reorder_suggestions(request: Request):
     if not require_admin(request):
@@ -718,9 +1297,6 @@ async def create_pos_from_reorder(request: Request):
             skipped.append({"name": f"Drug #{drug_id}", "reason": "not in current suggestions"})
             continue
         label = row.get("generic_name") or f"Drug #{drug_id}"
-        if str(row.get("procurement_type") or "purchase") == "consignment":
-            skipped.append({"name": label, "reason": "consignment - create that PO manually"})
-            continue
         if row.get("action") != "increase" or int(row.get("suggested_qty") or 0) <= 0:
             skipped.append({"name": label, "reason": "does not need reorder"})
             continue
@@ -762,30 +1338,52 @@ async def automation_run(request: Request):
     return {"success": True, "mode": mode, "result": result}
 
 
+def _shift_month(day: date, delta: int) -> date:
+    month_index = day.year * 12 + (day.month - 1) + delta
+    return date(month_index // 12, month_index % 12 + 1, 1)
+
+
+def _parse_month(value: str) -> date | None:
+    text = str(value or "").strip()
+    if len(text) < 7 or text[4] != "-":
+        return None
+    try:
+        return date(int(text[0:4]), int(text[5:7]), 1)
+    except ValueError:
+        return None
+
+
 @router.get("/monthly-consumption")
-def monthly_consumption(request: Request, months: int = 6):
+def monthly_consumption(request: Request, months: int = 6, start: str = "", end: str = ""):
     if not require_admin(request):
         return _unauthorized()
-    months_back = max(1, min(24, months))
     today = date.today().replace(day=1)
+    end_month = _parse_month(end) or today
+    if end_month > today:
+        end_month = today
+    start_month = _parse_month(start) or _shift_month(end_month, -(max(1, min(24, months)) - 1))
+    if start_month > end_month:
+        start_month = end_month
+    earliest = _shift_month(end_month, -23)
+    if start_month < earliest:
+        start_month = earliest
     labels = []
-    cursor = date(today.year, today.month, 1)
-    for i in range(months_back - 1, -1, -1):
-        y = cursor.year
-        m = cursor.month - i
-        while m <= 0:
-            m += 12
-            y -= 1
-        labels.append(f"{y:04d}-{m:02d}")
+    cursor = start_month
+    while cursor <= end_month:
+        labels.append(f"{cursor.year:04d}-{cursor.month:02d}")
+        cursor = _shift_month(cursor, 1)
+    range_end = _shift_month(end_month, 1)
     raw = fetch_all(
-        f"""
+        """
         SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
                to_char(s.date_created, 'YYYY-MM') AS month_label, SUM(si.quantity) AS qty
         FROM sales_items si JOIN sales s ON si.sale_id = s.sale_id JOIN drugs_master d ON si.drug_id = d.drug_id
         WHERE s.status = 'completed'
-          AND s.date_created >= (date_trunc('month', CURRENT_DATE) - INTERVAL '{months_back - 1} months')
+          AND s.date_created >= %s
+          AND s.date_created < %s
         GROUP BY d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category, month_label
-        """
+        """,
+        (start_month, range_end),
     )
     by_drug = {}
     for row in raw:
@@ -850,127 +1448,23 @@ def procurement(request: Request):
         })
     summary["supplier_count"] = len(by_supplier)
     by_category = [
-        {"category": r["category"], "total_cost": round(float(r["total_cost"] or 0), 2)}
+        {
+            "category": r["category"],
+            "total_cost": round(float(r["total_cost"] or 0), 2),
+            "total_units": int(r["total_units"] or 0),
+        }
         for r in fetch_all(
             """
-            SELECT d.category, COALESCE(SUM(COALESCE(il.cost_price, il.price, 0) * il.current_stock), 0) AS total_cost
+            SELECT d.category,
+                   COALESCE(SUM(COALESCE(il.cost_price, il.price, 0) * il.current_stock), 0) AS total_cost,
+                   COALESCE(SUM(il.current_stock), 0) AS total_units
             FROM drugs_master d JOIN inventory_lots il ON il.drug_id = d.drug_id AND il.is_active = 1
               AND il.expiration_date >= CURRENT_DATE
             GROUP BY d.category HAVING COALESCE(SUM(il.current_stock), 0) > 0 ORDER BY total_cost DESC
             """
         )
     ]
-    grouped = {}
-    for row in fetch_all(
-        """
-        SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form,
-               COALESCE(il.cost_price, il.price, 0) AS unit_cost, s.supplier_name, il.current_stock, il.lot_number
-        FROM inventory_lots il JOIN drugs_master d ON il.drug_id = d.drug_id
-        LEFT JOIN suppliers s ON il.supplier = s.supplier_id
-        WHERE il.is_active = 1 AND il.expiration_date >= CURRENT_DATE
-        ORDER BY d.drug_id, unit_cost ASC
-        """
-    ):
-        did = int(row["drug_id"])
-        grouped.setdefault(did, {
-            "drug_id": did, "generic_name": row["generic_name"], "brand_name": row["brand_name"],
-            "dosage": row["dosage"], "form": row["form"], "offers": [],
-        })
-        grouped[did]["offers"].append({
-            "supplier_name": row["supplier_name"] or "Unknown",
-            "price": float(row["unit_cost"] or 0),
-            "lot_number": row["lot_number"],
-            "current_stock": int(row["current_stock"] or 0),
-        })
-    comparison = []
-    for drug in grouped.values():
-        prices = [o["price"] for o in drug["offers"]]
-        if len(set(prices)) < 2:
-            continue
-        mn, mx = min(prices), max(prices)
-        drug["min_price"] = mn
-        drug["max_price"] = mx
-        drug["savings_pct"] = round(((mx - mn) / mx) * 100, 1) if mx else 0
-        comparison.append(drug)
-    comparison.sort(key=lambda d: d["savings_pct"], reverse=True)
-    return {"summary": summary, "by_supplier": by_supplier, "by_category": by_category, "price_comparison": comparison}
-
-
-@router.get("/expiry-waste")
-def expiry_waste(request: Request):
-    if not require_admin(request):
-        return _unauthorized()
-    reason = "Expired / Disposed"
-    raw = fetch_all(
-        """
-        SELECT sa.adjustment_id, sa.created_at, sa.quantity_change, sa.admin_name, sa.notes,
-               d.drug_id, d.generic_name, d.brand_name, d.category,
-               l.lot_number, l.expiration_date, l.price, l.cost_price
-        FROM stock_adjustments sa
-        JOIN drugs_master d ON sa.drug_id = d.drug_id
-        LEFT JOIN inventory_lots l ON sa.lot_inventory_id = l.lot_inventory_id
-        WHERE sa.reason = %s AND sa.quantity_change < 0
-        ORDER BY sa.created_at DESC
-        """,
-        (reason,),
-    )
-    rows = []
-    for row in raw:
-        units = abs(int(row["quantity_change"] or 0))
-        unit_value = float(row["cost_price"]) if row["cost_price"] is not None else float(row["price"] or 0)
-        created = row["created_at"]
-        date_s = created.strftime("%Y-%m-%d") if hasattr(created, "strftime") else str(created)[:10]
-        rows.append({
-            "adjustment_id": int(row["adjustment_id"]),
-            "date": date_s,
-            "drug_id": int(row["drug_id"]),
-            "label": f"{row['generic_name']}" + (f" ({row['brand_name']})" if row.get("brand_name") else ""),
-            "category": row["category"],
-            "lot_number": row["lot_number"],
-            "expiration_date": _jsonable(row["expiration_date"]),
-            "units": units,
-            "value": round(units * unit_value, 2),
-            "is_estimate": row["cost_price"] is None,
-            "admin_name": row["admin_name"],
-            "notes": row["notes"],
-        })
-    total_units = sum(r["units"] for r in rows)
-    total_value = sum(r["value"] for r in rows)
-    any_est = any(r["is_estimate"] for r in rows)
-    cat_tot, month_tot = {}, {}
-    for r in rows:
-        cat = r["category"] or "Uncategorized"
-        cat_tot.setdefault(cat, {"units": 0, "value": 0.0})
-        cat_tot[cat]["units"] += r["units"]
-        cat_tot[cat]["value"] += r["value"]
-        month = r["date"][:7]
-        month_tot.setdefault(month, {"units": 0, "value": 0.0})
-        month_tot[month]["units"] += r["units"]
-        month_tot[month]["value"] += r["value"]
-    top_category = max(cat_tot.items(), key=lambda kv: kv[1]["value"])[0] if cat_tot else None
-    monthly = []
-    today = date.today().replace(day=1)
-    for i in range(11, -1, -1):
-        y, m = today.year, today.month - i
-        while m <= 0:
-            m += 12
-            y -= 1
-        key = f"{y:04d}-{m:02d}"
-        monthly.append({"month": key, "units": month_tot.get(key, {}).get("units", 0), "value": round(month_tot.get(key, {}).get("value", 0), 2)})
-    by_category = [{"category": c, "units": t["units"], "value": round(t["value"], 2)} for c, t in cat_tot.items()]
-    by_category.sort(key=lambda x: x["value"], reverse=True)
-    return {
-        "summary": {
-            "total_units": total_units,
-            "total_value": round(total_value, 2),
-            "record_count": len(rows),
-            "top_category": top_category,
-            "has_estimated_values": any_est,
-        },
-        "monthly": monthly,
-        "by_category": by_category,
-        "details": rows[:100],
-    }
+    return {"summary": summary, "by_supplier": by_supplier, "by_category": by_category}
 
 
 def _linreg(xs, ys):
@@ -1068,7 +1562,7 @@ def forecast(request: Request, period: int = 30):
         return _unauthorized()
     if period not in (7, 30, 90):
         period = 30
-    history_days = 365
+    history_days = 1095
     history = []
     for row in fetch_all(
         """
@@ -1082,7 +1576,7 @@ def forecast(request: Request, period: int = 30):
                 SELECT sale_id, SUM(quantity) AS qty FROM sales_items GROUP BY sale_id
             ) q ON q.sale_id = s.sale_id
             WHERE LOWER(TRIM(s.status)) = 'completed'
-              AND s.date_created >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+              AND s.date_created::date >= (CURRENT_DATE - %s)
             GROUP BY s.date_created::date
             UNION ALL
             SELECT co.order_date::date AS sale_date,
@@ -1091,7 +1585,7 @@ def forecast(request: Request, period: int = 30):
             FROM customer_orders co
             LEFT JOIN order_details od ON od.order_id = co.order_id
             WHERE LOWER(TRIM(co.order_status)) IN ('completed', 'ready for pickup')
-              AND co.order_date >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+              AND co.order_date::date >= (CURRENT_DATE - %s)
             GROUP BY co.order_date::date
         ) t
         GROUP BY sale_date
@@ -1123,7 +1617,7 @@ def forecast(request: Request, period: int = 30):
             JOIN sales s ON si.sale_id = s.sale_id
             JOIN drugs_master d ON si.drug_id = d.drug_id
             WHERE LOWER(TRIM(s.status)) = 'completed'
-              AND s.date_created >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+              AND s.date_created::date >= (CURRENT_DATE - %s)
             GROUP BY d.drug_id, d.generic_name, d.brand_name, d.category, s.date_created::date
             UNION ALL
             SELECT d.drug_id, d.generic_name, d.brand_name, d.category,
@@ -1132,7 +1626,7 @@ def forecast(request: Request, period: int = 30):
             JOIN customer_orders co ON od.order_id = co.order_id
             JOIN drugs_master d ON od.drug_id = d.drug_id
             WHERE LOWER(TRIM(co.order_status)) IN ('completed', 'ready for pickup')
-              AND co.order_date >= (CURRENT_DATE - (%s * INTERVAL '1 day'))
+              AND co.order_date::date >= (CURRENT_DATE - %s)
             GROUP BY d.drug_id, d.generic_name, d.brand_name, d.category, co.order_date::date
         ) t
         GROUP BY drug_id, generic_name, brand_name, category, sale_date
@@ -1146,7 +1640,8 @@ def forecast(request: Request, period: int = 30):
             per_drug[did] = {"name": label, "category": row["category"], "series": []}
         per_drug[did]["series"].append({"date": _jsonable(row["sale_date"]), "qty": int(row["daily_qty"] or 0)})
     today = _manila_today()
-    range_start = today - timedelta(days=history_days)
+    first_sale = min(date.fromisoformat(str(p["date"])[:10]) for p in history)
+    range_start = max(first_sale, today - timedelta(days=history_days))
     payload = json.dumps({
         "period": period,
         "today": today.isoformat(),
@@ -1158,7 +1653,7 @@ def forecast(request: Request, period: int = 30):
     if script.exists():
         for cmd in (["python", str(script)], ["py", "-3", str(script)]):
             try:
-                proc = subprocess.run(cmd, input=payload, capture_output=True, text=True, timeout=20)
+                proc = subprocess.run(cmd, input=payload, capture_output=True, text=True, timeout=90)
                 if proc.returncode != 0:
                     continue
                 decoded = json.loads(proc.stdout or "{}")
@@ -1206,7 +1701,7 @@ def forecast(request: Request, period: int = 30):
     }
 
 
-SALES_TEMPLATE_HEADERS = ["date", "drug_id", "generic_name", "brand_name", "quantity", "unit_price"]
+SALES_TEMPLATE_HEADERS = ["Date", "Medicine", "Brand", "Quantity", "Price"]
 
 
 def _file_response(content: bytes, filename: str, kind: str):
@@ -1262,10 +1757,21 @@ def _parse_sale_date(row):
         return value.date()
     if isinstance(value, date):
         return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        from openpyxl.utils.datetime import from_excel
+        return from_excel(value).date()
     text = str(value or "").strip()
     if not text:
         raise ValueError("missing date")
-    return datetime.strptime(text[:10], "%Y-%m-%d").date()
+    head = text[:10]
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(head if fmt == "%Y-%m-%d" else text[:10], fmt).date()
+        except ValueError:
+            continue
+    if len(text) >= 10 and text[2] in "/-" and int(text[:2]) > 12:
+        return datetime.strptime(text[:10], "%d/%m/%Y" if "/" in text[:10] else "%d-%m-%Y").date()
+    raise ValueError("invalid date")
 
 
 def _cell(row, *names):
@@ -1273,6 +1779,89 @@ def _cell(row, *names):
         if name in row and row[name] not in (None, ""):
             return row[name]
     return ""
+
+
+def _whole_number(value):
+    if isinstance(value, bool):
+        raise ValueError("not a number")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not value.is_integer():
+            raise ValueError("not a whole number")
+        return int(value)
+    text = str(value or "").strip().replace(",", "")
+    if not re.fullmatch(r"\d+", text):
+        raise ValueError("not a whole number")
+    return int(text)
+
+
+def _money(value):
+    if isinstance(value, bool):
+        raise ValueError("not a price")
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value or "").strip().replace(",", "").replace("₱", "").replace("PHP", "")
+    if not text:
+        raise ValueError("missing price")
+    return float(text)
+
+
+def _inventory_label(drug):
+    name = str(drug.get("generic_name") or "").strip()
+    brand = str(drug.get("brand_name") or "").strip()
+    return f"{name} ({brand})" if brand else name
+
+
+def _match_inventory_drug(row, by_id, by_generic, by_brand):
+    problems = []
+    generic_raw = str(_cell(row, "generic_name", "generic", "drug", "medicine")).strip()
+    brand_raw = str(_cell(row, "brand_name", "brand")).strip()
+    generic = generic_raw.lower()
+    brand = brand_raw.lower()
+    drug = None
+    drug_id_raw = _cell(row, "drug_id", "id")
+    if drug_id_raw not in ("", None):
+        try:
+            drug = by_id.get(int(float(drug_id_raw)))
+        except (TypeError, ValueError):
+            drug = None
+        if drug is None:
+            problems.append("that drug id is not in the inventory")
+    generic_hits = by_generic.get(generic) or []
+    if generic and brand:
+        named = next((d for d in generic_hits if str(d.get("brand_name") or "").strip().lower() == brand), None)
+        if named is None:
+            known = [str(d.get("brand_name")).strip() for d in generic_hits if str(d.get("brand_name") or "").strip()]
+            hint = f" Use {', '.join(known)}" if known else ""
+            problems.append(f"brand \"{brand_raw}\" does not match {generic_raw} in the inventory.{hint}")
+        elif drug is not None and int(drug["drug_id"]) != int(named["drug_id"]):
+            problems.append(f"{generic_raw} ({brand_raw}) does not match that drug id")
+        else:
+            drug = named
+    elif generic and not brand:
+        if len(generic_hits) == 1:
+            drug = drug or generic_hits[0]
+        elif generic_hits:
+            known = [str(d.get("brand_name")).strip() or generic_raw for d in generic_hits]
+            problems.append(f"add the brand for {generic_raw}. In the inventory: {', '.join(known)}")
+        else:
+            brand_hits = by_brand.get(generic) or []
+            if len(brand_hits) == 1:
+                drug = drug or brand_hits[0]
+            else:
+                problems.append(f"{generic_raw} is not in the inventory")
+    elif brand and not generic:
+        brand_hits = by_brand.get(brand) or []
+        if len(brand_hits) == 1:
+            drug = drug or brand_hits[0]
+        elif brand_hits:
+            problems.append(f"brand \"{brand_raw}\" matches more than one medicine. Add the medicine name")
+        else:
+            problems.append(f"{brand_raw} is not in the inventory")
+    elif drug is None:
+        problems.append("medicine is required")
+    return drug, problems
 
 
 @router.get("/reports/sales-template")
@@ -1292,8 +1881,8 @@ def sales_template(request: Request):
         cell.font = font
         cell.alignment = Alignment(horizontal="left")
         ws.column_dimensions[cell.column_letter].width = 16
-    ws.append(["2026-08-01", 1, "Paracetamol", "Biogesic", 10, 5.50])
-    ws.append(["2026-08-01", "", "Amoxicillin", "", 4, 12.00])
+    ws.append(["2026-08-01", "Paracetamol", "Biogesic", 10, 5.50])
+    ws.append(["2026-08-02", "Amoxicillin", "", 4, 12.00])
     buf = io.BytesIO()
     wb.save(buf)
     return _file_response(buf.getvalue(), "pharmalink-sales-template.xlsx", "xlsx")
@@ -1315,64 +1904,64 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
 
     drugs = fetch_all("SELECT drug_id, generic_name, brand_name FROM drugs_master")
     by_id = {int(d["drug_id"]): d for d in drugs}
-    by_name = {}
+    by_generic = {}
+    by_brand = {}
     for d in drugs:
-        key = (str(d["generic_name"] or "").strip().lower(), str(d["brand_name"] or "").strip().lower())
-        by_name.setdefault(key, d)
-        by_name.setdefault((key[0], ""), d)
-
+        generic = str(d["generic_name"] or "").strip().lower()
+        brand = str(d["brand_name"] or "").strip().lower()
+        if generic:
+            by_generic.setdefault(generic, []).append(d)
+        if brand:
+            by_brand.setdefault(brand, []).append(d)
     grouped = {}
-    skipped = []
+    errors = []
+    today = _manila_today()
     for idx, row in enumerate(parsed, start=2):
+        row_errors = []
         try:
             sale_day = _parse_sale_date(row)
+            if sale_day > today:
+                row_errors.append(f"Row {idx}: date is in the future.")
         except Exception:
-            skipped.append(f"Row {idx}: invalid date")
-            continue
-        qty_raw = _cell(row, "quantity", "qty", "units")
+            sale_day = None
+            row_errors.append(f"Row {idx}: date must look like 2026-08-01.")
         try:
-            qty = int(float(qty_raw))
+            qty = _whole_number(_cell(row, "quantity", "qty", "units"))
+            if qty <= 0:
+                raise ValueError("quantity")
         except (TypeError, ValueError):
-            skipped.append(f"Row {idx}: invalid quantity")
-            continue
-        if qty <= 0:
-            skipped.append(f"Row {idx}: quantity must be greater than 0")
-            continue
-        drug = None
-        drug_id_raw = _cell(row, "drug_id", "id")
+            qty = 0
+            row_errors.append(f"Row {idx}: quantity must be a whole number greater than 0.")
         try:
-            if drug_id_raw not in ("", None):
-                drug = by_id.get(int(float(drug_id_raw)))
-        except (TypeError, ValueError):
-            drug = None
-        if not drug:
-            generic = str(_cell(row, "generic_name", "generic", "drug", "medicine")).strip().lower()
-            brand = str(_cell(row, "brand_name", "brand")).strip().lower()
-            drug = by_name.get((generic, brand)) or by_name.get((generic, ""))
-        if not drug:
-            skipped.append(f"Row {idx}: drug not found")
-            continue
-        price_raw = _cell(row, "unit_price", "price", "selling_price")
-        total_raw = _cell(row, "total", "amount", "line_total")
-        try:
-            price = float(price_raw) if price_raw not in ("", None) else 0.0
+            price = _money(_cell(row, "unit_price", "price", "selling_price"))
+            if price <= 0:
+                raise ValueError("price")
         except (TypeError, ValueError):
             price = 0.0
-        if price <= 0 and total_raw not in ("", None):
-            try:
-                price = float(total_raw) / qty
-            except (TypeError, ValueError, ZeroDivisionError):
-                price = 0.0
-        line_total = round(price * qty, 2)
+            row_errors.append(f"Row {idx}: price must be a number greater than 0.")
+        drug, match_problems = _match_inventory_drug(row, by_id, by_generic, by_brand)
+        for problem in match_problems:
+            row_errors.append(f"Row {idx}: {problem}.")
+        if row_errors:
+            errors.extend(row_errors)
+            continue
         grouped.setdefault(sale_day, []).append({
             "drug_id": int(drug["drug_id"]),
             "qty": qty,
             "price": price,
-            "subtotal": line_total,
+            "subtotal": round(price * qty, 2),
+            "label": _inventory_label(drug),
         })
 
+    if errors:
+        return {
+            "success": False,
+            "message": "Upload stopped. Nothing was saved. Fix the file and try again.",
+            "errors": errors[:20],
+            "error_count": len(errors),
+        }
     if not grouped:
-        return {"success": False, "message": "No valid rows to import.", "skipped": skipped[:20]}
+        return {"success": False, "message": "No data rows found. Check the header row and try again."}
 
     user_id = require_admin(request)
     imported_sales = 0
@@ -1380,7 +1969,22 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                lot_optional = True
+                try:
+                    cur.execute("ALTER TABLE sales_items ALTER COLUMN lot_id DROP NOT NULL")
+                except Exception:
+                    conn.rollback()
+                    lot_optional = False
                 for sale_day, items in grouped.items():
+                    for item in items:
+                        cur.execute(
+                            "SELECT lot_inventory_id FROM inventory_lots WHERE drug_id = %s ORDER BY lot_inventory_id LIMIT 1",
+                            (item["drug_id"],),
+                        )
+                        lot = cur.fetchone()
+                        if not lot and not lot_optional:
+                            raise ValueError(f"{item['label']} is not in the inventory.")
+                        item["lot_id"] = int(lot["lot_inventory_id"]) if lot else None
                     subtotal = round(sum(i["subtotal"] for i in items), 2)
                     sale_id = next_id(cur, "sales", "sale_id")
                     txn = f"IMP-{sale_day.strftime('%Y%m%d')}-{sale_id}"
@@ -1397,12 +2001,6 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
                     )
                     imported_sales += 1
                     for item in items:
-                        cur.execute(
-                            "SELECT lot_inventory_id FROM inventory_lots WHERE drug_id = %s ORDER BY lot_inventory_id LIMIT 1",
-                            (item["drug_id"],),
-                        )
-                        lot = cur.fetchone()
-                        lot_id = int(lot["lot_inventory_id"]) if lot else None
                         item_id = next_id(cur, "sales_items", "id")
                         cur.execute(
                             """
@@ -1410,27 +2008,29 @@ async def sales_upload(request: Request, file: UploadFile = File(...)):
                                 (id, sale_id, drug_id, lot_id, quantity, price, subtotal, discount_amount, vat_exempt)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, 0, 0)
                             """,
-                            (item_id, sale_id, item["drug_id"], lot_id, item["qty"], item["price"], item["subtotal"]),
+                            (item_id, sale_id, item["drug_id"], item["lot_id"], item["qty"], item["price"], item["subtotal"]),
                         )
                         imported_items += 1
-                _log(
-                    cur, request, "Upload Sales Data",
-                    f"Imported {imported_items} line(s) across {imported_sales} sale(s) from {file.filename}.",
-                )
+                if imported_items:
+                    _log(
+                        cur, request, "Upload Sales Data",
+                        f"Imported {imported_items} line(s) across {imported_sales} sale(s) from {file.filename}.",
+                    )
     except Exception as exc:
         return {"success": False, "message": "Could not save the uploaded sales. " + str(exc)}
+    if imported_items == 0:
+        return {"success": False, "message": "No data rows found. Check the header row and try again."}
     return {
         "success": True,
         "message": f"Imported {imported_items} line(s) in {imported_sales} sale(s). Inventory was not changed.",
         "sales": imported_sales,
         "items": imported_items,
-        "skipped": skipped[:20],
-        "skipped_count": len(skipped),
     }
 
 
+
 @router.get("/reports/export")
-def export_report(request: Request, kind: str = "", format: str = "xlsx", period: int = 30, months: int = 6):
+def export_report(request: Request, kind: str = "", format: str = "xlsx", period: int = 30, months: int = 6, start: str = "", end: str = ""):
     if not require_admin(request):
         return _unauthorized()
     fmt = "pdf" if str(format).lower() == "pdf" else "xlsx"
@@ -1457,9 +2057,9 @@ def export_report(request: Request, kind: str = "", format: str = "xlsx", period
         title = f"Sales Forecast ({data.get('period') or period} days)"
         filename = f"forecast-{period}d"
     elif kind == "consumption":
-        data = monthly_consumption(request, months=months)
+        data = monthly_consumption(request, months=months, start=start, end=end)
         month_labs = data.get("months") or []
-        headers = ["Drug", "Brand", "Category"] + month_labs + ["Total"]
+        headers = ["Medicine", "Brand", "Type"] + month_labs + ["Total"]
         rows = []
         for r in data.get("rows") or []:
             monthly = r.get("monthly") or {}
@@ -1470,33 +2070,57 @@ def export_report(request: Request, kind: str = "", format: str = "xlsx", period
             )
         totals = data.get("monthly_totals") or {}
         rows.append(["TOTAL", "", ""] + [totals.get(m, 0) for m in month_labs] + [sum(totals.values())])
-        title = f"Monthly Consumption ({len(month_labs)} months)"
+        title = f"Pieces sold each month ({len(month_labs)} months)"
         filename = f"consumption-{len(month_labs)}mo"
     elif kind == "procurement":
         data = procurement(request)
-        headers = ["Section", "Name", "Cost (PHP)", "Units", "Notes"]
-        rows = [["Summary", "Total inventory cost", (data.get("summary") or {}).get("total_inventory_cost"), (data.get("summary") or {}).get("total_units"), ""]]
+        headers = ["Section", "Name", "Cost (PHP)", "Pieces", "Notes"]
+        rows = [["Summary", "Total cost", (data.get("summary") or {}).get("total_inventory_cost"), (data.get("summary") or {}).get("total_units"), ""]]
         for r in data.get("by_supplier") or []:
-            rows.append(["Supplier", r.get("supplier_name"), r.get("total_cost"), r.get("total_units"), f"{r.get('distinct_drugs')} drugs"])
+            rows.append(["Supplier", r.get("supplier_name"), r.get("total_cost"), r.get("total_units"), f"{r.get('distinct_drugs')} medicines"])
         for r in data.get("by_category") or []:
-            rows.append(["Category", r.get("category"), r.get("total_cost"), "", ""])
-        for r in data.get("price_comparison") or []:
-            label = f"{r.get('generic_name')}" + (f" ({r.get('brand_name')})" if r.get("brand_name") else "")
-            rows.append(["Price gap", label, r.get("min_price"), "", f"High {r.get('max_price')} / save {r.get('savings_pct')}%"])
-        title = "Procurement Cost"
+            rows.append(["Type", r.get("category"), r.get("total_cost"), r.get("total_units"), ""])
+        title = "Cost of stock on hand"
         filename = "procurement"
-    elif kind == "expiry":
-        data = expiry_waste(request)
-        headers = ["Date", "Drug", "Category", "Lot", "Units lost", "Value (PHP)", "Adjusted by"]
-        rows = []
-        for r in data.get("details") or []:
-            rows.append([r.get("date"), r.get("label"), r.get("category"), r.get("lot_number"), r.get("units"), r.get("value"), r.get("admin_name")])
-        summary = data.get("summary") or {}
-        rows.append(["TOTAL", "", summary.get("top_category"), "", summary.get("total_units"), summary.get("total_value"), f"{summary.get('record_count')} records"])
-        title = "Expiry and Waste"
-        filename = "expiry-waste"
+    elif kind == "capital":
+        data = capital_at_risk(request)
+        if hasattr(data, "body"):
+            return data
+        headers = ["Medicine", "Brand", "Lot", "Supplier", "Expires", "Days left", "Pieces", "Unit cost", "Capital"]
+        rows = [[
+            "SUMMARY", "", "", "", "", "",
+            (data.get("expired_units") or 0) + (data.get("soon_units") or 0),
+            "",
+            data.get("total_capital"),
+        ]]
+        rows.append(["Expires within 30 days", "", "", "", "", "", data.get("soon_units"), "", data.get("soon_cost")])
+        rows.append(["Already expired, still in stock", "", "", "", "", "", data.get("expired_units"), "", data.get("expired_cost")])
+        for r in data.get("items") or []:
+            days_left = r.get("days_left")
+            days_label = "Expired" if r.get("bucket") == "expired" else days_left
+            rows.append([
+                r.get("generic_name"),
+                r.get("brand_name"),
+                r.get("lot_number"),
+                r.get("supplier_name"),
+                r.get("expiration_date"),
+                days_label,
+                r.get("current_stock"),
+                r.get("unit_cost"),
+                r.get("capital"),
+            ])
+        title = "Medicine capital at risk (30 days)"
+        filename = "capital-at-risk"
     else:
         return {"success": False, "message": "Unknown report type."}
+
+    kind_label = {
+        "forecast": "Sales forecast",
+        "consumption": "Monthly consumption",
+        "procurement": "Procurement cost",
+        "capital": "Medicine capital at risk",
+    }.get(kind, title)
+    log_event("Generate Report", f"Generated the {kind_label} report as {fmt.upper()}.", request=request)
 
     if fmt == "pdf":
         return _file_response(pdf_bytes(title, headers, rows), f"{filename}.pdf", "pdf")

@@ -178,7 +178,20 @@
     if (!root) return;
     ["first_name", "middle_name", "last_name"].forEach(function (name) {
       var el = root.querySelector("#" + name + ", [name='" + name + "']");
-      if (!el) return;
+      if (!el || el.dataset.nameBound) return;
+      el.dataset.nameBound = "1";
+      el.setAttribute("maxlength", "49");
+      el.addEventListener("input", function () {
+        var next = String(el.value || "")
+          .replace(/[^A-Za-zÑñ\s.'-]/g, "")
+          .replace(/^[^A-Za-zÑñ]+/, "");
+        if (el.value === next) return;
+        var pos = el.selectionStart || 0;
+        var removed = el.value.length - next.length;
+        el.value = next;
+        var nextPos = Math.max(0, pos - removed);
+        if (el.setSelectionRange) el.setSelectionRange(nextPos, nextPos);
+      });
       el.addEventListener("blur", function () {
         el.value = titleCaseName(el.value);
       });

@@ -189,12 +189,40 @@ a{ color:var(--ph-primary-600); }
 }
 .sidebar a[href="logout.php"]:hover{ background:var(--ph-danger); color:#fff; }
 
+.nav-toggle{
+  display:none;
+  width:40px; height:40px; min-width:40px; flex:0 0 40px;
+  margin:0; padding:0 !important;
+  border-radius:10px;
+  background:#1E3A34 !important; color:#fff !important;
+  box-shadow:none !important;
+  justify-content:center;
+}
+.nav-toggle:hover{ transform:none; background:#24544C !important; box-shadow:none !important; }
+.nav-backdrop{
+  display:none;
+  position:fixed; inset:0;
+  background:rgba(30,58,52,.45);
+  z-index:990;
+}
 @media (max-width:900px){
-  .sidebar{ width:76px; }
-  .sidebar h2, .sidebar-header h2, .sidebar .role, .role-badge{ display:none; }
-  .nav-item{ justify-content:center; padding:14px 0; }
-  .nav-item span{ display:none; }
-  .main{ margin-left:76px !important; }
+  .nav-toggle{ display:inline-flex; }
+  body.nav-open .nav-backdrop{ display:block; }
+  .header{ z-index:1100; gap:10px; }
+  .header h3{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sidebar{
+    top:72px; bottom:0; width:min(280px, 88vw); height:auto;
+    transform:translateX(-105%);
+    transition:transform .22s ease;
+    z-index:1000;
+  }
+  body.nav-open .sidebar{ transform:translateX(0); }
+  .sidebar-nav{ flex:1; min-height:0; overflow-y:auto; padding-bottom:72px; }
+  .main{ margin-left:0 !important; }
+}
+@media (max-width:720px){
+  .header{ height:56px; min-height:56px; padding:0 12px; }
+  .sidebar{ top:56px; }
 }
 
 /* ==========================================================================
@@ -298,6 +326,27 @@ a{ color:var(--ph-primary-600); }
 .staff-notif-dropdown.open,
 #notification-dropdown.open{ display:block; }
 
+/* On a phone the bell sits beside the menu, so a 320px panel anchored to
+   the bell runs off the left edge. Pin it to the screen instead. */
+@media (max-width: 900px) {
+  .staff-notif-dropdown,
+  #notification-dropdown {
+    position: fixed;
+    top: 80px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: calc(100vw - 24px);
+    z-index: 1200;
+  }
+}
+@media (max-width: 720px) {
+  .staff-notif-dropdown,
+  #notification-dropdown {
+    top: 64px;
+  }
+}
+
 .staff-notif-item{
   display:flex;
   gap:10px;
@@ -308,9 +357,31 @@ a{ color:var(--ph-primary-600); }
   color:var(--ph-text);
   line-height:1.4;
 }
+.staff-notif-item.is-new{
+  background:#FFF7E6;
+  border-left:3px solid var(--ph-gold, #FFC857);
+  animation:staffNotifPulse 1.1s ease 3;
+}
+.staff-notif-new{
+  display:inline-block;
+  margin-left:6px;
+  padding:1px 6px;
+  border-radius:999px;
+  background:var(--ph-gold, #FFC857);
+  color:#1E3A34;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.04em;
+  vertical-align:middle;
+}
+@keyframes staffNotifPulse{
+  0%, 100%{ background:#FFF7E6; }
+  50%{ background:#FFE3B3; }
+}
 .staff-notif-item:last-child{ border-bottom:none; }
 .staff-notif-item[role="button"]{ cursor:pointer; }
 .staff-notif-item[role="button"]:hover{ background:var(--ph-surface-2); }
+.staff-notif-item.is-new[role="button"]:hover{ background:#FFE9B8; }
 .staff-notif-item[role="button"]:focus{
   outline:2px solid var(--ph-primary-200);
   outline-offset:-2px;
@@ -460,6 +531,13 @@ a{ color:var(--ph-primary-600); }
   justify-content:center;
   padding:0 4px;
   border:2px solid var(--ph-surface);
+}
+.notification.has-new .notification-badge{
+  animation:staffBadgePulse 1s ease infinite;
+}
+@keyframes staffBadgePulse{
+  0%, 100%{ transform:scale(1); }
+  50%{ transform:scale(1.18); }
 }
 
 .content{ flex:1; padding:20px 34px 30px; overflow-y:auto; background:#ffffff; }
@@ -659,6 +737,16 @@ input, textarea, select, .p-input{
   color:var(--ph-text);
   background:var(--ph-surface);
   transition:border-color var(--ph-fast), box-shadow var(--ph-fast);
+}
+input[type="checkbox"],
+input[type="radio"]{
+  width:auto;
+  height:auto;
+  padding:0;
+  margin:0;
+  border:none;
+  box-shadow:none;
+  background:transparent;
 }
 input:focus, textarea:focus, select:focus{
   outline:none;
@@ -1018,6 +1106,13 @@ button.login-btn:hover{ filter:brightness(1.08); }
 }
 @media (max-width: 640px){
   .profile-hero{ flex-direction:column; align-items:flex-start; }
+  #profile .profile-hero{
+    align-items:center; width:100%; text-align:center;
+  }
+  #profile .profile-hero-copy,
+  #profile .profile-hero-copy h3,
+  #profile .profile-username{ text-align:center; width:100%; }
+  #profile .profile-hero .profile-pill-row{ justify-content:center; }
   .profile-card-head{ flex-direction:column; }
   .profile-card-head .profile-action-row{ width:100%; }
 }
@@ -1033,4 +1128,66 @@ button.login-btn:hover{ filter:brightness(1.08); }
 button:focus-visible, .nav-item:focus-visible, a:focus-visible{
   outline:2px solid var(--ph-primary-500);
   outline-offset:2px;
+}
+
+.ph-push-banner{
+  position:fixed;
+  left:12px;
+  right:12px;
+  bottom:12px;
+  z-index:12000;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px;
+  padding:12px 14px;
+  background:#1E3A34;
+  color:#FFF7E6;
+  border-radius:14px;
+  box-shadow:0 10px 28px rgba(30,58,52,.28);
+  pointer-events:auto;
+  touch-action:manipulation;
+}
+.ph-push-banner span{ flex:1 1 180px; font-size:14px; font-weight:600; }
+.ph-push-banner button,
+.ph-push-banner button:hover,
+.ph-push-banner button:active{
+  position:relative;
+  z-index:1;
+  border:0;
+  border-radius:999px;
+  padding:8px 14px;
+  font-weight:700;
+  cursor:pointer;
+  transform:none !important;
+  touch-action:manipulation;
+  pointer-events:auto;
+}
+.ph-push-enable,
+.ph-push-enable:hover{ background:#FFC857 !important; color:#1E3A34 !important; }
+.ph-push-later,
+.ph-push-later:hover{ background:transparent !important; color:#FFF7E6 !important; box-shadow:none !important; }
+
+/* Phone date fields ignore width unless the native look is turned off. */
+@media (max-width: 900px){
+  input[type="date"]{
+    -webkit-appearance:none;
+    appearance:none;
+    display:block;
+    width:100% !important;
+    min-width:0 !important;
+    max-width:100% !important;
+    box-sizing:border-box !important;
+    text-align:left;
+  }
+  input[type="date"]::-webkit-date-and-time-value{
+    text-align:left;
+    margin:0;
+    min-width:0;
+  }
+  input[type="date"]::-webkit-datetime-edit{
+    display:inline-block;
+    min-width:0;
+    padding:0;
+  }
 }

@@ -1,10 +1,6 @@
 /**
- * supplier.js - Supplier Management module (admin/admin.php, #supplier-section)
- *
- * Talks to: get_suppliers.php, add_supplier.php, update_supplier.php
- *
- * Exposes window.initializeSupplierModule(), which admin.php calls the
- * first time (and every time) the "Supplier" nav item is clicked.
+ * supplier.js - Supplier list for the admin page.
+ * The table stays one line per supplier. Add and edit open a popup.
  */
 (function () {
     let eventsBound = false;
@@ -23,53 +19,30 @@
         return `<span class="sup-badge ${cls}">${escapeHtml(status || 'Active')}</span>`;
     }
 
-    function renderSupplierCard(s) {
-        const medicines = Array.isArray(s.medicines_supplied) ? s.medicines_supplied : [];
-        const shown = medicines.slice(0, 5).map(m =>
-            `<span class="sup-chip">${escapeHtml(m)}</span>`
-        ).join('');
-        const medsHtml = medicines.length
-            ? shown + (medicines.length > 5 ? `<span class="sup-chip-more">+${medicines.length - 5} more</span>` : '')
-            : `<span class="sup-chip-empty">No medicines linked yet</span>`;
-
-        const reasonHtml = (s.status === 'Inactive' && s.inactive_reason)
-            ? `<p class="sup-reason"><i class="fas fa-circle-info"></i> ${escapeHtml(s.inactive_reason)}</p>`
-            : '';
-
-        const policy = String(s.consignment_policy || 'none').toLowerCase();
-        const policyLabel = policy === 'returnable'
-            ? 'Consignment: returnable'
-            : (policy === 'non_returnable' ? 'Consignment: non-returnable' : 'No consignment policy');
-        const policyChip = `<span class="sup-chip">${escapeHtml(policyLabel)}</span>`;
+    function renderRow(s) {
+        const medicines = supplierMedicines(s);
+        const countLabel = medicines.length ? String(medicines.length) : '0';
+        const tip = medicines.length
+            ? medicines.map(m => m.generic_name).join(', ')
+            : 'No medicines linked yet';
+        const contact = s.contact_number || s.email || '—';
         const isActive = s.status === 'Active';
 
         return `
-        <div class="supplier-card" data-id="${s.supplier_id}">
-            <div class="sup-card-top">
-                <div>
-                    <h3>${escapeHtml(s.supplier_name)}</h3>
-                    ${statusBadge(s.status)}
-                </div>
-                <div class="sup-card-actions">
-                    <button type="button" class="sup-icon-btn edit-supplier-btn" title="Edit supplier"><i class="fas fa-pen"></i></button>
-                    <button type="button" class="sup-icon-btn toggle-supplier-btn ${isActive ? 'is-active' : 'is-inactive'}" title="${isActive ? 'Deactivate' : 'Reactivate'}">
+        <tr data-id="${s.supplier_id}">
+            <td class="sup-name">${escapeHtml(s.supplier_name)}</td>
+            <td class="sup-contact" data-label="Contact" title="${escapeHtml(contact)}">${escapeHtml(contact)}</td>
+            <td data-label="Status">${statusBadge(s.status)}</td>
+            <td data-label="Medicines"><button type="button" class="sup-count" title="${escapeHtml(tip)}" aria-label="Show medicines">${countLabel}</button></td>
+            <td data-label="Actions">
+                <div class="sup-actions">
+                    <button type="button" class="um-btn um-btn-edit edit-supplier-btn" title="Edit" aria-label="Edit"><i class="fas fa-pen"></i></button>
+                    <button type="button" class="um-btn ${isActive ? 'um-btn-danger' : 'um-btn-activate'} toggle-supplier-btn" title="${isActive ? 'Deactivate' : 'Reactivate'}" aria-label="${isActive ? 'Deactivate' : 'Reactivate'}">
                         <i class="fas ${isActive ? 'fa-ban' : 'fa-rotate-left'}"></i>
                     </button>
                 </div>
-            </div>
-            <div class="sup-meta">
-                <div><i class="fas fa-phone"></i> ${escapeHtml(s.contact_number) || '-'}</div>
-                <div><i class="fas fa-envelope"></i> ${escapeHtml(s.email) || '-'}</div>
-                <div><i class="fas fa-location-dot"></i> ${escapeHtml(s.address) || '-'}</div>
-            </div>
-            <div class="sup-meds">
-                <p class="sup-meds-label">Consignment policy</p>
-                ${policyChip}
-                <p class="sup-meds-label">Medicines supplied</p>
-                ${medsHtml}
-            </div>
-            ${reasonHtml}
-        </div>`;
+            </td>
+        </tr>`;
     }
 
     function applyFiltersAndRender() {
@@ -80,20 +53,26 @@
         const statusFilter = document.getElementById('supplier-status-filter')?.value || 'all';
 
         const filtered = allSuppliers.filter(s => {
-            if (search && !(s.supplier_name || '').toLowerCase().includes(search)) return false;
+            if (search) {
+                const nameHit = (s.supplier_name || '').toLowerCase().includes(search);
+                const medHit = supplierMedicines(s).some(m =>
+                    [m.generic_name, m.brand_name, m.dosage].join(' ').toLowerCase().includes(search)
+                );
+                if (!nameHit && !medHit) return false;
+            }
             if (statusFilter === 'active' && s.status !== 'Active') return false;
             if (statusFilter === 'inactive' && s.status !== 'Inactive') return false;
             return true;
         });
 
         list.innerHTML = filtered.length
-            ? filtered.map(renderSupplierCard).join('')
-            : '<p class="empty-message">No suppliers found.</p>';
+            ? filtered.map(renderRow).join('')
+            : '<tr><td colspan="5" class="empty-message">No suppliers found.</td></tr>';
     }
 
     function fetchSuppliers() {
         const list = document.querySelector('.supplier-list');
-        if (list) list.innerHTML = '<p class="empty-message">Loading suppliers...</p>';
+        if (list) list.innerHTML = '<tr><td colspan="5" class="empty-message">Loading suppliers...</td></tr>';
 
         return fetch('/api/admin/suppliers')
             .then(res => {
@@ -106,49 +85,96 @@
             })
             .catch(err => {
                 console.error('Failed to load suppliers:', err);
-                if (list) list.innerHTML = '<p class="empty-message empty-error">Failed to load suppliers. Please try again.</p>';
+                if (list) list.innerHTML = '<tr><td colspan="5" class="empty-message empty-error">Failed to load suppliers. Please try again.</td></tr>';
             });
     }
 
-    function openSupplierModal(mode, supplier) {
-        const isEdit = mode === 'edit';
+    function supplierMedicines(supplier) {
+        const raw = supplier && Array.isArray(supplier.medicines_supplied) ? supplier.medicines_supplied : [];
+        return raw.map(item => {
+            if (typeof item === 'string') return { generic_name: item, brand_name: '', dosage: '' };
+            return {
+                generic_name: item.generic_name || '',
+                brand_name: item.brand_name || '',
+                dosage: item.dosage || '',
+            };
+        }).filter(item => item.generic_name || item.brand_name);
+    }
 
+    function openMedicineList(supplier) {
+        const medicines = supplierMedicines(supplier);
+        const countText = medicines.length === 1 ? '1 medicine' : medicines.length + ' medicines';
+        const rows = medicines.length
+            ? medicines.map(m => `
+                <tr>
+                    <td>${escapeHtml(m.generic_name || '—')}</td>
+                    <td>${escapeHtml(m.brand_name || '—')}</td>
+                    <td>${escapeHtml(m.dosage || '—')}</td>
+                </tr>`).join('')
+            : '<tr><td colspan="3" class="is-empty">No medicines linked yet.</td></tr>';
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay um-modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal-content um-modal-card sup-meds-modal" role="dialog" aria-modal="true">
+                <div class="sup-meds-pop-head">
+                    <div>
+                        <p class="sup-meds-pop-kicker">Medicines supplied</p>
+                        <h3>${escapeHtml(supplier.supplier_name || 'Supplier')}</h3>
+                    </div>
+                    <button type="button" class="close-modal" aria-label="Close">&times;</button>
+                </div>
+                <p class="sup-meds-pop-count">${countText}</p>
+                <div class="sup-meds-pop-table-wrap">
+                    <table class="sup-meds-pop-table">
+                        <thead>
+                            <tr>
+                                <th>Generic name</th>
+                                <th>Brand</th>
+                                <th>Dosage</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.querySelector('.close-modal').onclick = close;
+        overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    }
+
+    function openSupplierModal(mode, supplier) {
+        const isEdit = mode === 'edit' && supplier;
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay um-modal-overlay';
 
         overlay.innerHTML = `
-            <div class="modal-content um-modal-card">
+            <div class="modal-content um-modal-card sup-modal">
                 <div class="um-modal-head">
-                    <h3>${isEdit ? 'Edit Supplier' : 'Add Supplier'}</h3>
+                    <h3>${isEdit ? 'Edit supplier' : 'Add supplier'}</h3>
                     <span class="close-modal" title="Close">&times;</span>
                 </div>
                 <form id="supplierForm">
-                    <label for="sf-name">Supplier Name</label>
+                    <label for="sf-name">Supplier name</label>
                     <input type="text" id="sf-name" required value="${isEdit ? escapeHtml(supplier.supplier_name) : ''}">
-                    <label for="sf-contact">Contact Number</label>
+                    <label for="sf-contact">Contact number</label>
                     <input type="text" id="sf-contact" value="${isEdit ? escapeHtml(supplier.contact_number) : ''}">
                     <label for="sf-email">Email</label>
                     <input type="email" id="sf-email" value="${isEdit ? escapeHtml(supplier.email) : ''}">
                     <label for="sf-address">Address</label>
                     <input type="text" id="sf-address" value="${isEdit ? escapeHtml(supplier.address) : ''}">
-                    <label for="sf-consignment">Consignment policy</label>
-                    <select id="sf-consignment">
-                        <option value="none" ${!isEdit || supplier.consignment_policy === 'none' || !supplier.consignment_policy ? 'selected' : ''}>None (not consignment)</option>
-                        <option value="returnable" ${isEdit && supplier.consignment_policy === 'returnable' ? 'selected' : ''}>Returnable</option>
-                        <option value="non_returnable" ${isEdit && supplier.consignment_policy === 'non_returnable' ? 'selected' : ''}>Non-returnable</option>
-                    </select>
                     ${isEdit ? `
                     <label for="sf-status">Status</label>
                     <select id="sf-status">
                         <option value="Active" ${supplier.status === 'Active' ? 'selected' : ''}>Active</option>
                         <option value="Inactive" ${supplier.status === 'Inactive' ? 'selected' : ''}>Inactive</option>
                     </select>
-                    <div id="sf-reason-wrap" style="display:${supplier.status === 'Inactive' ? 'block' : 'none'};">
-                        <label for="sf-reason">Reason for Deactivation</label>
-                        <input type="text" id="sf-reason" value="${escapeHtml(supplier.inactive_reason || '')}" placeholder="e.g. No longer supplying">
+                    <div id="sf-reason-wrap" ${supplier.status === 'Inactive' ? '' : 'hidden'}>
+                        <label for="sf-reason">Reason for deactivation</label>
+                        <input type="text" id="sf-reason" value="${escapeHtml(supplier.inactive_reason || '')}" placeholder="Example: No longer supplying">
                     </div>` : ''}
                     <button type="submit">
-                        <i class="fas fa-floppy-disk"></i> ${isEdit ? 'Save Changes' : 'Add Supplier'}
+                        <i class="fas fa-floppy-disk"></i> ${isEdit ? 'Save changes' : 'Add supplier'}
                     </button>
                 </form>
             </div>`;
@@ -162,7 +188,7 @@
         if (statusSelect) {
             statusSelect.addEventListener('change', () => {
                 const wrap = overlay.querySelector('#sf-reason-wrap');
-                if (wrap) wrap.style.display = statusSelect.value === 'Inactive' ? 'block' : 'none';
+                if (wrap) wrap.hidden = statusSelect.value !== 'Inactive';
             });
         }
 
@@ -172,19 +198,25 @@
                 name: overlay.querySelector('#sf-name').value.trim(),
                 contact: overlay.querySelector('#sf-contact').value.trim(),
                 email: overlay.querySelector('#sf-email').value.trim(),
-                address: overlay.querySelector('#sf-address').value.trim(),
-                consignment_policy: overlay.querySelector('#sf-consignment')?.value || 'none',
+                address: overlay.querySelector('#sf-address').value.trim()
             };
-            if (!payload.name) { alert('Supplier name is required.'); return; }
+            if (!payload.name) {
+                alert('Supplier name is required.');
+                return;
+            }
 
             let url = '/api/admin/suppliers';
             if (isEdit) {
                 url = '/api/admin/suppliers/update';
                 payload.supplier_id = supplier.supplier_id;
                 payload.status = overlay.querySelector('#sf-status').value;
-                payload.inactive_reason = overlay.querySelector('#sf-reason')?.value.trim() || '';
+                payload.inactive_reason = payload.status === 'Inactive'
+                    ? (overlay.querySelector('#sf-reason')?.value.trim() || '')
+                    : '';
             }
 
+            const submitBtn = overlay.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
             fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -199,7 +231,8 @@
                         alert(result.message || 'Something went wrong. Please try again.');
                     }
                 })
-                .catch(err => alert('Error: ' + err.message));
+                .catch(err => alert('Error: ' + err.message))
+                .finally(() => { submitBtn.disabled = false; });
         });
     }
 
@@ -213,30 +246,27 @@
                 contact: supplier.contact_number,
                 email: supplier.email,
                 address: supplier.address,
-                consignment_policy: supplier.consignment_policy || 'none',
                 status,
                 inactive_reason: reason
             })
         })
             .then(res => res.json())
             .then(result => {
-                if (result.success) {
-                    fetchSuppliers();
-                } else {
-                    alert(result.message || 'Something went wrong. Please try again.');
-                }
+                if (result.success) fetchSuppliers();
+                else alert(result.message || 'Something went wrong. Please try again.');
             })
             .catch(err => alert('Error: ' + err.message));
     }
 
     function handleListClick(e) {
-        const card = e.target.closest('.supplier-card');
-        if (!card) return;
-        const id = card.getAttribute('data-id');
-        const supplier = allSuppliers.find(s => String(s.supplier_id) === String(id));
+        const row = e.target.closest('tr[data-id]');
+        if (!row) return;
+        const supplier = allSuppliers.find(s => String(s.supplier_id) === String(row.getAttribute('data-id')));
         if (!supplier) return;
 
-        if (e.target.closest('.edit-supplier-btn')) {
+        if (e.target.closest('.sup-count')) {
+            openMedicineList(supplier);
+        } else if (e.target.closest('.edit-supplier-btn')) {
             openSupplierModal('edit', supplier);
         } else if (e.target.closest('.toggle-supplier-btn')) {
             if (supplier.status === 'Active') {

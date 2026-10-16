@@ -30,6 +30,30 @@ onCustomerReady(function() {
     const clearCartBtn = document.getElementById('clear-cart-btn');
     const emptyCartMessage = document.getElementById('emptyCartMessage');
 
+    function orderNoLabel(row) {
+        if ((row && row.kind) === 'online' && row.order_id) return 'ORD-' + row.order_id;
+        return '';
+    }
+
+    function shortTxnId(value) {
+        const s = String(value || '').trim();
+        const parts = /^TXN-\d+-(\d+)$/i.exec(s);
+        return parts ? ('TXN-' + parts[1]) : s;
+    }
+
+    function txnLabel(row) {
+        const txn = String((row && row.transaction_id) || '').trim();
+        if (txn) return shortTxnId(txn);
+        if ((row && row.kind) === 'walkin') return 'SALE-' + row.order_id;
+        return orderNoLabel(row) || ('ORD-' + ((row && row.order_id) || ''));
+    }
+
+    function txnSubLabel(row) {
+        const ord = orderNoLabel(row);
+        if (!ord) return '';
+        return ord === txnLabel(row) ? '' : ord;
+    }
+
     // Modals
     const receiptModal = document.getElementById('receiptModal');
     const receiptContent = document.getElementById('receiptContent');
@@ -61,6 +85,10 @@ onCustomerReady(function() {
     if (categoryFilter) {
         categoryFilter.addEventListener('change', applyProductFilters);
     }
+    const productSort = document.getElementById('productSort');
+    if (productSort) {
+        productSort.addEventListener('change', applyProductFilters);
+    }
     if (closeReceiptModal) {
         closeReceiptModal.addEventListener('click', () => {
             receiptModal.style.display = 'none';
@@ -69,6 +97,7 @@ onCustomerReady(function() {
     // ⭐ Close Listener para sa Order Details Modal
     if (closeOrderDetailsModal) {
         closeOrderDetailsModal.addEventListener('click', () => {
+            stopOrderPayPoll();
             if (orderDetailsModal) {
                 orderDetailsModal.style.display = 'none';
             }
@@ -192,8 +221,10 @@ if (target === 'orders') {
             const kind = row.kind === 'walkin' ? 'walkin' : 'online';
             const kindLabel = kind === 'walkin' ? 'Walk-in' : 'Online';
             const cls = homeStatusClass(row.order_status);
+            const ord = txnSubLabel(row);
+            const fullTxn = String(row.transaction_id || '').trim();
             return `<tr>
-                <td><strong>#${row.order_id}</strong></td>
+                <td><strong${fullTxn ? ` title="${fullTxn}"` : ''}>${txnLabel(row)}</strong>${ord ? `<div class="dash-item-sub">${ord}</div>` : ''}</td>
                 <td>${row.order_date || '-'}</td>
                 <td><span class="dash-kind dash-kind-${kind}">${kindLabel}</span></td>
                 <td><span class="mo-pay">${homePayLabel(row.payment_method)}</span></td>
@@ -256,8 +287,13 @@ if (target === 'orders') {
                     btn.setAttribute('data-stock', stock);
 
                     const card = btn.closest('.product');
-                    const stockLabel = card ? card.querySelector('p[style*="color:#888"]') : null;
-                    if (stockLabel) stockLabel.textContent = stock > 0 ? `${stock} in stock` : 'Out of stock';
+                    if (card) card.setAttribute('data-stock', String(stock));
+                    const stockLabel = card ? card.querySelector('.shop-stock') : null;
+                    if (stockLabel) {
+                        stockLabel.textContent = stock > 0 ? `${stock} in stock` : 'Out of stock';
+                        stockLabel.classList.remove('shop-stock-ok', 'shop-stock-low', 'shop-stock-out');
+                        stockLabel.classList.add(stock <= 0 ? 'shop-stock-out' : (stock <= 10 ? 'shop-stock-low' : 'shop-stock-ok'));
+                    }
 
                     if (stock <= 0) {
                         btn.disabled = true;
@@ -269,6 +305,7 @@ if (target === 'orders') {
                         btn.style.cursor = 'pointer';
                     }
                 });
+                applyProductFilters();
             })
             .catch(err => console.error('Product stock refresh failed:', err));
     };
@@ -301,6 +338,7 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
         })
         .then(data => {
             customerOrdersCache = data.orders || [];
+            ordersPage = 1;
             renderCustomerOrdersTable();
             setupOrderFilterListener();
         })
@@ -311,9 +349,31 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
 };
 
     let customerOrdersCache = [];
+    let ordersPage = 1;
+    const ORDERS_PAGE_SIZE = 10;
+
+    function paintOrdersPager(total) {
+        const pages = Math.max(1, Math.ceil(total / ORDERS_PAGE_SIZE) || 1);
+        if (ordersPage > pages) ordersPage = pages;
+        if (ordersPage < 1) ordersPage = 1;
+        const info = document.getElementById('orders-page-info');
+        const prev = document.getElementById('orders-prev');
+        const next = document.getElementById('orders-next');
+        if (info) info.textContent = `Page ${ordersPage} of ${pages} (${total} results)`;
+        if (prev) prev.disabled = ordersPage <= 1;
+        if (next) next.disabled = ordersPage >= pages || !total;
+        return (ordersPage - 1) * ORDERS_PAGE_SIZE;
+    }
 
     function orderSearchQuery() {
         return String(document.getElementById('order_search')?.value || '').trim().toLowerCase();
+    }
+
+    function orderPayText(row) {
+        const label = orderPayLabel(row.payment_method || (row.kind === 'walkin' ? 'cash' : 'cash'));
+        const method = String(row.payment_method || '').toLowerCase();
+        if (row.kind === 'walkin' || (method !== 'gcash' && method !== 'maya')) return label;
+        return label + (String(row.payment_status || '').toLowerCase() === 'paid' ? ' · Paid' : ' · Unpaid');
     }
 
     function orderPayLabel(method) {
@@ -330,6 +390,9 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
         if (!q) return true;
         const hay = [
             row.order_id,
+            row.transaction_id,
+            txnLabel(row),
+            orderNoLabel(row),
             row.order_date,
             row.total_amount,
             row.order_status,
@@ -357,6 +420,7 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
         if (countEl) countEl.textContent = String(rows.length);
         if (openEl) openEl.textContent = String(openCount);
         if (spentEl) spentEl.textContent = '₱' + spent.toFixed(2);
+        const start = paintOrdersPager(rows.length);
         if (!rows.length) {
             const title = customerOrdersCache.length ? 'No matching orders' : 'No orders found';
             const hint = customerOrdersCache.length
@@ -369,17 +433,22 @@ window.loadCustomerOrders = function(type = 'all', startDate = '', endDate = '')
             </td></tr>`;
             return;
         }
-        tbody.innerHTML = rows.map(row => {
+        tbody.innerHTML = rows.slice(start, start + ORDERS_PAGE_SIZE).map(row => {
             const cls = String(row.order_status || '').toLowerCase().replace(/\s+/g, '-');
-            const pay = orderPayLabel(row.payment_method || (row.kind === 'walkin' ? 'cash' : 'cash'));
+            const pay = orderPayText(row);
             const kind = row.kind === 'walkin' ? 'walkin' : 'online';
+            const pendingCancel = kind === 'online' && String(row.order_status || '').toLowerCase() === 'pending'
+                ? `<button type="button" class="mo-cancel" onclick="cancelPendingOrder(${Number(row.order_id)})">Cancel</button>`
+                : '';
+            const ord = txnSubLabel(row);
+            const fullTxn = String(row.transaction_id || '').trim();
             return `<tr>
-                <td><strong>#${row.order_id}</strong></td>
+                <td><strong${fullTxn ? ` title="${fullTxn}"` : ''}>${txnLabel(row)}</strong>${ord ? `<div class="dash-item-sub">${ord}</div>` : ''}</td>
                 <td>${row.order_date || '-'}</td>
                 <td><span class="mo-pay">${pay}</span></td>
                 <td><span class="status ${cls}">${row.order_status || '-'}</span></td>
                 <td class="mo-amt-cell">₱${row.total_amount}</td>
-                <td><button type="button" class="mo-view" onclick="showOrderDetails(${row.order_id}, '${kind}')"><i class="fas fa-eye"></i> View</button></td>
+                <td><button type="button" class="mo-view" onclick="showOrderDetails(${row.order_id}, '${kind}')"><i class="fas fa-eye"></i> View</button>${pendingCancel}</td>
             </tr>`;
         }).join('');
     }
@@ -472,10 +541,14 @@ function displayOrderDetails(data) {
         const calculatedTotal = data.items.reduce((sum, item) => sum + (item.ordered_qty * item.price_per_unit), 0);
         const statusColor = getStatusColor(data.status);
 
+        const detailTxn = txnLabel(data);
+        const detailOrd = txnSubLabel(data);
+        const fullTxn = String(data.transaction_id || '').trim();
         orderDetailsContent.innerHTML = `
             <div class="mo-detail-head">
-                <h4>Order #${data.order_id}</h4>
+                <h4${fullTxn ? ` title="${fullTxn}"` : ''}>${detailTxn}</h4>
                 <p>${data.customer_name || ''}</p>
+                ${detailOrd ? `<p>Order ${detailOrd}</p>` : ''}
             </div>
             <div class="mo-detail-row"><span>Status</span><strong style="color:${statusColor};">${data.status}</strong></div>
             <table class="mo-detail-items">
@@ -491,12 +564,119 @@ function displayOrderDetails(data) {
                 <span>Total</span>
                 <span>₱${calculatedTotal.toFixed(2)}</span>
             </div>
-            <p class="mo-detail-note">${data.kind === 'walkin'
-                ? 'Paid at the cashier (walk-in sale).'
-                : (String(data.payment_method || '').toLowerCase() === 'gcash' || String(data.payment_method || '').toLowerCase() === 'maya'
-                    ? 'Paid online with GCash or Maya. Pickup after payment.'
-                    : 'Cash will be collected at pickup.')}</p>
+            <p class="mo-detail-note">${orderPaymentNote(data)}</p>
+            ${String(data.kind || '') !== 'walkin' && String(data.status || '').toLowerCase() === 'pending'
+                ? `<div class="mo-detail-actions"><button type="button" class="mo-cancel" onclick="cancelPendingOrder(${Number(data.order_id)})">Cancel order</button><p>You can cancel while this order is still pending. The items go back in stock.</p></div>`
+                : ''}
+            <div class="mo-pay-qr" id="orderPayBox"></div>
         `;
+        startOrderPayment(data);
+    }
+
+    window.cancelPendingOrder = function(orderId) {
+        const ask = typeof window.phConfirm === 'function'
+            ? window.phConfirm('Cancel this pending order? The items go back in stock.', 'Cancel order')
+            : Promise.resolve(window.confirm('Cancel this pending order? The items go back in stock.'));
+        Promise.resolve(ask).then((ok) => {
+            if (!ok) return;
+            fetch('/api/customer/orders/' + encodeURIComponent(orderId) + '/cancel', {
+                method: 'POST',
+                credentials: 'same-origin',
+            })
+                .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+                .then(({ ok, data }) => {
+                    if (!ok || !data.success) {
+                        alert((data && data.message) || 'Could not cancel this order.');
+                        return;
+                    }
+                    alert(data.message || 'Order cancelled. The items are back in stock.');
+                    if (orderDetailsModal) orderDetailsModal.style.display = 'none';
+                    const type = document.querySelector('.order-type-tab.active')?.dataset.type || 'all';
+                    const start = document.getElementById('order_start_date')?.value || '';
+                    const end = document.getElementById('order_end_date')?.value || '';
+                    if (typeof window.loadCustomerOrders === 'function') window.loadCustomerOrders(type, start, end);
+                    if (typeof window.loadHomeStats === 'function') window.loadHomeStats();
+                    if (typeof window.refreshProductStock === 'function') window.refreshProductStock();
+                })
+                .catch(() => alert('Could not cancel this order.'));
+        });
+    };
+
+    let orderPayTimer = null;
+
+    function stopOrderPayPoll() {
+        if (orderPayTimer) {
+            clearInterval(orderPayTimer);
+            orderPayTimer = null;
+        }
+    }
+
+    function orderPaymentNote(data) {
+        const method = String(data.payment_method || 'cash').toLowerCase();
+        const paid = String(data.payment_status || '').toLowerCase() === 'paid';
+        const ready = String(data.status || '').toLowerCase().includes('ready');
+        if (data.kind === 'walkin') return 'Paid at the cashier (walk-in sale).';
+        if (method !== 'gcash' && method !== 'maya') return 'Cash will be collected at pickup.';
+        if (paid) return 'Paid with ' + orderPayLabel(method) + '. Pick up the order at the store.';
+        if (ready) return 'Scan the QR code to pay. You can do this from home.';
+        return orderPayLabel(method) + ' payment opens after the cashier marks this Ready for Pickup.';
+    }
+
+    function paintOrderQr(box, method, payload) {
+        if (!box) return;
+        box.textContent = '';
+        const note = document.createElement('p');
+        if (payload.paid || payload.payment_status === 'paid') {
+            stopOrderPayPoll();
+            note.textContent = 'Payment received. You can pick this up at the store.';
+            box.appendChild(note);
+            return;
+        }
+        if (payload.qr_image) {
+            const img = document.createElement('img');
+            img.alt = 'Scan to pay';
+            img.src = payload.qr_image;
+            const amount = Number(payload.amount || 0).toFixed(2);
+            note.textContent = 'Scan with ' + orderPayLabel(method) + ' to pay ₱' + amount + '.';
+            box.appendChild(img);
+            box.appendChild(note);
+            return;
+        }
+        note.textContent = payload.message || 'QR code is not ready yet.';
+        box.appendChild(note);
+    }
+
+    function startOrderPayment(data) {
+        stopOrderPayPoll();
+        const method = String(data.payment_method || '').toLowerCase();
+        const box = document.getElementById('orderPayBox');
+        if (!box) return;
+        if (data.kind === 'walkin' || (method !== 'gcash' && method !== 'maya')) return;
+        if (String(data.payment_status || '').toLowerCase() === 'paid') return;
+        if (!String(data.status || '').toLowerCase().includes('ready')) return;
+        box.innerHTML = '<p>Preparing your QR code...</p>';
+        const issue = () => fetch('/api/customer/orders/' + data.order_id + '/payment', {
+            method: 'POST',
+            credentials: 'same-origin',
+        })
+            .then((response) => response.json())
+            .then((payload) => paintOrderQr(box, method, payload))
+            .catch(() => {
+                box.innerHTML = '<p>Could not load the QR code. Close this and open the order again.</p>';
+            });
+        issue();
+        orderPayTimer = setInterval(() => {
+            fetch('/api/customer/orders/' + data.order_id + '/payment', { credentials: 'same-origin' })
+                .then((response) => response.json())
+                .then((payload) => {
+                    if (payload.paid || payload.payment_status === 'paid') {
+                        paintOrderQr(box, method, payload);
+                        return;
+                    }
+                    if (payload.expired) issue();
+                })
+                .catch(() => {});
+        }, 4000);
     }
 
     // Helper function para sa kulay ng status
@@ -538,7 +718,11 @@ function displayOrderDetails(data) {
         } else {
             cart[lotId] = { name: name, price: price, qty: 1, drug_id: drugId, max_stock: maxStock, lot_id: lotId };
         }
-        updateCartPanel();
+        updateCartPanel({ name: name, qty: cart[lotId].qty });
+        flashAddedButton(button);
+        if (typeof window.phToast === 'function') {
+            window.phToast('Added to cart: ' + name);
+        }
     }
 
     window.addRxMatchToCart = function (item) {
@@ -614,26 +798,25 @@ function displayOrderDetails(data) {
             finalTotal += itemTotal;
             totalItems += item.qty;
 
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                 <td class="cart-item-name">
+            const line = document.createElement('div');
+            line.className = 'cart-line';
+            line.innerHTML = `
+                <div class="cart-item-name">
                     ${item.name}
                     <span class="cart-item-price">₱${item.price.toFixed(2)} each</span>
-                </td>
-                <td>
+                </div>
+                <div class="cart-line-actions">
                     <div class="qty-wrapper">
-                        <button class="qty-control-btn qty-minus" onclick="updateCartQty(this.closest('tr').querySelector('.qty-input'), -1)">−</button>
+                        <button type="button" class="qty-control-btn qty-minus" onclick="updateCartQty(this.closest('.cart-line').querySelector('.qty-input'), -1)">−</button>
                         <input type="number" class="qty-input" min="1" value="${item.qty}" data-lot-id="${lotId}" onchange="updateCartQty(this)">
-                        <button class="qty-control-btn qty-plus" onclick="updateCartQty(this.closest('tr').querySelector('.qty-input'), 1)" ${item.qty >= item.max_stock ? 'disabled style="opacity:0.5;"' : ''}>+</button>
+                        <button type="button" class="qty-control-btn qty-plus" onclick="updateCartQty(this.closest('.cart-line').querySelector('.qty-input'), 1)" ${item.qty >= item.max_stock ? 'disabled style="opacity:0.5;"' : ''}>+</button>
                     </div>
-                </td>
-                <td class="cart-item-total">₱${itemTotal.toFixed(2)}</td>
-                <td>
-                    <button class="cart-remove-btn" onclick="removeItem('${lotId}')">&times;</button>
-                </td>
+                    <button type="button" class="cart-remove-btn" onclick="removeItem('${lotId}')" aria-label="Remove">&times;</button>
+                </div>
+                <div class="cart-item-total">₱${itemTotal.toFixed(2)}</div>
             `;
 
-            cartItemsTableBody.appendChild(tr);
+            cartItemsTableBody.appendChild(line);
 
             const addBtn = document.querySelector(`.add-btn[data-lot-id="${lotId}"]`);
             if (addBtn) {
@@ -652,8 +835,45 @@ function displayOrderDetails(data) {
         }
 
         syncPayHint();
+        syncMobileCartBar(arguments[0]);
 
         return { finalTotal };
+    }
+
+    function flashAddedButton(button) {
+        if (!button) return;
+        if (!button.dataset.addLabel) button.dataset.addLabel = button.innerHTML;
+        button.classList.add('is-added');
+        button.innerHTML = '<i class="fas fa-check"></i> Added';
+        window.clearTimeout(button._addFlash);
+        button._addFlash = window.setTimeout(() => {
+            if (button.isConnected) button.innerHTML = button.dataset.addLabel;
+            button.classList.remove('is-added');
+        }, 1100);
+    }
+
+    function syncMobileCartBar(notice) {
+        const bar = document.getElementById('cartMobileBar');
+        const products = document.getElementById('products');
+        if (!bar) return;
+        const items = Object.values(cart);
+        const count = items.reduce((sum, item) => sum + item.qty, 0);
+        const total = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+        const text = document.getElementById('cartMobileBarText');
+        const price = document.getElementById('cartMobileBarTotal');
+        if (count === 0) {
+            bar.hidden = true;
+            if (products) products.classList.remove('has-cart-bar');
+            return;
+        }
+        bar.hidden = false;
+        if (products) products.classList.add('has-cart-bar');
+        if (text) {
+            text.textContent = notice && notice.name
+                ? `Added: ${notice.name}`
+                : (count === 1 ? '1 item in cart' : `${count} items in cart`);
+        }
+        if (price) price.textContent = `₱${total.toFixed(2)}`;
     }
 
     function currentPayMethod() {
@@ -665,16 +885,14 @@ function displayOrderDetails(data) {
     }
 
     function checkoutCta(totalItems, finalTotal) {
-        const base = isEwalletPay(currentPayMethod()) ? 'Pay and Place Order' : 'Submit Order for Pickup';
+        const base = 'Submit Order for Pickup';
         return totalItems > 0 ? `${base} (₱${finalTotal.toFixed(2)})` : base;
     }
 
     function syncPayHint() {
         const hint = document.getElementById('shopPayHint');
         if (!hint) return;
-        hint.textContent = isEwalletPay(currentPayMethod())
-            ? 'Pay now with GCash or Maya through PayMongo. Pickup is after payment.'
-            : 'Cash is collected at pickup. GCash and Maya are paid now through PayMongo.';
+        hint.textContent = 'Pay at the cashier. QR appears when the order is ready.';
     }
 
 
@@ -727,30 +945,7 @@ function displayOrderDetails(data) {
 
         if (checkoutBtn) {
             checkoutBtn.disabled = true;
-            checkoutBtn.innerText = isEwalletPay(payMethod) ? 'Opening PayMongo...' : 'Processing...';
-        }
-
-        if (isEwalletPay(payMethod)) {
-            fetch('/api/customer/ewallet/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify(orderData),
-            })
-            .then((response) => response.json())
-            .then((data) => {
-                if (data.success && data.checkout_url) {
-                    window.location.href = data.checkout_url;
-                    return;
-                }
-                throw new Error(data.message || 'Could not start GCash/Maya checkout.');
-            })
-            .catch((err) => {
-                alert(err.message || 'Could not start e-wallet payment.');
-                resetCheckoutBtn();
-                updateCartPanel();
-            });
-            return;
+            checkoutBtn.innerText = 'Processing...';
         }
 
         fetch('/api/customer/orders', {
@@ -857,7 +1052,7 @@ function displayOrderDetails(data) {
             <hr style="border-top: 1px dashed #ccc; margin-top: 20px;">
             
             <p style="margin-top: 15px; font-weight: bold; color: orange; text-align: center;">Current Status: Pending ⏱️</p>
-            <p style="font-size: 0.9em; text-align: center;">We will notify you when your order is **'Ready for Pickup'**.</p>
+            <p style="font-size: 0.9em; text-align: center;">We will notify you when your order is Ready for Pickup. GCash and Maya can be paid from home with the QR code after that.</p>
         `;
         
         receiptModal.style.display = 'flex';
@@ -886,9 +1081,29 @@ function displayOrderDetails(data) {
             applyBtn.dataset.bound = '1';
             applyBtn.addEventListener('click', reloadOrders);
         }
+        const prevBtn = document.getElementById('orders-prev');
+        const nextBtn = document.getElementById('orders-next');
+        if (prevBtn && !prevBtn.dataset.bound) {
+            prevBtn.dataset.bound = '1';
+            prevBtn.addEventListener('click', () => {
+                if (ordersPage <= 1) return;
+                ordersPage -= 1;
+                renderCustomerOrdersTable();
+            });
+        }
+        if (nextBtn && !nextBtn.dataset.bound) {
+            nextBtn.dataset.bound = '1';
+            nextBtn.addEventListener('click', () => {
+                ordersPage += 1;
+                renderCustomerOrdersTable();
+            });
+        }
         if (searchInputEl && !searchInputEl.dataset.bound) {
             searchInputEl.dataset.bound = '1';
-            searchInputEl.addEventListener('input', renderCustomerOrdersTable);
+            searchInputEl.addEventListener('input', () => {
+                ordersPage = 1;
+                renderCustomerOrdersTable();
+            });
             searchInputEl.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -905,7 +1120,24 @@ function displayOrderDetails(data) {
         if (!searchInput || !categoryFilter || !productGrid) return;
         const search = searchInput.value.toLowerCase().trim();
         const selectedCategory = categoryFilter.value;
-        const products = productGrid.querySelectorAll('.product');
+        const sort = document.getElementById('productSort')?.value || 'name-asc';
+        const products = Array.from(productGrid.querySelectorAll('.product'));
+
+        products.sort((a, b) => {
+            const nameA = (a.getAttribute('data-sort-name') || '').toLowerCase();
+            const nameB = (b.getAttribute('data-sort-name') || '').toLowerCase();
+            const priceA = parseFloat(a.getAttribute('data-price')) || 0;
+            const priceB = parseFloat(b.getAttribute('data-price')) || 0;
+            const stockA = parseInt(a.getAttribute('data-stock'), 10) || 0;
+            const stockB = parseInt(b.getAttribute('data-stock'), 10) || 0;
+            if (sort === 'name-desc') return nameB.localeCompare(nameA);
+            if (sort === 'price-asc') return priceA - priceB || nameA.localeCompare(nameB);
+            if (sort === 'price-desc') return priceB - priceA || nameA.localeCompare(nameB);
+            if (sort === 'stock-asc') return stockA - stockB || nameA.localeCompare(nameB);
+            if (sort === 'stock-desc') return stockB - stockA || nameA.localeCompare(nameB);
+            return nameA.localeCompare(nameB);
+        });
+        products.forEach((product) => productGrid.appendChild(product));
 
         products.forEach(product => {
             const productCategory = product.getAttribute('data-category') || '';
@@ -932,6 +1164,10 @@ function displayOrderDetails(data) {
         });
     }
 
+    document.getElementById('cartMobileBar')?.addEventListener('click', () => {
+        document.getElementById('cart-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
     if (checkoutBtn) checkoutBtn.addEventListener('click', submitOrder);
     document.getElementById('checkoutPaymentMethod')?.addEventListener('change', () => updateCartPanel());
     if (clearCartBtn) clearCartBtn.addEventListener('click', clearCart);
@@ -939,6 +1175,7 @@ function displayOrderDetails(data) {
     // Initial Load
     updateCartPanel();
     loadHomeStats();
+    applyProductFilters();
 
     // FILE: customer.js (Sa dulo ng DOMContentLoaded block)
 
@@ -962,30 +1199,105 @@ function updateNotificationBadge(count) {
             badge.className = 'notification-badge';
             notificationBell.appendChild(badge);
         }
-        badge.textContent = notificationCount > 9 ? '9+' : notificationCount;
+        badge.textContent = notificationCount > 99 ? '99+' : notificationCount;
     } else if (badge) {
         badge.remove();
     }
 }
 
-function renderNotificationDropdown(notifications) {
-    if (!notificationDropdown || !notificationDropdown.classList.contains('open')) return;
+const PH_TZ = 'Asia/Manila';
+let seenCustomerNotifKeys = null;
 
-    if (!notifications || notifications.length === 0) {
+function escapeNotifHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+}
+
+function formatCustomerNotifWhen(iso, fallback) {
+    if (!iso) return fallback || '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return fallback || '';
+    const sec = Math.round((Date.now() - d.getTime()) / 1000);
+    const clock = d.toLocaleTimeString('en-PH', { timeZone: PH_TZ, hour: 'numeric', minute: '2-digit', hour12: true });
+    if (sec < 45) return 'Just now · ' + clock;
+    if (sec < 3600) {
+        const mins = Math.max(1, Math.floor(sec / 60));
+        return (mins === 1 ? '1 minute ago' : mins + ' minutes ago') + ' · ' + clock;
+    }
+    const manilaNow = new Date(new Date().toLocaleString('en-US', { timeZone: PH_TZ }));
+    const manilaThen = new Date(d.toLocaleString('en-US', { timeZone: PH_TZ }));
+    const startToday = new Date(manilaNow);
+    startToday.setHours(0, 0, 0, 0);
+    if (manilaThen >= startToday) return 'Today, ' + clock;
+    const startY = new Date(startToday);
+    startY.setDate(startY.getDate() - 1);
+    if (manilaThen >= startY) return 'Yesterday, ' + clock;
+    return d.toLocaleString('en-PH', {
+        timeZone: PH_TZ,
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    });
+}
+
+function isFreshCustomerNotif(n) {
+    const t = Date.parse((n && n.date_iso) || '') || 0;
+    if (!t) return false;
+    return (Date.now() - t) < 5 * 60 * 1000;
+}
+
+function renderNotificationDropdown(notifications) {
+    if (!notificationDropdown) return;
+
+    notifications = (notifications || []).slice().sort((a, b) => {
+        const ta = Date.parse((a && a.date_iso) || '') || 0;
+        const tb = Date.parse((b && b.date_iso) || '') || 0;
+        return tb - ta;
+    });
+    const keysNow = {};
+    const arrived = {};
+    notifications.forEach((n) => {
+        const key = String((n && n.order_id) || '');
+        if (!key) return;
+        keysNow[key] = true;
+        if (seenCustomerNotifKeys === null) {
+            if (isFreshCustomerNotif(n)) arrived[key] = true;
+        } else if (!seenCustomerNotifKeys[key] || isFreshCustomerNotif(n)) {
+            arrived[key] = true;
+        }
+    });
+    seenCustomerNotifKeys = keysNow;
+    const hasNew = Object.keys(arrived).length > 0;
+    if (notificationBell) notificationBell.classList.toggle('has-new', hasNew);
+
+    if (!notificationDropdown.classList.contains('open')) return;
+
+    if (!notifications.length) {
         notificationDropdown.innerHTML = '<div class="staff-notif-empty">No new alerts. You are all caught up!</div>';
         return;
     }
 
-    notificationDropdown.innerHTML = notifications.map(notif => `
-        <div class="staff-notif-item order_update"
-             data-order-id="${notif.order_id}"
+    notificationDropdown.innerHTML = notifications.map((notif) => {
+        const key = String(notif.order_id || '');
+        const isNew = !!arrived[key];
+        const when = formatCustomerNotifWhen(notif.date_iso, notif.date);
+        const dateLine = when
+            ? `<br><small class="staff-notif-when" style="color:#9ca3af;" data-iso="${escapeNotifHtml(notif.date_iso || '')}">${escapeNotifHtml(when)}</small>`
+            : '';
+        const newMark = isNew ? '<span class="staff-notif-new">NEW</span>' : '';
+        return `<div class="staff-notif-item order_update${isNew ? ' is-new' : ''}"
+             data-order-id="${escapeNotifHtml(key)}"
              role="button"
-             tabindex="0"
-             style="cursor:pointer;">
+             tabindex="0">
             <i class="fas fa-receipt"></i>
-            <span>${notif.message}<br><small style="color:#9ca3af;">${notif.date}</small></span>
-        </div>
-    `).join('');
+            <span>${escapeNotifHtml(notif.message)}${newMark}${dateLine}</span>
+        </div>`;
+    }).join('');
+    notificationDropdown.scrollTop = 0;
 
     notificationDropdown.querySelectorAll('.staff-notif-item[data-order-id]').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -1002,6 +1314,15 @@ function renderNotificationDropdown(notifications) {
                 item.click();
             }
         });
+    });
+}
+
+function tickCustomerNotifTimes() {
+    if (!notificationDropdown) return;
+    notificationDropdown.querySelectorAll('.staff-notif-when[data-iso]').forEach((el) => {
+        const iso = el.getAttribute('data-iso') || '';
+        if (!iso) return;
+        el.textContent = formatCustomerNotifWhen(iso, el.textContent);
     });
 }
 
@@ -1055,23 +1376,8 @@ if (notificationBell && notificationDropdown) {
         }
     });
 
-    setInterval(checkNotifications, 30000);
+    setInterval(checkNotifications, 4000);
+    setInterval(tickCustomerNotifTimes, 1000);
     checkNotifications();
-}
-
-// =======================================================
-// LIVE CLOCK ("Server Date & Time" widget, same as Admin/Cashier)
-// =======================================================
-const liveClockEl = document.getElementById('live-clock');
-if (liveClockEl) {
-    const tickClock = () => {
-        const now = new Date();
-        liveClockEl.textContent = now.toLocaleString('en-PH', {
-            weekday: 'short', month: 'short', day: 'numeric',
-            hour: 'numeric', minute: '2-digit', hour12: true
-        });
-    };
-    tickClock();
-    setInterval(tickClock, 30000);
 }
 });

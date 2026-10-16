@@ -1,10 +1,14 @@
 import json
 import hashlib
+import logging
 import os
 import random
 import subprocess
-from datetime import datetime, timedelta
+import sys
+from datetime import datetime, timedelta, timezone
+from html import escape
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -13,13 +17,16 @@ from psycopg2.extras import RealDictCursor
 from app.activity import log_event, write_activity_log
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin, require_staff
+from app.checkout_rates import get_checkout_rates
 from app.loyalty import get_loyalty_settings, get_peso_per_point
-from app.payments import CASHIER_PAYMENT_KEYS
+from app.mailer import send_mail
+from app.payments import CASHIER_PAYMENT_KEYS, CUSTOMER_EWALLET_KEYS
 from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
 from app.profile_photos import resolve_photo_url, staff_photo_url
-from app.stock import sync_stock_status_for_drug
+from app.stock import allocate_expiring_first, drug_id_for_lot, restore_order_stock, sellable_quantity, split_money, sync_stock_status_for_drug
 from app.validation import prepare_profile_fields
 
+logger = logging.getLogger("pharmalink.cashier")
 router = APIRouter(prefix="/api/cashier", tags=["cashier"])
 ROOT = Path(__file__).resolve().parent.parent.parent
 POINTS_TO_PESO_RATE = 0.30  # fallback if settings are missing; POS reads /loyalty-settings
@@ -34,15 +41,40 @@ def _title(value):
     return str(value or "").title()
 
 
-def _fmt_dt(value, fmt: str) -> str:
+_MANILA = ZoneInfo("Asia/Manila")
+
+
+def _dt_manila(value):
     if value is None:
-        return ""
+        return None
     if isinstance(value, str):
         try:
             value = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
-            return value
-    return value.strftime(fmt)
+            return None
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(_MANILA)
+
+
+def _fmt_dt(value, fmt: str) -> str:
+    dt = _dt_manila(value)
+    if dt is not None:
+        return dt.strftime(fmt)
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _manila_now():
+    return datetime.now(_MANILA)
+
+
+def _sale_date_sql(alias=None):
+    col = f"{alias}.date_created" if alias else "date_created"
+    return f"(({col} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date"
 
 
 @router.get("/products")
@@ -51,15 +83,29 @@ def products(request: Request):
         return _unauthorized()
     rows = fetch_all(
         """
+        WITH avail AS (
+            SELECT drug_id, lot_inventory_id, price, current_stock, expiration_date
+            FROM inventory_lots
+            WHERE is_active = 1
+              AND expiration_date >= CURRENT_DATE
+              AND current_stock > 0
+        )
         SELECT dm.drug_id, dm.category, dm.brand_name, dm.generic_name,
-               dm.dosage, dm.form, il.price, il.lot_inventory_id, il.current_stock
+               dm.dosage, dm.form, first_lot.price, first_lot.lot_inventory_id,
+               sums.on_hand AS current_stock
         FROM drugs_master dm
-        JOIN inventory_lots il ON dm.drug_id = il.drug_id
-        WHERE il.current_stock > 0
-          AND il.is_active = 1
-          AND il.expiration_date >= CURRENT_DATE
-          AND dm.is_active = 1
-        ORDER BY il.expiration_date ASC
+        JOIN (
+            SELECT drug_id, SUM(current_stock) AS on_hand
+            FROM avail
+            GROUP BY drug_id
+        ) sums ON sums.drug_id = dm.drug_id
+        JOIN (
+            SELECT DISTINCT ON (drug_id) drug_id, lot_inventory_id, price
+            FROM avail
+            ORDER BY drug_id, expiration_date ASC, lot_inventory_id ASC
+        ) first_lot ON first_lot.drug_id = dm.drug_id
+        WHERE dm.is_active = 1
+        ORDER BY dm.generic_name ASC, dm.brand_name ASC
         """
     )
     products = []
@@ -118,7 +164,19 @@ def product_by_barcode(request: Request, barcode: str = ""):
             "generic_name": drug["generic_name"],
             "brand_name": drug["brand_name"],
         }
+    on_hand = fetch_one(
+        """
+        SELECT COALESCE(SUM(current_stock), 0) AS on_hand
+        FROM inventory_lots
+        WHERE drug_id = %s
+          AND is_active = 1
+          AND expiration_date >= CURRENT_DATE
+          AND current_stock > 0
+        """,
+        (drug["drug_id"],),
+    )
     product = {**dict(drug), **dict(row)}
+    product["current_stock"] = int((on_hand or {}).get("on_hand") or 0)
     product["category"] = _title(product.get("category"))
     product["generic_name"] = _title(product.get("generic_name"))
     product["brand_name"] = _title(product.get("brand_name"))
@@ -164,6 +222,13 @@ def customers(request: Request):
     } for r in rows]
 
 
+@router.get("/checkout-rates")
+def cashier_checkout_rates(request: Request):
+    if not require_staff(request):
+        return _unauthorized()
+    return {"success": True, **get_checkout_rates()}
+
+
 @router.get("/loyalty-settings")
 def cashier_loyalty_settings(request: Request):
     if not require_staff(request):
@@ -177,7 +242,7 @@ def promos(request: Request):
         return _unauthorized()
     rows = fetch_all(
         """
-        SELECT promo_id, name, discount_type, discount_value, drug_id, category
+        SELECT promo_id, name, discount_type, discount_value, drug_id, category, segment_label
         FROM promos
         WHERE is_active = 1
           AND CURRENT_DATE BETWEEN start_date AND end_date
@@ -189,6 +254,7 @@ def promos(request: Request):
         item = dict(row)
         item["discount_value"] = float(item["discount_value"] or 0)
         item["drug_id"] = int(item["drug_id"]) if item.get("drug_id") is not None else None
+        item["segment_label"] = str(item.get("segment_label") or "").strip() or None
         item["drug_ids"] = []
         out.append(item)
         promo_ids.append(int(item["promo_id"]))
@@ -211,7 +277,17 @@ def online_orders(request: Request):
         return _unauthorized()
     rows = fetch_all(
         """
-        SELECT co.order_id, co.order_date, co.order_status, c.first_name, c.last_name
+        SELECT co.order_id, co.order_date, co.order_status, co.payment_method, co.payment_status,
+               c.first_name, c.last_name,
+               COALESCE((
+                   SELECT string_agg(
+                       COALESCE(NULLIF(TRIM(dm.brand_name), ''), dm.generic_name),
+                       ', ' ORDER BY od.detail_id
+                   )
+                   FROM order_details od
+                   JOIN drugs_master dm ON dm.drug_id = od.drug_id
+                   WHERE od.order_id = co.order_id
+               ), '') AS medicines
         FROM customer_orders co
         JOIN customers c ON co.customer_id = c.customer_id
         WHERE co.order_status IN ('Pending', 'Processing', 'Ready for Pickup')
@@ -227,6 +303,9 @@ def online_orders(request: Request):
             "customer_name": f"{row['first_name']} {row['last_name']}",
             "status": status,
             "status_class": str(status).lower().replace(" ", "-"),
+            "payment_method": row.get("payment_method") or "cash",
+            "payment_status": row.get("payment_status") or "unpaid",
+            "medicines": row.get("medicines") or "",
             "date": _fmt_dt(row["order_date"], "%b %d, %Y %I:%M %p"),
         })
     return {"success": True, "orders": orders}
@@ -236,7 +315,13 @@ def online_orders(request: Request):
 def online_order_details(order_id: int, request: Request):
     if not require_staff(request):
         return _unauthorized()
-    header = fetch_one("SELECT customer_id, order_status FROM customer_orders WHERE order_id = %s", (order_id,))
+    header = fetch_one(
+        """
+        SELECT customer_id, order_status, payment_method, payment_status, payment_reference
+        FROM customer_orders WHERE order_id = %s
+        """,
+        (order_id,),
+    )
     if not header:
         return JSONResponse({"success": False, "message": "Order not found."}, status_code=404)
     customer = fetch_one(
@@ -249,7 +334,7 @@ def online_order_details(order_id: int, request: Request):
     items = fetch_all(
         """
         SELECT od.drug_id, od.lot_inventory_id, od.quantity AS ordered_qty, od.price_per_unit,
-               dm.brand_name, dm.generic_name, il.current_stock
+               dm.brand_name, dm.generic_name, dm.category, il.current_stock
         FROM order_details od
         JOIN drugs_master dm ON od.drug_id = dm.drug_id
         JOIN inventory_lots il ON od.lot_inventory_id = il.lot_inventory_id
@@ -264,8 +349,68 @@ def online_order_details(order_id: int, request: Request):
         "customer_id": header["customer_id"],
         "loyalty_points": float(customer["loyalty_points"]) if customer else 0,
         "status": header["order_status"],
+        "payment_method": header.get("payment_method") or "cash",
+        "payment_status": header.get("payment_status") or "unpaid",
+        "payment_reference": header.get("payment_reference") or "",
         "items": [dict(i) for i in items],
     }
+
+
+_ORDER_STATUS_MAIL = {
+    "Pending": "We received your order and it is waiting to be processed.",
+    "Processing": "We are preparing your order. We will email you again when it is ready for pickup.",
+    "Ready for Pickup": "Your order is ready. Please pick it up at the store.",
+    "Completed": "Your order has been completed. Thank you for shopping with us.",
+    "Cancelled": "This order was cancelled. Contact the store if you still need the medicine.",
+}
+
+
+def _order_status_email_html(first_name: str, order_id: int, status: str, total: float, payment_method: str = "") -> str:
+    note = _ORDER_STATUS_MAIL.get(status, f"Your order status is now {status}.")
+    if status == "Ready for Pickup" and str(payment_method or "").lower() in CUSTOMER_EWALLET_KEYS:
+        note = (
+            "Your order is ready. Open My Orders and scan the QR code to pay with GCash or Maya. "
+            "You can pay from home before you pick it up."
+        )
+    who = escape(first_name or "there")
+    return f"""
+    <div style="font-family:Arial,sans-serif;color:#1E3A34;line-height:1.5;">
+      <p>Hello {who},</p>
+      <p>Order <strong>#{order_id}</strong> is now <strong>{escape(status)}</strong>.</p>
+      <p>{escape(note)}</p>
+      <p>Order total: ₱{total:,.2f}</p>
+      <p>PharmaLink</p>
+    </div>
+    """
+
+
+def customer_status_note(status: str, payment_method: str = "") -> str:
+    note = _ORDER_STATUS_MAIL.get(status, f"Your order status is now {status}.")
+    if status == "Ready for Pickup" and str(payment_method or "").lower() in CUSTOMER_EWALLET_KEYS:
+        note = "Your order is ready. Open My Orders and scan the QR code to pay. You can pay from home."
+    return note
+
+
+def _notify_customer_order_status(order_id: int, status: str, email: str, first_name: str, total: float, payment_method: str = "", customer_id: int | None = None) -> bool:
+    note = customer_status_note(status, payment_method)
+    if customer_id:
+        try:
+            from app.push import queue_customer_push
+            queue_customer_push(int(customer_id), f"Order #{order_id} is {status}", note, order_id)
+        except Exception:
+            logger.exception("Order %s push failed", order_id)
+    address = str(email or "").strip()
+    if not address:
+        return False
+    sent = send_mail(
+        address,
+        f"PharmaLink order #{order_id} is {status}",
+        _order_status_email_html(first_name, order_id, status, total, payment_method),
+    )
+    if not sent.get("success"):
+        logger.warning("Order %s status email failed: %s", order_id, sent.get("message"))
+        return False
+    return True
 
 
 @router.post("/online-orders/status")
@@ -278,16 +423,78 @@ async def update_order_status(request: Request):
     allowed = {"Pending", "Processing", "Ready for Pickup", "Completed", "Cancelled"}
     if order_id <= 0 or status not in allowed:
         return {"success": False, "message": "Invalid order_id or status."}
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE customer_orders SET order_status = %s WHERE order_id = %s", (status, order_id))
-            write_activity_log(
-                cur,
-                "Update Order Status",
-                f"Order #{order_id} status set to '{status}'.",
-                request=request,
-            )
-    return {"success": True}
+    recipient = None
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT co.order_status, co.total_amount, co.payment_method, co.customer_id, c.email, c.first_name
+                    FROM customer_orders co
+                    JOIN customers c ON c.customer_id = co.customer_id
+                    WHERE co.order_id = %s
+                    FOR UPDATE OF co
+                    """,
+                    (order_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return {"success": False, "message": "Order not found."}
+                previous = str(row["order_status"] or "")
+                if previous != status:
+                    if status == "Cancelled" and previous == "Completed":
+                        return {"success": False, "message": "Completed sales stay as they are."}
+                    if status == "Cancelled":
+                        cur.execute("SAVEPOINT sold_check")
+                        sold = None
+                        try:
+                            cur.execute(
+                                """
+                                SELECT sale_id FROM sales
+                                WHERE online_order_id = %s AND LOWER(COALESCE(status, '')) = 'completed'
+                                LIMIT 1
+                                """,
+                                (order_id,),
+                            )
+                            sold = cur.fetchone()
+                        except Exception:
+                            cur.execute("ROLLBACK TO SAVEPOINT sold_check")
+                            sold = None
+                        if sold:
+                            return {"success": False, "message": "This order was already sold. Completed sales stay as they are."}
+                        if previous in ("Pending", "Processing", "Ready for Pickup"):
+                            restore_order_stock(cur, order_id)
+                    cur.execute(
+                        "UPDATE customer_orders SET order_status = %s, is_read = 0 WHERE order_id = %s",
+                        (status, order_id),
+                    )
+                    write_activity_log(
+                        cur,
+                        "Update Order",
+                        f"Set order #{order_id} to {status}.",
+                        request=request,
+                    )
+                    recipient = {
+                        "email": row.get("email"),
+                        "first_name": row.get("first_name") or "",
+                        "total": float(row.get("total_amount") or 0),
+                        "payment_method": row.get("payment_method") or "cash",
+                        "customer_id": row.get("customer_id"),
+                    }
+    except ValueError as exc:
+        return {"success": False, "message": str(exc)}
+    emailed = False
+    if recipient:
+        emailed = _notify_customer_order_status(
+            order_id,
+            status,
+            recipient["email"],
+            recipient["first_name"],
+            recipient["total"],
+            recipient["payment_method"],
+            recipient.get("customer_id"),
+        )
+    return {"success": True, "email_sent": emailed}
 
 
 @router.get("/transactions")
@@ -312,12 +519,12 @@ def daily_sales(request: Request):
         return _unauthorized()
     labels = []
     data = []
-    today = datetime.now().date()
+    today = _manila_now().date()
     for i in range(6, -1, -1):
         day = today - timedelta(days=i)
         labels.append(day.strftime("%a"))
         row = fetch_one(
-            "SELECT COALESCE(SUM(total_amount), 0) AS total FROM sales WHERE date_created::date = %s AND status = 'completed'",
+            f"SELECT COALESCE(SUM(total_amount), 0) AS total FROM sales WHERE {_sale_date_sql()} = %s AND status = 'completed'",
             (day.isoformat(),),
         )
         data.append(round(float(row["total"] or 0), 2))
@@ -328,15 +535,15 @@ def daily_sales(request: Request):
 def top_selling(request: Request, startDate: str = "", endDate: str = ""):
     if not require_staff(request):
         return _unauthorized()
-    start = startDate or datetime.now().strftime("%Y-%m-%d")
-    end = endDate or datetime.now().strftime("%Y-%m-%d")
+    start = startDate or _manila_now().strftime("%Y-%m-%d")
+    end = endDate or _manila_now().strftime("%Y-%m-%d")
     rows = fetch_all(
-        """
+        f"""
         SELECT d.generic_name, d.brand_name, COALESCE(SUM(si.quantity), 0) AS total_quantity_sold
         FROM sales_items si
         JOIN sales s ON si.sale_id = s.sale_id
         JOIN drugs_master d ON si.drug_id = d.drug_id
-        WHERE s.date_created::date BETWEEN %s AND %s
+        WHERE {_sale_date_sql("s")} BETWEEN %s AND %s
           AND s.status = 'completed'
         GROUP BY d.drug_id, d.generic_name, d.brand_name
         ORDER BY total_quantity_sold DESC
@@ -358,25 +565,26 @@ def top_selling(request: Request, startDate: str = "", endDate: str = ""):
 def recent_transactions(request: Request, startDate: str = "", endDate: str = ""):
     if not require_staff(request):
         return _unauthorized()
-    start = startDate or (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-    end = endDate or datetime.now().strftime("%Y-%m-%d")
+    start = startDate or (_manila_now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    end = endDate or _manila_now().strftime("%Y-%m-%d")
     rows = fetch_all(
-        """
+        f"""
         SELECT s.date_created,
                COALESCE(CONCAT(c.first_name, ' ', c.last_name), 'Guest') AS customer_name,
                s.total_amount, s.status
         FROM sales s
         LEFT JOIN customers c ON s.customer_id = c.customer_id
-        WHERE s.date_created::date BETWEEN %s AND %s
+        WHERE {_sale_date_sql("s")} BETWEEN %s AND %s
         ORDER BY s.date_created DESC
-        LIMIT 5
+        LIMIT 100
         """,
         (start, end),
     )
     out = []
     for row in rows:
         item = dict(row)
-        item["time_display"] = _fmt_dt(row["date_created"], "%H:%M")
+        item["date_display"] = _fmt_dt(row["date_created"], "%b %d, %Y")
+        item["time_display"] = _fmt_dt(row["date_created"], "%I:%M %p")
         item["total_amount"] = f"{float(row['total_amount'] or 0):.2f}"
         out.append(item)
     return out
@@ -386,8 +594,8 @@ def recent_transactions(request: Request, startDate: str = "", endDate: str = ""
 def sales_report(request: Request, startDate: str = "", endDate: str = "", q: str = "", payment: str = ""):
     if not require_staff(request):
         return _unauthorized()
-    start = startDate or (datetime.now() - timedelta(days=6)).strftime("%Y-%m-%d")
-    end = endDate or datetime.now().strftime("%Y-%m-%d")
+    start = startDate or (_manila_now() - timedelta(days=6)).strftime("%Y-%m-%d")
+    end = endDate or _manila_now().strftime("%Y-%m-%d")
     needle = (q or "").strip().lower()
     pay = (payment or "").strip().lower()
     params: list = [start, end]
@@ -402,6 +610,8 @@ def sales_report(request: Request, startDate: str = "", endDate: str = "", q: st
             OR LOWER(COALESCE(s.payment_reference, '')) LIKE %s
             OR LOWER(COALESCE(c.first_name, '') || ' ' || COALESCE(c.last_name, '')) LIKE %s
             OR LOWER(COALESCE(st.first_name, '') || ' ' || COALESCE(st.last_name, '')) LIKE %s
+            OR CAST(s.online_order_id AS TEXT) LIKE %s
+            OR LOWER('ord-' || COALESCE(s.online_order_id::text, '')) LIKE %s
           )
     """
     search_no_ref = """
@@ -409,17 +619,19 @@ def sales_report(request: Request, startDate: str = "", endDate: str = "", q: st
             LOWER(COALESCE(s.transaction_id, '')) LIKE %s
             OR LOWER(COALESCE(c.first_name, '') || ' ' || COALESCE(c.last_name, '')) LIKE %s
             OR LOWER(COALESCE(st.first_name, '') || ' ' || COALESCE(st.last_name, '')) LIKE %s
+            OR CAST(s.online_order_id AS TEXT) LIKE %s
+            OR LOWER('ord-' || COALESCE(s.online_order_id::text, '')) LIKE %s
           )
     """
     base_from = """
         FROM sales s
         LEFT JOIN customers c ON s.customer_id = c.customer_id
         LEFT JOIN staff_info st ON st.user_id = s.user_id
-        WHERE s.date_created::date BETWEEN %s AND %s
+        WHERE {0} BETWEEN %s AND %s
           AND s.status = 'completed'
-    """
+    """.format(_sale_date_sql("s"))
     select_sql = """
-        SELECT s.sale_id, s.transaction_id, s.date_created, s.total_amount, s.subtotal,
+        SELECT s.sale_id, s.transaction_id, s.online_order_id, s.date_created, s.total_amount, s.subtotal,
                s.discount_amount, s.tax_amount, s.cash_received, s.change_amount,
                s.payment_method, s.payment_reference, s.status,
                COALESCE(NULLIF(TRIM(CONCAT(c.first_name, ' ', c.last_name)), ''), 'Guest') AS customer_name,
@@ -429,7 +641,7 @@ def sales_report(request: Request, startDate: str = "", endDate: str = "", q: st
     query_sql = select_sql + base_from + extra_sql
     if needle:
         query_sql += search_with_ref
-        query_params.extend([like, like, like, like])
+        query_params.extend([like, like, like, like, like, like])
     query_sql += " ORDER BY s.date_created DESC LIMIT 250"
     try:
         rows = fetch_all(query_sql, tuple(query_params))
@@ -438,7 +650,7 @@ def sales_report(request: Request, startDate: str = "", endDate: str = "", q: st
         query_sql = select_sql.replace("s.payment_reference, ", "") + base_from + extra_sql
         if needle:
             query_sql += search_no_ref
-            query_params.extend([like, like, like])
+            query_params.extend([like, like, like, like, like])
         query_sql += " ORDER BY s.date_created DESC LIMIT 250"
         rows = fetch_all(query_sql, tuple(query_params))
     logs = []
@@ -457,6 +669,8 @@ def sales_report(request: Request, startDate: str = "", endDate: str = "", q: st
         logs.append({
             "sale_id": row["sale_id"],
             "transaction_id": row.get("transaction_id") or f"SALE-{row['sale_id']}",
+            "online_order_id": row.get("online_order_id"),
+            "order_no": f"ORD-{row['online_order_id']}" if row.get("online_order_id") else "",
             "date": _fmt_dt(row.get("date_created"), "%b %d, %Y"),
             "time": _fmt_dt(row.get("date_created"), "%I:%M %p"),
             "customer_name": row.get("customer_name") or "Guest",
@@ -469,11 +683,11 @@ def sales_report(request: Request, startDate: str = "", endDate: str = "", q: st
             "status": row.get("status") or "completed",
         })
     items_row = fetch_one(
-        """
+        f"""
         SELECT COALESCE(SUM(si.quantity), 0) AS items_sold
         FROM sales_items si
         JOIN sales s ON si.sale_id = s.sale_id
-        WHERE s.date_created::date BETWEEN %s AND %s
+        WHERE {_sale_date_sql("s")} BETWEEN %s AND %s
           AND s.status = 'completed'
         """,
         (start, end),
@@ -500,9 +714,11 @@ def sales_report_detail(request: Request, sale_id: int):
         return _unauthorized()
     sale = fetch_one(
         """
-        SELECT s.sale_id, s.transaction_id, s.date_created, s.total_amount, s.subtotal,
+        SELECT s.sale_id, s.transaction_id, s.online_order_id, s.date_created, s.total_amount, s.subtotal,
                s.discount_amount, s.tax_amount, s.cash_received, s.change_amount,
                s.payment_method, s.status,
+               COALESCE(s.points_redeemed, 0) AS points_redeemed,
+               COALESCE(s.points_discount_value, 0) AS points_discount_value,
                COALESCE(NULLIF(TRIM(CONCAT(c.first_name, ' ', c.last_name)), ''), 'Guest') AS customer_name,
                COALESCE(NULLIF(TRIM(CONCAT(st.first_name, ' ', st.last_name)), ''), 'Staff') AS cashier_name
         FROM sales s
@@ -536,6 +752,8 @@ def sales_report_detail(request: Request, sale_id: int):
         "sale": {
             "sale_id": sale["sale_id"],
             "transaction_id": sale.get("transaction_id") or f"SALE-{sale['sale_id']}",
+            "online_order_id": sale.get("online_order_id"),
+            "order_no": f"ORD-{sale['online_order_id']}" if sale.get("online_order_id") else "",
             "date": _fmt_dt(sale.get("date_created"), "%b %d, %Y %I:%M %p"),
             "customer_name": sale.get("customer_name") or "Guest",
             "cashier_name": sale.get("cashier_name") or "Staff",
@@ -547,6 +765,8 @@ def sales_report_detail(request: Request, sale_id: int):
             "total_amount": round(float(sale.get("total_amount") or 0), 2),
             "cash_received": round(float(sale.get("cash_received") or 0), 2),
             "change_amount": round(float(sale.get("change_amount") or 0), 2),
+            "points_redeemed": round(float(sale.get("points_redeemed") or 0), 2),
+            "points_discount_value": round(float(sale.get("points_discount_value") or 0), 2),
             "status": sale.get("status") or "completed",
         },
         "items": [
@@ -566,14 +786,17 @@ def sales_report_detail(request: Request, sale_id: int):
 def dashboard(request: Request, startDate: str = "", endDate: str = ""):
     if not require_staff(request):
         return _unauthorized()
-    start = startDate or datetime.now().strftime("%Y-%m-%d")
-    end = endDate or datetime.now().strftime("%Y-%m-%d")
+    start = startDate or _manila_now().strftime("%Y-%m-%d")
+    end = endDate or _manila_now().strftime("%Y-%m-%d")
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
                 UPDATE drugs_master dm
                 SET stock_status = CASE
+                    WHEN COALESCE(dm.minimum_stock, 0) = 0
+                     AND NOT EXISTS (SELECT 1 FROM inventory_lots WHERE drug_id = dm.drug_id)
+                    THEN 'ok'
                     WHEN COALESCE((SELECT SUM(current_stock) FROM inventory_lots WHERE is_active = 1 AND drug_id = dm.drug_id), 0) <= 0 THEN 'out'
                     WHEN COALESCE((SELECT SUM(current_stock) FROM inventory_lots WHERE is_active = 1 AND drug_id = dm.drug_id), 0) <= dm.minimum_stock THEN 'low'
                     ELSE 'ok'
@@ -582,20 +805,20 @@ def dashboard(request: Request, startDate: str = "", endDate: str = ""):
                 """
             )
             cur.execute(
-                "SELECT COUNT(sale_id) AS transaction_count FROM sales WHERE date_created::date BETWEEN %s AND %s AND status = 'completed'",
+                f"SELECT COUNT(sale_id) AS transaction_count FROM sales WHERE {_sale_date_sql()} BETWEEN %s AND %s AND status = 'completed'",
                 (start, end),
             )
             transaction_count = int(cur.fetchone()["transaction_count"] or 0)
             cur.execute(
-                "SELECT COALESCE(SUM(total_amount), 0) AS total_sales FROM sales WHERE date_created::date BETWEEN %s AND %s AND status = 'completed'",
+                f"SELECT COALESCE(SUM(total_amount), 0) AS total_sales FROM sales WHERE {_sale_date_sql()} BETWEEN %s AND %s AND status = 'completed'",
                 (start, end),
             )
             total_sales = float(cur.fetchone()["total_sales"] or 0)
             cur.execute(
-                """
+                f"""
                 SELECT COALESCE(SUM(si.quantity), 0) AS items_sold
                 FROM sales_items si JOIN sales s ON si.sale_id = s.sale_id
-                WHERE s.date_created::date BETWEEN %s AND %s AND s.status = 'completed'
+                WHERE {_sale_date_sql("s")} BETWEEN %s AND %s AND s.status = 'completed'
                 """,
                 (start, end),
             )
@@ -618,45 +841,74 @@ def dashboard(request: Request, startDate: str = "", endDate: str = ""):
     }
 
 
+def _customer_purchase_rows():
+    """Online orders plus walk-in sales the cashier linked to a customer.
+
+    A sale that completes an online order is skipped so that order is not counted twice.
+    """
+    return fetch_all(
+        """
+        SELECT c.customer_id,
+               CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+               c.loyalty_points,
+               COALESCE(o.total_spent, 0) + COALESCE(w.total_spent, 0) AS total_spent,
+               COALESCE(o.order_count, 0) + COALESCE(w.order_count, 0) AS order_count,
+               CASE
+                   WHEN o.last_order_date IS NULL THEN w.last_sale_date
+                   WHEN w.last_sale_date IS NULL THEN o.last_order_date
+                   ELSE GREATEST(o.last_order_date, w.last_sale_date)
+               END AS last_order_date
+        FROM customers c
+        LEFT JOIN (
+            SELECT customer_id,
+                   COALESCE(SUM(total_amount), 0) AS total_spent,
+                   COUNT(order_id) AS order_count,
+                   MAX(order_date) AS last_order_date
+            FROM customer_orders
+            GROUP BY customer_id
+        ) o ON o.customer_id = c.customer_id
+        LEFT JOIN (
+            SELECT customer_id,
+                   COALESCE(SUM(total_amount), 0) AS total_spent,
+                   COUNT(sale_id) AS order_count,
+                   MAX(date_created) AS last_sale_date
+            FROM sales
+            WHERE LOWER(TRIM(COALESCE(status, ''))) = 'completed'
+              AND online_order_id IS NULL
+              AND customer_id IS NOT NULL
+            GROUP BY customer_id
+        ) w ON w.customer_id = c.customer_id
+        WHERE COALESCE(c.is_active, 1) = 1
+        ORDER BY total_spent DESC, customer_name
+        """
+    )
+
+
 @router.get("/charts")
 def charts(request: Request):
     if not require_staff(request):
         return _unauthorized()
-    freq_rows = fetch_all(
-        """
-        SELECT CONCAT(c.first_name, ' ', c.last_name) AS fullname, COUNT(o.order_id) AS order_count
-        FROM customers c
-        LEFT JOIN customer_orders o ON c.customer_id = o.customer_id
-        GROUP BY c.customer_id, c.first_name, c.last_name
-        ORDER BY order_count DESC
-        """
-    )
-    spend_rows = fetch_all(
-        """
-        SELECT c.customer_id, CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
-               c.loyalty_points, SUM(co.total_amount) AS total_spent,
-               COUNT(co.order_id) AS order_count, MAX(co.order_date) AS last_order_date
-        FROM customers c
-        LEFT JOIN customer_orders co ON c.customer_id = co.customer_id
-        GROUP BY c.customer_id, c.first_name, c.last_name, c.loyalty_points
-        ORDER BY total_spent DESC
-        """
-    )
+    rows = _customer_purchase_rows()
+    by_frequency = sorted(rows, key=lambda r: (-int(r["order_count"] or 0), r["customer_name"] or ""))
     type_rows = fetch_all(
         "SELECT customer_type, COUNT(*) as total FROM customers WHERE is_active = 1 GROUP BY customer_type"
     )
     return {
-        "freq_labels": [r["fullname"] for r in freq_rows],
-        "freq_data": [int(r["order_count"] or 0) for r in freq_rows],
-        "spend_labels": [r["customer_name"] for r in spend_rows],
-        "spend_data": [float(r["total_spent"] or 0) for r in spend_rows],
+        "freq_labels": [r["customer_name"] for r in by_frequency],
+        "freq_data": [int(r["order_count"] or 0) for r in by_frequency],
+        "spend_labels": [r["customer_name"] for r in rows],
+        "spend_data": [float(r["total_spent"] or 0) for r in rows],
         "type_labels": [r["customer_type"] for r in type_rows],
         "type_data": [int(r["total"] or 0) for r in type_rows],
     }
 
 
 def _paymongo_base_url() -> str:
-    return (os.getenv("PAYMONGO_BASE_URL") or "http://127.0.0.1:8080").rstrip("/")
+    configured = (os.getenv("PAYMONGO_BASE_URL") or "").strip().rstrip("/")
+    public = (os.getenv("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
+    if configured and "127.0.0.1" not in configured and "localhost" not in configured:
+        return configured
+    return public or configured or "http://127.0.0.1:8080"
 
 
 @router.post("/ewallet/checkout")
@@ -721,9 +973,33 @@ async def create_sale(request: Request):
     total_amount = float(payload.get("total_amount") or 0)
     cash_received = float(payload.get("cash_received") or 0)
     change_amount = float(payload.get("change_amount") or 0)
-    payment_method = payload.get("payment_method") or "cash"
+    payment_method = str(payload.get("payment_method") or "cash").strip().lower()
     payment_reference = str(payload.get("payment_reference") or "").strip() or None
     points_requested = float(payload.get("points_redeemed") or 0)
+    online_order_id = payload.get("online_order_id")
+    try:
+        online_order_id = int(online_order_id) if online_order_id not in (None, "") else None
+    except (TypeError, ValueError):
+        online_order_id = None
+    if online_order_id is not None and online_order_id <= 0:
+        online_order_id = None
+    linked_order = None
+    if online_order_id:
+        linked_order = fetch_one(
+            """
+            SELECT payment_method, payment_status, payment_reference
+            FROM customer_orders WHERE order_id = %s
+            """,
+            (online_order_id,),
+        )
+        if linked_order:
+            order_method = str(linked_order.get("payment_method") or "").strip().lower()
+            if order_method in CASHIER_PAYMENT_KEYS:
+                payment_method = order_method
+            if order_method in ("gcash", "maya"):
+                payment_reference = str(linked_order.get("payment_reference") or payment_reference or "").strip() or None
+                cash_received = total_amount
+                change_amount = 0.0
 
     if payment_method not in CASHIER_PAYMENT_KEYS:
         return JSONResponse({"status": "error", "message": "Invalid payment method."}, status_code=400)
@@ -731,9 +1007,15 @@ async def create_sale(request: Request):
         return JSONResponse({"status": "error", "message": "Invalid transaction total."}, status_code=400)
     if total_amount == 0 and points_requested <= 0:
         return JSONResponse({"status": "error", "message": "Invalid transaction total."}, status_code=400)
+    settle_online_ewallet = bool(
+        linked_order and payment_method in ("gcash", "maya")
+    )
     if payment_method == "cash":
         if cash_received < total_amount:
             return JSONResponse({"status": "error", "message": "Insufficient cash received."}, status_code=400)
+    elif settle_online_ewallet:
+        cash_received = total_amount
+        change_amount = 0.0
     else:
         checkout_id = str(payload.get("paymongo_checkout_id") or "").strip()
         try:
@@ -759,17 +1041,11 @@ async def create_sale(request: Request):
                     qty = int(item.get("qty") or 0)
                     if lot_id <= 0 or qty <= 0:
                         raise ValueError(f"Invalid item in cart (lot #{lot_id}, qty {qty}).")
-                    cur.execute(
-                        "SELECT current_stock FROM inventory_lots WHERE lot_inventory_id = %s AND is_active = 1 FOR UPDATE",
-                        (lot_id,),
-                    )
-                    lot = cur.fetchone()
-                    if not lot:
-                        raise ValueError(f"Item (lot #{lot_id}) no longer exists or is inactive.")
-                    if int(lot["current_stock"]) < qty:
-                        raise ValueError(
-                            f"Not enough stock for lot #{lot_id} - only {lot['current_stock']} left, but {qty} requested. Please refresh and try again."
-                        )
+                    if linked_order:
+                        continue
+                    drug_id = drug_id_for_lot(cur, lot_id)
+                    if sellable_quantity(cur, drug_id) < qty:
+                        raise ValueError(f"Not enough stock. Only {sellable_quantity(cur, drug_id)} left, but {qty} requested.")
 
                 points_redeemed = 0.0
                 points_discount_value = 0.0
@@ -798,13 +1074,13 @@ async def create_sale(request: Request):
                     else:
                         points_redeemed = points_requested
 
-                transaction_id = f"TXN-{datetime.now().strftime('%Y%m%d%H%M%S')}-{random.randint(1000, 9999)}"
+                transaction_id = f"TXN-{_manila_now().strftime('%Y%m%d%H%M%S')}-{random.randint(1000, 9999)}"
                 discount_amount_with_points = discount_total + points_discount_value
                 sale_id = next_id(cur, "sales", "sale_id")
                 sale_params = (
                     sale_id, transaction_id, customer_id, user_id, subtotal, discount_amount_with_points,
                     tax_total, total_amount, cash_received, change_amount, payment_method, payment_reference,
-                    points_redeemed, points_discount_value,
+                    points_redeemed, points_discount_value, online_order_id,
                 )
                 cur.execute("SAVEPOINT sale_header")
                 try:
@@ -813,8 +1089,8 @@ async def create_sale(request: Request):
                         INSERT INTO sales
                             (sale_id, transaction_id, customer_id, user_id, subtotal, discount_amount, tax_amount,
                              total_amount, cash_received, change_amount, payment_method, payment_reference,
-                             points_redeemed, points_discount_value, status, date_created)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'completed', NOW())
+                             points_redeemed, points_discount_value, online_order_id, status, date_created)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'completed', NOW())
                         """,
                         sale_params,
                     )
@@ -835,29 +1111,33 @@ async def create_sale(request: Request):
                         ),
                     )
                 for item in items:
-                    drug_id = int(item.get("drug_id") or 0)
-                    lot_id = int(item.get("lot_id") or 0)
+                    drug_id = drug_id_for_lot(cur, int(item.get("lot_id") or 0))
                     qty = int(item.get("qty") or 0)
                     price = float(item.get("price") or 0)
                     line_subtotal = float(item.get("subtotal") or (price * qty))
                     discount_amount = float(item.get("discount_amount") or 0)
                     promo_name = item.get("promo_name")
                     vat_exempt = int(item.get("vat_exempt") or 0)
-                    item_id = next_id(cur, "sales_items", "id")
-                    cur.execute(
-                        """
-                        INSERT INTO sales_items
-                            (id, sale_id, drug_id, lot_id, quantity, price, subtotal, discount_amount, promo_name, vat_exempt)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (item_id, sale_id, drug_id, lot_id, qty, price, line_subtotal, discount_amount, promo_name, vat_exempt),
-                    )
-                    cur.execute(
-                        "UPDATE inventory_lots SET current_stock = current_stock - %s WHERE lot_inventory_id = %s",
-                        (qty, lot_id),
-                    )
-                    if drug_id > 0:
-                        affected.add(drug_id)
+                    if linked_order:
+                        parts = [{"lot_id": int(item.get("lot_id") or 0), "qty": qty}]
+                    else:
+                        parts = allocate_expiring_first(cur, drug_id, qty)
+                    subtotals = split_money(line_subtotal, qty, [part["qty"] for part in parts])
+                    discounts = split_money(discount_amount, qty, [part["qty"] for part in parts])
+                    for part, part_subtotal, part_discount in zip(parts, subtotals, discounts):
+                        item_id = next_id(cur, "sales_items", "id")
+                        cur.execute(
+                            """
+                            INSERT INTO sales_items
+                                (id, sale_id, drug_id, lot_id, quantity, price, subtotal, discount_amount, promo_name, vat_exempt)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            """,
+                            (
+                                item_id, sale_id, drug_id, part["lot_id"], part["qty"], price,
+                                part_subtotal, part_discount, promo_name, vat_exempt,
+                            ),
+                        )
+                    affected.add(drug_id)
 
                 if points_redeemed > 0:
                     cur.execute(
@@ -909,8 +1189,13 @@ async def loyalty_points(request: Request):
                 return {"success": False, "message": "Customer not found."}
             new_balance = max(0.0, float(row["loyalty_points"] or 0) + points)
             cur.execute("UPDATE customers SET loyalty_points = %s WHERE customer_id = %s", (new_balance, customer_id))
-            details = f"Customer ID {customer_id} points {points:+} (new balance: {new_balance}) - via Customer Segmentation."
-            write_activity_log(cur, "Adjust Loyalty Points", details, request=request)
+            person = fetch_one("SELECT first_name, last_name FROM customers WHERE customer_id = %s", (customer_id,))
+            who = "this customer"
+            if person:
+                who = f"{person.get('first_name') or ''} {person.get('last_name') or ''}".strip() or who
+            direction = "added" if points > 0 else "removed"
+            details = f"{direction.capitalize()} {abs(points):g} loyalty point(s) for {who}. Balance is now {new_balance:g}."
+            write_activity_log(cur, "Update Loyalty Points", details, request=request)
     return {"success": True, "new_balance": new_balance}
 
 
@@ -998,17 +1283,7 @@ async def update_profile(request: Request):
 def segmentation(request: Request):
     if not require_staff(request):
         return _unauthorized()
-    spend_rows = fetch_all(
-        """
-        SELECT c.customer_id, CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
-               c.loyalty_points, SUM(co.total_amount) AS total_spent,
-               COUNT(co.order_id) AS order_count, MAX(co.order_date) AS last_order_date
-        FROM customers c
-        LEFT JOIN customer_orders co ON c.customer_id = co.customer_id
-        GROUP BY c.customer_id, c.first_name, c.last_name, c.loyalty_points
-        ORDER BY total_spent DESC
-        """
-    )
+    spend_rows = _customer_purchase_rows()
     spend_customers = []
     spend_data = []
     now = datetime.now()
@@ -1031,7 +1306,9 @@ def segmentation(request: Request):
             "total_spent": amt,
         })
 
-    fingerprint = hashlib.md5(json.dumps(spend_customers, default=str).encode()).hexdigest()
+    fingerprint = hashlib.md5(
+        json.dumps({"kmeans": 2, "customers": spend_customers}, default=str).encode()
+    ).hexdigest()
     cache_file = ROOT / "cache" / "segment_kmeans_cache.json"
     stored_k = 3
     if cache_file.exists():
@@ -1040,10 +1317,14 @@ def segmentation(request: Request):
             stored_k = int(cached.get("active_k") or (cached.get("payload") or {}).get("active_k") or 3)
             if stored_k not in (2, 3, 4, 5):
                 stored_k = 3
-            if cached.get("fingerprint") == fingerprint and cached.get("payload"):
-                payload = cached["payload"]
-                payload["active_k"] = stored_k
-                return payload
+            cached_payload = cached.get("payload") or {}
+            if (
+                cached.get("fingerprint") == fingerprint
+                and cached_payload
+                and cached_payload.get("engine") == "kmeans"
+            ):
+                cached_payload["active_k"] = stored_k
+                return cached_payload
         except Exception:
             stored_k = 3
 
@@ -1058,6 +1339,8 @@ def segmentation(request: Request):
     engine = "quantile"
     silhouette = {}
     debug = {}
+    if not kmeans_results:
+        debug["kmeans"] = "scikit-learn did not return clusters"
     total = len(spend_customers)
     for n, labels in label_sets.items():
         counts = [0] * n
@@ -1086,6 +1369,8 @@ def segmentation(request: Request):
             engine = "kmeans"
             if result.get("silhouette_score") is not None:
                 silhouette[n] = result["silhouette_score"]
+        elif result and result.get("error"):
+            debug[str(n)] = result.get("error")
         if not used and total > 0:
             for idx, amt in enumerate(spend_data):
                 bucket = min(n - 1, int((idx / total) * n))
@@ -1143,15 +1428,14 @@ async def segmentation_config(request: Request):
     cached["payload"] = payload
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     cache_file.write_text(json.dumps(cached, default=str), encoding="utf-8")
-    log_event("Update Segmentation", f"Set customer segments to {k}.", request=request)
+    log_event("Update Segmentation", f"Set customer groups to {k} segments.", request=request)
     return {"success": True, "active_k": k}
 
 
 def _run_kmeans(spend_customers):
-    script = ROOT / "python" / "segment_kmeans.py"
-    if not script.exists() or not spend_customers:
+    if not spend_customers:
         return None
-    payload = json.dumps({
+    payload = {
         "ks": [2, 3, 4, 5],
         "customers": [
             {
@@ -1162,15 +1446,30 @@ def _run_kmeans(spend_customers):
             }
             for c in spend_customers
         ],
-    })
-    for cmd in (["python", str(script)], ["py", "-3", str(script)]):
-        try:
-            proc = subprocess.run(cmd, input=payload, capture_output=True, text=True, timeout=20)
-            if proc.returncode != 0:
-                continue
-            decoded = json.loads(proc.stdout or "{}")
-            if decoded.get("success"):
-                return decoded.get("results")
-        except Exception:
-            continue
+    }
+    python_dir = str(ROOT / "python")
+    if python_dir not in sys.path:
+        sys.path.insert(0, python_dir)
+    try:
+        import segment_kmeans as skm
+        return skm.cluster_payload(payload)
+    except Exception as exc:
+        logger.warning("K-Means in-process failed: %s", exc)
+    script = ROOT / "python" / "segment_kmeans.py"
+    if not script.exists():
+        return None
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script)],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        decoded = json.loads(proc.stdout or "{}")
+        if decoded.get("success"):
+            return decoded.get("results")
+        logger.warning("K-Means subprocess failed: %s %s", proc.returncode, (proc.stderr or decoded.get("error") or "").strip())
+    except Exception as exc:
+        logger.warning("K-Means subprocess error: %s", exc)
     return None

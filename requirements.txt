@@ -7,5 +7,9 @@ python-multipart
 itsdangerous
 apscheduler
 rapidocr-onnxruntime
+pypdfium2
 openpyxl
 fpdf2
+pywebpush
+numpy
+scikit-learn

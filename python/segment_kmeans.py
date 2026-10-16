@@ -16,7 +16,7 @@ Contract (stdin -> stdout, both JSON):
       ]
     }
     Three RFM-style features are used per customer:
-      - monetary:     total amount spent (from completed/placed orders)
+      - monetary:     total spent on online orders plus walk-in sales linked to the customer
       - frequency:    number of orders placed
       - recency_days: days since the customer's most recent order
                       (a large placeholder, e.g. 9999, is used for
@@ -103,31 +103,19 @@ def cluster_one_k(k, X, X_norm, ids):
     }
 
 
-def main():
-    try:
-        payload = json.load(sys.stdin)
-    except Exception as e:
-        fail(f"Invalid JSON input: {e}")
-        return
-
+def cluster_payload(payload):
     ks = payload.get("ks")
     if ks is None and isinstance(payload.get("k"), int):
-        ks = [payload["k"]]  # backwards-compatible single-k input
+        ks = [payload["k"]]
     if not isinstance(ks, list) or not ks or any((not isinstance(k, int) or k < 2) for k in ks):
-        fail("ks must be a non-empty list of integers >= 2")
-        return
+        raise ValueError("ks must be a non-empty list of integers >= 2")
 
     customers = payload.get("customers") or []
     if not customers:
-        fail("No customers provided")
-        return
+        raise ValueError("No customers provided")
 
-    try:
-        import numpy as np
-        import sklearn  # noqa: F401  (import check only; used lazily per-k above)
-    except ImportError as e:
-        fail(f"scikit-learn / numpy not available: {e}")
-        return
+    import numpy as np
+    import sklearn  # noqa: F401
 
     ids = [c["customer_id"] for c in customers]
     X = np.array(
@@ -136,16 +124,10 @@ def main():
         dtype=float,
     )
 
-    # Z-score normalization - computed ONCE and reused for every k - so
-    # Monetary (₱ hundreds/thousands) doesn't dominate Frequency (single
-    # digits) or Recency (days) purely due to scale. Same normalization
-    # approach used in the segmentation literature this study is based
-    # on (e.g. Tabianan et al., 2022).
     means = X.mean(axis=0)
     stds = X.std(axis=0)
-    stds[stds == 0] = 1.0  # avoid divide-by-zero for a constant column
+    stds[stds == 0] = 1.0
     X_norm = (X - means) / stds
-
     no_variation = bool(np.allclose(X_norm, X_norm[0]))
 
     results = {}
@@ -154,6 +136,24 @@ def main():
             results[str(k)] = {"success": False, "error": "Not enough variation in customer data to form meaningful clusters"}
         else:
             results[str(k)] = cluster_one_k(k, X, X_norm, ids)
+    return results
+
+
+def main():
+    try:
+        payload = json.load(sys.stdin)
+    except Exception as e:
+        fail(f"Invalid JSON input: {e}")
+        return
+
+    try:
+        results = cluster_payload(payload)
+    except ImportError as e:
+        fail(f"scikit-learn / numpy not available: {e}")
+        return
+    except ValueError as e:
+        fail(str(e))
+        return
 
     print(json.dumps({"success": True, "results": results, "engine": "kmeans"}))
 

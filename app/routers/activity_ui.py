@@ -5,7 +5,6 @@ from collections import defaultdict
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from app.activity import log_event
 from app.deps import session_user_id
 
 router = APIRouter(prefix="/api/activity", tags=["activity"])
@@ -43,9 +42,4 @@ async def ui_click(request: Request):
     lower = label.lower()
     if any(w in lower for w in ("password", "current password", "new password")):
         label = "Password field"
-    role = str(request.session.get("user_role") or "user")
-    details = f"{role} clicked “{label}”"
-    if page:
-        details += f" on {page}"
-    log_event("UI Click", details[:500], request=request)
-    return {"ok": True}
+    return {"ok": True, "skipped": True}

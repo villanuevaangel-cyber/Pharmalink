@@ -18,18 +18,38 @@ from app.routers.staff import router as staff_router
 from app.routers.admin import router as admin_router
 from app.routers.admin_ops import router as admin_ops_router
 from app.routers.activity_ui import router as activity_ui_router
+from app.routers.push import router as push_router
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
 
+def _boot_database() -> None:
+    import time
+
+    while True:
+        try:
+            init_pool()
+            from app.automation import start_scheduler
+            start_scheduler()
+            print("Database connected.", flush=True)
+            return
+        except Exception as exc:
+            print(f"Database not ready, retrying: {exc}", flush=True)
+            time.sleep(10)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    init_pool()
-    from app.automation import start_scheduler, stop_scheduler
-    start_scheduler()
+    import threading
+
+    threading.Thread(target=_boot_database, daemon=True, name="pharmalink-db").start()
     yield
-    stop_scheduler()
+    try:
+        from app.automation import stop_scheduler
+        stop_scheduler()
+    except Exception:
+        pass
 
 
 app = FastAPI(title="PharmaLink", lifespan=lifespan)
@@ -47,6 +67,7 @@ app.include_router(staff_router)
 app.include_router(admin_router)
 app.include_router(admin_ops_router)
 app.include_router(activity_ui_router)
+app.include_router(push_router)
 
 
 @app.get("/sw.js")
