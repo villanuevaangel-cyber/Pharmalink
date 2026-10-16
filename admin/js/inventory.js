@@ -928,28 +928,32 @@
         return document.getElementById('lotStatusFilter')?.value || 'active';
     }
 
+    let lotsRequest = 0;
+
     function fetchLots() {
         const body = document.getElementById('inventoryBody');
         if (body) body.innerHTML = '<tr><td colspan="13" class="inv-empty">Loading...</td></tr>';
         const status = lotStatusFilter();
         const excludeExpired = status === 'active' ? '1' : '0';
         const params = new URLSearchParams({ status, exclude_expired: excludeExpired });
+        const requestId = ++lotsRequest;
         return fetch('/api/admin/lots?' + params.toString())
             .then(res => {
                 if (!res.ok) throw new Error('Server returned ' + res.status);
-                const ctype = (res.headers.get('content-type') || '').toLowerCase();
-                if (!ctype.includes('application/json')) throw new Error('Server returned ' + res.status);
                 return res.json();
             })
             .then(data => {
+                if (requestId !== lotsRequest) return;
                 lots = Array.isArray(data) ? data : [];
                 renderSummaryCards();
                 renderInventoryTable();
             })
             .catch(err => {
+                if (requestId !== lotsRequest) return;
                 console.error('Failed to load inventory lots:', err);
-                const body = document.getElementById('inventoryBody');
-                if (body) body.innerHTML = '<tr><td colspan="13" class="inv-empty is-error">Failed to load inventory.</td></tr>';
+                inventoryDataLoaded = false;
+                const failedBody = document.getElementById('inventoryBody');
+                if (failedBody) failedBody.innerHTML = '<tr><td colspan="13" class="inv-empty is-error">Failed to load inventory.</td></tr>';
             });
     }
 
@@ -1389,6 +1393,11 @@
     }
 
     let inventoryDataLoaded = false;
+    function inventorySectionOpen() {
+        const sec = document.getElementById('inventory');
+        if (!sec) return false;
+        return sec.classList.contains('is-shown') || sec.style.display === 'block';
+    }
     function ensureInventoryData() {
         if (inventoryDataLoaded) return;
         inventoryDataLoaded = true;
@@ -1397,6 +1406,7 @@
         fetchStockAdjustments();
         fetchCategoryMarkups();
     }
+    if (window.__inventoryPending || inventorySectionOpen()) ensureInventoryData();
 
     window.computeSuggestedPrice = computeSuggestedPrice;
     window.fetchCategoryMarkups = fetchCategoryMarkups;
