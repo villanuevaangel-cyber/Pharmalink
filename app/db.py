@@ -95,7 +95,7 @@ def _open_pool() -> None:
     for _attempt in range(1):
         try:
             _pool = ThreadedConnectionPool(
-                minconn=1,
+                minconn=3,
                 maxconn=8,
                 host=os.getenv("SUPABASE_DB_HOST"),
                 port=os.getenv("SUPABASE_DB_PORT", "5432"),

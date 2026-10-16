@@ -21,20 +21,13 @@
                     return;
                 }
                 window.ADMIN_USER_ID = me.user_id;
-                let staff = me.staff || {};
-                try {
-                    const profileRes = await fetch("/api/admin/profile", { credentials: "same-origin" });
-                    const profile = await profileRes.json();
-                    if (profile.success && profile.staff) staff = profile.staff;
-                } catch (err) {}
+                const staff = me.staff || {};
                 applyProfile(staff, me.firstName, me.lastName, me.profile_image || staff.profile_image);
             }
         } catch (err) {
             return;
         }
 
-        loadStaffTable();
-        loadCustomerTable();
     });
 
     function personName(staff, firstName, lastName, fallback) {

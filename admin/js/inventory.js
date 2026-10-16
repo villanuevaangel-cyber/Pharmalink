@@ -1386,6 +1386,12 @@
             });
         });
 
+    }
+
+    let inventoryDataLoaded = false;
+    function ensureInventoryData() {
+        if (inventoryDataLoaded) return;
+        inventoryDataLoaded = true;
         fetchMasterDrugs();
         fetchLots();
         fetchStockAdjustments();
@@ -1396,6 +1402,7 @@
     window.fetchCategoryMarkups = fetchCategoryMarkups;
     window.fetchMasterDrugs = fetchMasterDrugs;
     window.fetchLots = fetchLots;
+    window.ensureInventoryData = ensureInventoryData;
     window.openDrugBarcodeScanner = openDrugBarcodeScanner;
 
     if (document.readyState === 'loading') {

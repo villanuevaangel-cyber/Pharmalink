@@ -751,7 +751,7 @@
     });
 
     refresh();
-    setInterval(refresh, 4000);
+    setInterval(refresh, 30000);
     setInterval(tickNotifTimes, 1000);
   });
 

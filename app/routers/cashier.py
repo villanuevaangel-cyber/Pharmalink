@@ -83,27 +83,27 @@ def products(request: Request):
         return _unauthorized()
     rows = fetch_all(
         """
+        WITH avail AS (
+            SELECT drug_id, lot_inventory_id, price, current_stock, expiration_date
+            FROM inventory_lots
+            WHERE is_active = 1
+              AND expiration_date >= CURRENT_DATE
+              AND current_stock > 0
+        )
         SELECT dm.drug_id, dm.category, dm.brand_name, dm.generic_name,
-               dm.dosage, dm.form, il.price, il.lot_inventory_id, stock.on_hand AS current_stock
+               dm.dosage, dm.form, first_lot.price, first_lot.lot_inventory_id,
+               sums.on_hand AS current_stock
         FROM drugs_master dm
-        JOIN LATERAL (
-            SELECT lot_inventory_id, price
-            FROM inventory_lots
-            WHERE drug_id = dm.drug_id
-              AND is_active = 1
-              AND expiration_date >= CURRENT_DATE
-              AND current_stock > 0
-            ORDER BY expiration_date ASC, lot_inventory_id ASC
-            LIMIT 1
-        ) il ON TRUE
-        JOIN LATERAL (
-            SELECT COALESCE(SUM(current_stock), 0) AS on_hand
-            FROM inventory_lots
-            WHERE drug_id = dm.drug_id
-              AND is_active = 1
-              AND expiration_date >= CURRENT_DATE
-              AND current_stock > 0
-        ) stock ON stock.on_hand > 0
+        JOIN (
+            SELECT drug_id, SUM(current_stock) AS on_hand
+            FROM avail
+            GROUP BY drug_id
+        ) sums ON sums.drug_id = dm.drug_id
+        JOIN (
+            SELECT DISTINCT ON (drug_id) drug_id, lot_inventory_id, price
+            FROM avail
+            ORDER BY drug_id, expiration_date ASC, lot_inventory_id ASC
+        ) first_lot ON first_lot.drug_id = dm.drug_id
         WHERE dm.is_active = 1
         ORDER BY dm.generic_name ASC, dm.brand_name ASC
         """
@@ -878,6 +878,7 @@ def _customer_purchase_rows():
               AND customer_id IS NOT NULL
             GROUP BY customer_id
         ) w ON w.customer_id = c.customer_id
+        WHERE COALESCE(c.is_active, 1) = 1
         ORDER BY total_spent DESC, customer_name
         """
     )
