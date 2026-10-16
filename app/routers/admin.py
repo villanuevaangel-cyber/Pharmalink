@@ -152,14 +152,25 @@ def dashboard(
                 else:
                     inactive_supplier_count += int(row["cnt"])
             cur.execute("SELECT stock_status, COUNT(*) AS cnt FROM drugs_master WHERE is_active = 1 GROUP BY stock_status")
-            ok_stock = low_stock = out_stock = 0
+            ok_stock = out_stock = 0
             for row in cur.fetchall():
-                if row["stock_status"] == "low":
-                    low_stock = int(row["cnt"])
-                elif row["stock_status"] == "out":
+                if row["stock_status"] == "out":
                     out_stock = int(row["cnt"])
-                else:
+                elif row["stock_status"] != "low":
                     ok_stock += int(row["cnt"])
+            cur.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM inventory_lots l
+                JOIN drugs_master d ON d.drug_id = l.drug_id
+                WHERE d.is_active = 1
+                  AND l.is_active = 1
+                  AND l.current_stock > 0
+                  AND l.expiration_date >= CURRENT_DATE
+                  AND l.current_stock <= COALESCE(d.minimum_stock, 0)
+                """
+            )
+            low_stock = int(cur.fetchone()["cnt"] or 0)
             cur.execute(
                 """
                 SELECT COUNT(*) AS cnt FROM inventory_lots
