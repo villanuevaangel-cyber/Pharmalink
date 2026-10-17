@@ -934,7 +934,7 @@ def create_auto_purchase_orders(drug_ids: set[int] | None = None, use_forecast: 
     if drug_ids is not None:
         needs = [s for s in needs if int(s["drug_id"]) in drug_ids]
     notes = (
-        "This is an automatic order. PharmaLink prepared it from the stock we expect to need in the next 30 days."
+        "This is an automatic order. PharmaLink prepared it from the Prophet 30-day sales forecast."
     )
     result = create_purchase_orders_from_needs(needs, "System", notes, raise_alerts=True)
     from app.routers.admin_ops import send_saved_purchase_order
@@ -1003,7 +1003,7 @@ def _unsent_automatic_po_ids(exclude: set[int] | None = None) -> list[int]:
 
 
 def run_restock_if_needed() -> dict:
-    """Create and email PMDS Drugstore POs as soon as stock is short."""
+    """Create and email POs from the Prophet forecast as soon as stock is short."""
     global _pending_all_drugs
     if not _restock_lock.acquire(blocking=False):
         schedule_auto_restock_check()
@@ -1016,7 +1016,7 @@ def run_restock_if_needed() -> dict:
             _pending_all_drugs = False
         result = create_auto_purchase_orders(
             drug_ids=None if all_drugs else drug_ids,
-            use_forecast=False,
+            use_forecast=True,
         )
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
