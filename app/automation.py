@@ -35,6 +35,7 @@ _pending_drug_ids: set[int] = set()
 _pending_all_drugs = False
 _restock_task_scheduled = False
 _AUTO_EMAIL_SUPPLIER_ID = 10
+_AUTO_EMAIL_SUPPLIER_EMAIL = "pharmalink.ph32@gmail.com"
 
 
 def ensure_automation_schema(conn) -> None:
@@ -669,6 +670,7 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
                        COALESCE(stock.on_hand, 0) AS current_stock, COALESCE(recent.sold, 0) AS units_sold_30d,
                        recent_supplier.supplier_id AS suggested_supplier_id,
                        recent_supplier.supplier_name AS suggested_supplier_name,
+                       recent_supplier.email AS suggested_supplier_email,
                        recent_supplier.consignment_policy AS supplier_consignment_policy,
                        COALESCE((
                            SELECT SUM(il.current_stock)
@@ -696,7 +698,7 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
                     GROUP BY si.drug_id
                 ) recent ON recent.drug_id = d.drug_id
                 LEFT JOIN LATERAL (
-                    SELECT s.supplier_id, s.supplier_name, s.consignment_policy
+                    SELECT s.supplier_id, s.supplier_name, s.email, s.consignment_policy
                     FROM suppliers s
                     WHERE s.supplier_id = COALESCE(
                         (
@@ -806,6 +808,7 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             "reasoning": reasoning,
             "suggested_supplier_id": int(row["suggested_supplier_id"]) if row["suggested_supplier_id"] is not None else None,
             "suggested_supplier_name": row["suggested_supplier_name"],
+            "suggested_supplier_email": (row.get("suggested_supplier_email") or "").strip(),
         })
     order = {"increase": 0, "decrease": 1, "ok": 2}
     suggestions.sort(
@@ -923,7 +926,10 @@ def create_auto_purchase_orders(drug_ids: set[int] | None = None, use_forecast: 
         if s["action"] == "increase"
         and s["suggested_qty"] > 0
         and s.get("auto_po", True)
-        and int(s.get("suggested_supplier_id") or 0) == _AUTO_EMAIL_SUPPLIER_ID
+        and (
+            int(s.get("suggested_supplier_id") or 0) == _AUTO_EMAIL_SUPPLIER_ID
+            or str(s.get("suggested_supplier_email") or "").strip().lower() == _AUTO_EMAIL_SUPPLIER_EMAIL
+        )
     ]
     if drug_ids is not None:
         needs = [s for s in needs if int(s["drug_id"]) in drug_ids]
@@ -997,7 +1003,7 @@ def _unsent_automatic_po_ids(exclude: set[int] | None = None) -> list[int]:
 
 
 def run_restock_if_needed() -> dict:
-    """Create and email Personal Test Supplier POs as soon as stock is short."""
+    """Create and email PMDS Drugstore POs as soon as stock is short."""
     global _pending_all_drugs
     if not _restock_lock.acquire(blocking=False):
         schedule_auto_restock_check()
