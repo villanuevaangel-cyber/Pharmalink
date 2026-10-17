@@ -467,7 +467,7 @@
                             <strong id="automation-hourly-text">Checking…</strong>
                         </div>
                         <div class="ad-auto-meta-item">
-                            <span class="ad-auto-label">Auto-PO · 6:00 AM</span>
+                            <span class="ad-auto-label">Auto-PO · on restock</span>
                             <strong id="automation-daily-text">Checking…</strong>
                         </div>
                         <div class="ad-auto-meta-item">
@@ -5665,13 +5665,13 @@ window.loadSalesAnalytics = loadSalesAnalytics;
                     pill.classList.toggle('is-off', !running);
                 }
                 const hourly = data.last_run && data.last_run.hourly;
-                const daily = data.last_run && data.last_run.daily;
+                const daily = data.last_run && (data.last_run.restock || data.last_run.daily);
                 const emailEl = document.getElementById('automation-email-text');
                 const mail = data.alert_email || {};
                 const recipients = mail.recipients || [];
                 const last = mail.last_result || {};
                 if (hourlyEl) hourlyEl.textContent = hourly ? ('Last run ' + fmtAutomationAt(hourly.at)) : 'Waiting for first pass';
-                if (dailyEl) dailyEl.textContent = daily ? ('Last run ' + fmtAutomationAt(daily.at)) : 'Runs daily at 6:00 AM';
+                if (dailyEl) dailyEl.textContent = daily ? ('Last run ' + fmtAutomationAt(daily.at)) : 'Sends when stock needs restock';
                 if (emailEl) {
                     if (!recipients.length) {
                         emailEl.textContent = 'No admin email saved. Add one on the admin account.';

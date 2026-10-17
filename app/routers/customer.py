@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response
 from psycopg2.extras import RealDictCursor
 
 from app.activity import write_activity_log
-from app.automation import _upsert_alert
+from app.automation import _upsert_alert, schedule_auto_restock_check
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import session_user_id
 from app.payments import CUSTOMER_EWALLET_KEYS, CUSTOMER_PAYMENT_KEYS, normalize_payment_method
@@ -888,6 +888,7 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
 
         import secrets
         request.session["order_token"] = secrets.token_hex(32)
+        schedule_auto_restock_check()
         return {
             "success": True,
             "order_id": order_id,

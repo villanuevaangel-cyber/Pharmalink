@@ -11,7 +11,7 @@ from psycopg2 import IntegrityError
 from psycopg2.extras import RealDictCursor
 
 from app.activity import actor_display_name, write_activity_log
-from app.automation import run_consignment_cross_check
+from app.automation import run_consignment_cross_check, schedule_auto_restock_check
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin
 from app.pricing import reprice_lots_for_category, resolve_selling_price
@@ -100,7 +100,7 @@ def dashboard(
 ):
     if not require_admin(request):
         return _unauthorized()
-    today = date.today()
+    today = _manila_today()
     start = _parse_day(start_date)
     end = _parse_day(end_date)
     if start and end:
@@ -128,10 +128,16 @@ def dashboard(
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                "SELECT COUNT(u.user_id) AS n FROM users u JOIN role r ON u.role_id=r.role_id WHERE LOWER(r.role_name) != 'customer'"
+                """
+                SELECT COUNT(u.user_id) AS n
+                FROM users u
+                JOIN role r ON u.role_id = r.role_id
+                WHERE LOWER(r.role_name) != 'customer'
+                  AND u.is_active = 1
+                """
             )
             staff_count = int(cur.fetchone()["n"] or 0)
-            cur.execute("SELECT COUNT(customer_id) AS n FROM customers")
+            cur.execute("SELECT COUNT(customer_id) AS n FROM customers WHERE COALESCE(is_active, 1) = 1")
             customer_count = int(cur.fetchone()["n"] or 0)
             cur.execute(
                 """
@@ -158,6 +164,7 @@ def dashboard(
                     out_stock = int(row["cnt"])
                 elif row["stock_status"] != "low":
                     ok_stock += int(row["cnt"])
+            expiring_until = today + timedelta(days=30)
             cur.execute(
                 """
                 SELECT COUNT(*) AS cnt
@@ -166,18 +173,24 @@ def dashboard(
                 WHERE d.is_active = 1
                   AND l.is_active = 1
                   AND l.current_stock > 0
-                  AND l.expiration_date >= CURRENT_DATE
+                  AND l.expiration_date >= %s
                   AND l.current_stock <= COALESCE(d.minimum_stock, 0)
-                """
+                """,
+                (today,),
             )
             low_stock = int(cur.fetchone()["cnt"] or 0)
             cur.execute(
                 """
-                SELECT COUNT(*) AS cnt FROM inventory_lots
-                WHERE is_active = 1 AND current_stock > 0
-                  AND expiration_date >= CURRENT_DATE
-                  AND expiration_date <= (CURRENT_DATE + INTERVAL '30 days')
-                """
+                SELECT COUNT(*) AS cnt
+                FROM inventory_lots l
+                JOIN drugs_master d ON d.drug_id = l.drug_id
+                WHERE d.is_active = 1
+                  AND l.is_active = 1
+                  AND l.current_stock > 0
+                  AND l.expiration_date >= %s
+                  AND l.expiration_date <= %s
+                """,
+                (today, expiring_until),
             )
             expiring_30_count = int(cur.fetchone()["cnt"] or 0)
     return {
@@ -474,17 +487,19 @@ def list_lots(request: Request, status: str = "active", exclude_expired: str = "
         LEFT JOIN suppliers s ON l.supplier = s.supplier_id
     """
     where = []
+    params = []
     if status == "active":
         where.append("l.is_active = 1")
     elif status == "archived":
         where.append("l.is_active = 0")
     if exclude_expired == "1":
-        where.append("l.expiration_date >= CURRENT_DATE")
+        where.append("l.expiration_date >= %s")
+        params.append(_manila_today())
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY l.expiration_date ASC"
     out = []
-    for row in fetch_all(sql):
+    for row in fetch_all(sql, tuple(params)):
         item = _row(row)
         item["current_stock"] = int(item.get("current_stock") or 0)
         item["minimum_stock"] = int(item.get("minimum_stock") or 0)
@@ -524,11 +539,13 @@ async def update_lot(request: Request):
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("SELECT drug_id FROM inventory_lots WHERE lot_inventory_id = %s", (lot_id,))
+                cur.execute("SELECT drug_id, current_stock FROM inventory_lots WHERE lot_inventory_id = %s", (lot_id,))
                 lot_row = cur.fetchone()
                 if not lot_row:
                     return JSONResponse({"success": False, "message": "Stock lot not found."}, status_code=404)
                 drug_id = int(lot_row["drug_id"])
+                previous_stock = int(lot_row["current_stock"] or 0)
+                new_stock = int(data.get("current_stock") or 0)
                 sell_price = resolve_selling_price(cur, drug_id, cost_price)
                 cur.execute(
                     """
@@ -538,11 +555,13 @@ async def update_lot(request: Request):
                     """,
                     (
                         str(data.get("lot_number") or "").strip(), exp_raw,
-                        int(data.get("current_stock") or 0), sell_price, cost_price, supplier, lot_id,
+                        new_stock, sell_price, cost_price, supplier, lot_id,
                     ),
                 )
                 sync_stock_status_for_drug(cur, drug_id)
                 _log(cur, request, "Update Stock Lot", f"Updated lot {data.get('lot_number') or lot_id}.")
+        if new_stock < previous_stock:
+            schedule_auto_restock_check()
         return {"success": True, "message": "Stock lot updated successfully."}
     except IntegrityError:
         return {"success": False, "message": "This lot number already exists for this drug. Please use a different lot/batch number."}
@@ -569,6 +588,7 @@ def deactivate_lot(request: Request, id: int = 0):
             cur.execute("UPDATE inventory_lots SET is_active = 0 WHERE lot_inventory_id = %s", (id,))
             detail = f"Deactivated lot {lot_label}" + (f" of {med}." if med else ".")
             _log(cur, request, "Deactivate Stock Lot", detail)
+    schedule_auto_restock_check()
     return {"success": True, "message": "Stock lot deactivated successfully."}
 
 
@@ -680,6 +700,8 @@ async def adjust_stock(request: Request):
                 "Update Stock",
                 f"{moved} of {med}, lot {lot_no}. Stock is now {new_stock} (was {previous}). Reason: {reason}.{note}",
             )
+    if change < 0:
+        schedule_auto_restock_check()
     return {"success": True, "new_stock": new_stock, "quantity_change": change}
 
 

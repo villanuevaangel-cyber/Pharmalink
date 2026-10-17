@@ -1078,17 +1078,18 @@ def activity_logs(
     offset = max(0, int(offset))
     where = ["action <> 'UI Click'", "action NOT ILIKE %s"]
     params: list = ["%click%"]
+    manila_date = "((date AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date"
     start_s = str(start or "").strip()[:10]
     end_s = str(end or "").strip()[:10]
     if start_s and end_s and start_s > end_s:
         start_s, end_s = end_s, start_s
     if start_s and end_s:
-        where.append("date::date BETWEEN %s AND %s")
+        where.append(f"{manila_date} BETWEEN %s AND %s")
         params.extend([start_s, end_s])
     elif int(days or 0) > 0:
         span = max(1, min(365, int(days)))
-        where.append("date::date >= (CURRENT_DATE - (%s - 1))")
-        params.append(span)
+        where.append(f"{manila_date} >= (%s::date - (%s - 1))")
+        params.extend([_manila_today().isoformat(), span])
     query = " ".join(str(q or "").split())[:80]
     if query:
         like = f"%{query}%"
@@ -1099,7 +1100,7 @@ def activity_logs(
     total = int((total_row or {}).get("n") or 0)
     logs = []
     for row in fetch_all(
-        "SELECT date, admin_name, action, details FROM activity_logs"
+        "SELECT ((date AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila') AS date, admin_name, action, details FROM activity_logs"
         + clause
         + " ORDER BY date DESC LIMIT %s OFFSET %s",
         tuple(params) + (limit, offset),
@@ -1165,20 +1166,22 @@ def expiring(request: Request, days: int = 30):
     if not require_admin(request):
         return _unauthorized()
     days = max(1, days)
+    today = _manila_today()
     items = []
     total = 0.0
     for row in fetch_all(
         """
         SELECT l.lot_inventory_id, l.lot_number, l.expiration_date, l.current_stock, l.price,
                d.generic_name, d.brand_name, d.dosage, d.form,
-               (l.expiration_date - CURRENT_DATE) AS days_left
+               (l.expiration_date - %s::date) AS days_left
         FROM inventory_lots l JOIN drugs_master d ON l.drug_id = d.drug_id
-        WHERE l.is_active = 1 AND l.current_stock > 0
-          AND l.expiration_date >= CURRENT_DATE
-          AND l.expiration_date <= (CURRENT_DATE + (%s || ' days')::interval)
+        WHERE d.is_active = 1
+          AND l.is_active = 1 AND l.current_stock > 0
+          AND l.expiration_date >= %s
+          AND l.expiration_date <= %s
         ORDER BY l.expiration_date ASC
         """,
-        (days,),
+        (today, today, today + timedelta(days=days)),
     ):
         qty = int(row["current_stock"] or 0)
         price = float(row["price"] or 0)
