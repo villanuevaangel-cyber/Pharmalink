@@ -561,7 +561,7 @@ async def update_lot(request: Request):
                 sync_stock_status_for_drug(cur, drug_id)
                 _log(cur, request, "Update Stock Lot", f"Updated lot {data.get('lot_number') or lot_id}.")
         if new_stock < previous_stock:
-            schedule_auto_restock_check()
+            schedule_auto_restock_check(drug_id)
         return {"success": True, "message": "Stock lot updated successfully."}
     except IntegrityError:
         return {"success": False, "message": "This lot number already exists for this drug. Please use a different lot/batch number."}
@@ -575,7 +575,7 @@ def deactivate_lot(request: Request, id: int = 0):
         return JSONResponse({"success": False, "message": "Lot ID is required."}, status_code=400)
     lot = fetch_one(
         """
-        SELECT l.lot_number, d.generic_name FROM inventory_lots l
+        SELECT l.lot_number, l.drug_id, d.generic_name FROM inventory_lots l
         LEFT JOIN drugs_master d ON d.drug_id = l.drug_id
         WHERE l.lot_inventory_id = %s
         """,
@@ -588,7 +588,8 @@ def deactivate_lot(request: Request, id: int = 0):
             cur.execute("UPDATE inventory_lots SET is_active = 0 WHERE lot_inventory_id = %s", (id,))
             detail = f"Deactivated lot {lot_label}" + (f" of {med}." if med else ".")
             _log(cur, request, "Deactivate Stock Lot", detail)
-    schedule_auto_restock_check()
+    if lot and lot.get("drug_id"):
+        schedule_auto_restock_check(int(lot["drug_id"]))
     return {"success": True, "message": "Stock lot deactivated successfully."}
 
 
@@ -701,7 +702,7 @@ async def adjust_stock(request: Request):
                 f"{moved} of {med}, lot {lot_no}. Stock is now {new_stock} (was {previous}). Reason: {reason}.{note}",
             )
     if change < 0:
-        schedule_auto_restock_check()
+        schedule_auto_restock_check(int(lot["drug_id"]))
     return {"success": True, "new_stock": new_stock, "quantity_change": change}
 
 

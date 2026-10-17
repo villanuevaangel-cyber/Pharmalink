@@ -1,6 +1,7 @@
 """Server-side automation: schema, expiry, alerts, trend/consignment POs, scheduler."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -30,8 +31,10 @@ _scheduler = None
 _last_run: dict = {}
 _restock_lock = threading.Lock()
 _restock_timer_lock = threading.Lock()
-_restock_timer = None
-_RESTOCK_DELAY_SEC = 8
+_pending_drug_ids: set[int] = set()
+_pending_all_drugs = False
+_restock_task_scheduled = False
+_AUTO_EMAIL_SUPPLIER_ID = 10
 
 
 def ensure_automation_schema(conn) -> None:
@@ -650,9 +653,12 @@ def _prophet_units_by_drug(period: int = TARGET_DAYS) -> tuple[dict, str]:
     return demand, "prophet"
 
 
-def compute_reorder_suggestions() -> dict:
+def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
     lead, target, overstock, window = LEAD_DAYS, TARGET_DAYS, OVERSTOCK_DAYS, SALES_WINDOW_DAYS
-    forecast_units, demand_engine = _prophet_units_by_drug(target)
+    if use_forecast:
+        forecast_units, demand_engine = _prophet_units_by_drug(target)
+    else:
+        forecast_units, demand_engine = {}, "recent_average"
     rows = []
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -902,21 +908,25 @@ def create_purchase_orders_from_needs(needs, created_by: str, notes: str, raise_
                 created.append({
                     "po_id": po_id,
                     "po_number": po_number,
+                    "supplier_id": int(supplier_id),
                     "supplier_name": supplier["supplier_name"],
                     "item_count": len(items),
                 })
     return {"created": created, "skipped": skipped}
 
 
-def create_auto_purchase_orders() -> dict:
-    data = compute_reorder_suggestions()
+def create_auto_purchase_orders(drug_ids: set[int] | None = None, use_forecast: bool = True) -> dict:
+    data = compute_reorder_suggestions(use_forecast=use_forecast)
     needs = [
         s
         for s in data["suggestions"]
         if s["action"] == "increase"
         and s["suggested_qty"] > 0
         and s.get("auto_po", True)
+        and int(s.get("suggested_supplier_id") or 0) == _AUTO_EMAIL_SUPPLIER_ID
     ]
+    if drug_ids is not None:
+        needs = [s for s in needs if int(s["drug_id"]) in drug_ids]
     notes = (
         "This is an automatic order. PharmaLink prepared it from the stock we expect to need in the next 30 days."
     )
@@ -987,12 +997,25 @@ def _unsent_automatic_po_ids(exclude: set[int] | None = None) -> list[int]:
 
 
 def run_restock_if_needed() -> dict:
-    """Create and email supplier POs as soon as reorder rules say stock is short."""
+    """Create and email Personal Test Supplier POs as soon as stock is short."""
+    global _pending_all_drugs
     if not _restock_lock.acquire(blocking=False):
         schedule_auto_restock_check()
         return _last_run.get("restock") or {}
     try:
-        result = create_auto_purchase_orders()
+        with _restock_timer_lock:
+            drug_ids = set(_pending_drug_ids)
+            _pending_drug_ids.clear()
+            all_drugs = _pending_all_drugs
+            _pending_all_drugs = False
+        result = create_auto_purchase_orders(
+            drug_ids=None if all_drugs else drug_ids,
+            use_forecast=False,
+        )
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                scan_stock_alerts(cur)
+        result["email"] = email_alert_digest(stock_and_expiry_only=True)
         stamp = {"at": datetime.now(MANILA).isoformat(), **result}
         _last_run["restock"] = stamp
         _last_run["daily"] = stamp
@@ -1005,15 +1028,41 @@ def run_restock_if_needed() -> dict:
         _restock_lock.release()
 
 
-def schedule_auto_restock_check() -> None:
-    """Wait a few seconds after stock drops, then restock. Does not block checkout."""
-    global _restock_timer
+async def _restock_in_request_threadpool() -> None:
+    global _restock_task_scheduled
+    await asyncio.sleep(1)
+    from starlette.concurrency import run_in_threadpool
+
+    try:
+        await run_in_threadpool(run_restock_if_needed)
+    finally:
+        leftover = False
+        with _restock_timer_lock:
+            _restock_task_scheduled = False
+            leftover = bool(_pending_drug_ids or _pending_all_drugs)
+        if leftover:
+            schedule_auto_restock_check()
+
+
+def schedule_auto_restock_check(drug_id: int | None = None) -> None:
+    """Email restock from the request threadpool so Gmail SMTP can connect."""
+    global _pending_all_drugs, _restock_task_scheduled
     with _restock_timer_lock:
-        if _restock_timer is not None:
-            _restock_timer.cancel()
-        _restock_timer = threading.Timer(_RESTOCK_DELAY_SEC, run_restock_if_needed)
-        _restock_timer.daemon = True
-        _restock_timer.start()
+        if drug_id is None:
+            _pending_all_drugs = True
+        else:
+            _pending_drug_ids.add(int(drug_id))
+        if _restock_task_scheduled:
+            return
+        _restock_task_scheduled = True
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        threading.Thread(target=run_restock_if_needed, name="pharmalink-restock", daemon=True).start()
+        with _restock_timer_lock:
+            _restock_task_scheduled = False
+        return
+    loop.create_task(_restock_in_request_threadpool())
 
 
 def _admin_emails() -> list[str]:

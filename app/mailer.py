@@ -1,6 +1,7 @@
 import os
 import smtplib
 import socket
+import time
 from email.message import EmailMessage
 from email.utils import formataddr
 
@@ -101,18 +102,24 @@ def send_mail(to_email: str, subject: str, body_html: str) -> dict:
         return {"success": False, "message": str(exc) or type(exc).__name__}
 
     mode = "ssl" if port == 465 else "starttls"
-    try:
-        _send_once(host, port, mode, user, password, msg)
-        return {"success": True, "message": "sent"}
-    except smtplib.SMTPAuthenticationError as exc:
-        return {"success": False, "message": str(exc) or "SMTP login failed."}
-    except _CONNECT_ERRORS as exc:
-        if port != 465:
-            try:
-                _send_once(host, 465, "ssl", user, password, msg)
-                return {"success": True, "message": "sent"}
-            except Exception as fallback_exc:
-                return {"success": False, "message": str(fallback_exc) or str(exc)}
-        return {"success": False, "message": str(exc) or type(exc).__name__}
-    except Exception as exc:
-        return {"success": False, "message": str(exc) or type(exc).__name__}
+    last_exc = None
+    for attempt in range(3):
+        try:
+            _send_once(host, port, mode, user, password, msg)
+            return {"success": True, "message": "sent"}
+        except smtplib.SMTPAuthenticationError as exc:
+            return {"success": False, "message": str(exc) or "SMTP login failed."}
+        except _CONNECT_ERRORS as exc:
+            last_exc = exc
+            if port != 465:
+                try:
+                    _send_once(host, 465, "ssl", user, password, msg)
+                    return {"success": True, "message": "sent"}
+                except Exception as fallback_exc:
+                    last_exc = fallback_exc
+            if attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+        except Exception as exc:
+            return {"success": False, "message": str(exc) or type(exc).__name__}
+    return {"success": False, "message": str(last_exc) or "Network is unreachable"}

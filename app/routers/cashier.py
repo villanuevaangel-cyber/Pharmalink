@@ -1032,6 +1032,7 @@ async def create_sale(request: Request):
         if used:
             return JSONResponse({"status": "error", "message": "This e-wallet payment was already used on another sale."}, status_code=409)
 
+    sold_drugs = set()
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -1155,10 +1156,12 @@ async def create_sale(request: Request):
                 if points_redeemed > 0:
                     details += f" Points redeemed: {points_redeemed:.2f} (₱{points_discount_value:.2f})."
                 write_activity_log(cur, "POS Sale", details, request=request)
+                sold_drugs = set(affected)
 
         if not linked_order:
             from app.automation import schedule_auto_restock_check
-            schedule_auto_restock_check()
+            for drug_id in sold_drugs:
+                schedule_auto_restock_check(int(drug_id))
         return {
             "status": "success",
             "sale_id": sale_id,

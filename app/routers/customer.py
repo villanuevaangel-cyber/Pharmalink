@@ -888,7 +888,8 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
 
         import secrets
         request.session["order_token"] = secrets.token_hex(32)
-        schedule_auto_restock_check()
+        for drug_id in affected:
+            schedule_auto_restock_check(int(drug_id))
         return {
             "success": True,
             "order_id": order_id,
