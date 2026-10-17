@@ -201,25 +201,36 @@ def categories(request: Request):
 def customers(request: Request):
     if not require_staff(request):
         return _unauthorized()
-    rows = fetch_all(
-        """
-        SELECT customer_id,
-               CONCAT_WS(' ', first_name, middle_name, last_name) AS name,
-               COALESCE(username, '') AS username,
-               COALESCE(phone_number, '') AS phone_number,
-               COALESCE(loyalty_points, 0) AS loyalty_points
-        FROM customers
-        WHERE is_active = 1
-        ORDER BY last_name ASC
-        """
-    )
-    return [{
-        "customer_id": r["customer_id"],
-        "name": r["name"],
-        "username": r["username"] or "",
-        "phone_number": r["phone_number"] or "",
-        "loyalty_points": float(r["loyalty_points"] or 0),
-    } for r in rows]
+    try:
+        rows = fetch_all(
+            """
+            SELECT customer_id, first_name, middle_name, last_name,
+                   COALESCE(username, '') AS username,
+                   COALESCE(phone_number, '') AS phone_number,
+                   COALESCE(loyalty_points, 0) AS loyalty_points
+            FROM customers
+            WHERE is_active = 1
+            ORDER BY last_name ASC
+            """
+        )
+    except Exception:
+        logger.exception("cashier customers query failed")
+        rows = []
+    out = []
+    for r in rows:
+        parts = [
+            str(r.get("first_name") or "").strip(),
+            str(r.get("middle_name") or "").strip(),
+            str(r.get("last_name") or "").strip(),
+        ]
+        out.append({
+            "customer_id": int(r["customer_id"]),
+            "name": " ".join(p for p in parts if p),
+            "username": r.get("username") or "",
+            "phone_number": r.get("phone_number") or "",
+            "loyalty_points": float(r.get("loyalty_points") or 0),
+        })
+    return out
 
 
 @router.get("/checkout-rates")
@@ -275,37 +286,52 @@ def promos(request: Request):
 def online_orders(request: Request):
     if not require_staff(request):
         return _unauthorized()
-    rows = fetch_all(
-        """
-        SELECT co.order_id, co.order_date, co.order_status, co.payment_method, co.payment_status,
-               c.first_name, c.last_name,
-               COALESCE((
-                   SELECT string_agg(
-                       COALESCE(NULLIF(TRIM(dm.brand_name), ''), dm.generic_name),
-                       ', ' ORDER BY od.detail_id
-                   )
-                   FROM order_details od
-                   JOIN drugs_master dm ON dm.drug_id = od.drug_id
-                   WHERE od.order_id = co.order_id
-               ), '') AS medicines
-        FROM customer_orders co
-        JOIN customers c ON co.customer_id = c.customer_id
-        WHERE co.order_status IN ('Pending', 'Processing', 'Ready for Pickup')
-        ORDER BY co.order_date ASC
-        """
-    )
+    try:
+        rows = fetch_all(
+            """
+            SELECT co.order_id, co.order_date, co.order_status,
+                   COALESCE(co.payment_method, 'cash') AS payment_method,
+                   COALESCE(co.payment_status, 'unpaid') AS payment_status,
+                   COALESCE(c.first_name, '') AS first_name,
+                   COALESCE(c.last_name, '') AS last_name
+            FROM customer_orders co
+            LEFT JOIN customers c ON co.customer_id = c.customer_id
+            WHERE co.order_status IN ('Pending', 'Processing', 'Ready for Pickup')
+            ORDER BY co.order_date ASC
+            """
+        )
+        order_ids = [int(r["order_id"]) for r in rows]
+        medicines = {}
+        if order_ids:
+            for item in fetch_all(
+                """
+                SELECT od.order_id,
+                       COALESCE(NULLIF(TRIM(dm.brand_name), ''), dm.generic_name) AS med_name
+                FROM order_details od
+                JOIN drugs_master dm ON dm.drug_id = od.drug_id
+                WHERE od.order_id = ANY(%s)
+                ORDER BY od.order_id ASC, od.detail_id ASC
+                """,
+                (order_ids,),
+            ):
+                medicines.setdefault(int(item["order_id"]), []).append(item["med_name"] or "")
+    except Exception:
+        logger.exception("cashier online-orders query failed")
+        rows = []
+        medicines = {}
     orders = []
     for row in rows:
         status = row["order_status"]
+        oid = int(row["order_id"])
         orders.append({
-            "order_id": row["order_id"],
-            "display_id": f"ORD-{row['order_id']}",
-            "customer_name": f"{row['first_name']} {row['last_name']}",
+            "order_id": oid,
+            "display_id": f"ORD-{oid}",
+            "customer_name": f"{row['first_name']} {row['last_name']}".strip() or "Customer",
             "status": status,
             "status_class": str(status).lower().replace(" ", "-"),
             "payment_method": row.get("payment_method") or "cash",
             "payment_status": row.get("payment_status") or "unpaid",
-            "medicines": row.get("medicines") or "",
+            "medicines": ", ".join(n for n in medicines.get(oid, []) if n),
             "date": _fmt_dt(row["order_date"], "%b %d, %Y %I:%M %p"),
         })
     return {"success": True, "orders": orders}
@@ -905,7 +931,11 @@ def charts(request: Request):
 
 def _paymongo_base_url() -> str:
     configured = (os.getenv("PAYMONGO_BASE_URL") or "").strip().rstrip("/")
-    public = (os.getenv("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
+    public = (
+        os.getenv("PUBLIC_BASE_URL")
+        or os.getenv("RENDER_EXTERNAL_URL")
+        or ""
+    ).strip().rstrip("/")
     if configured and "127.0.0.1" not in configured and "localhost" not in configured:
         return configured
     return public or configured or "http://127.0.0.1:8080"
