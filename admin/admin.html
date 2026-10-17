@@ -5302,6 +5302,17 @@ window.loadSalesAnalytics = loadSalesAnalytics;
     const periodLabels = { today: 'Today', month: 'This Month', year: 'This Year', custom: 'Custom range' };
     let dashPeriod = 'month';
 
+    function adminGetJson(url, retries) {
+        retries = retries == null ? 2 : retries;
+        return fetch(url, { credentials: 'same-origin' }).then((res) => {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        }).catch((err) => {
+            if (retries < 1) throw err;
+            return new Promise((resolve) => setTimeout(resolve, 1500)).then(() => adminGetJson(url, retries - 1));
+        });
+    }
+
     function padDash(n) { return String(n).padStart(2, '0'); }
     function toYmd(d) {
         return d.getFullYear() + '-' + padDash(d.getMonth() + 1) + '-' + padDash(d.getDate());
@@ -5352,8 +5363,7 @@ window.loadSalesAnalytics = loadSalesAnalytics;
             if (endEl) endEl.value = end;
         }
         const qs = new URLSearchParams({ period: dashPeriod, start_date: start, end_date: end });
-        fetch('/api/admin/dashboard?' + qs.toString())
-            .then(res => res.json())
+        adminGetJson('/api/admin/dashboard?' + qs.toString())
             .then(data => {
                 const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
                 set('card-staff-count', data.staff_count);
@@ -5534,8 +5544,7 @@ window.loadSalesAnalytics = loadSalesAnalytics;
             : '<tr><td colspan="3">No sales data yet.</td></tr>';
     }
     function refreshMovingItems() {
-        fetch('/api/admin/moving-items')
-            .then(r => r.json())
+        adminGetJson('/api/admin/moving-items')
             .then(d => {
                 movingData = {
                     fast_moving: d.fast_moving || [],
@@ -5652,8 +5661,7 @@ window.loadSalesAnalytics = loadSalesAnalytics;
         return d.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
     }
     function refreshAutomationStatus() {
-        fetch('/api/admin/automation/status')
-            .then(r => r.json())
+        adminGetJson('/api/admin/automation/status')
             .then(data => {
                 const pill = document.getElementById('automation-scheduler-pill');
                 const hourlyEl = document.getElementById('automation-hourly-text');

@@ -1,7 +1,6 @@
 import os
 import smtplib
 import socket
-import time
 from email.message import EmailMessage
 from email.utils import formataddr
 
@@ -10,7 +9,7 @@ GENERIC_FORGOT_MESSAGE = (
     "If an account matches that ID and email, a password reset link has been sent to the email on file."
 )
 
-_SMTP_TIMEOUT = 10
+_SMTP_TIMEOUT = 4
 _CONNECT_ERRORS = (
     TimeoutError,
     socket.timeout,
@@ -24,27 +23,25 @@ def _clean(value: str) -> str:
     return (value or "").strip().strip('"').strip("'")
 
 
-def _connect_ipv4_first(host, port, timeout, source_address=None):
-    """Prefer IPv4. Render often has no IPv6 route, which raises errno 101."""
+def _connect_ipv4(host, port, timeout, source_address=None):
+    """IPv4 only. Render free instances often have no IPv6 route (errno 101)."""
     last_err = None
-    for family in (socket.AF_INET, socket.AF_INET6):
+    try:
+        infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+    except OSError as exc:
+        raise exc
+    for af, socktype, proto, _canon, sa in infos:
+        sock = socket.socket(af, socktype, proto)
         try:
-            infos = socket.getaddrinfo(host, port, family, socket.SOCK_STREAM)
+            if timeout is not None:
+                sock.settimeout(timeout)
+            if source_address:
+                sock.bind(source_address)
+            sock.connect(sa)
+            return sock
         except OSError as exc:
             last_err = exc
-            continue
-        for af, socktype, proto, _canon, sa in infos:
-            sock = socket.socket(af, socktype, proto)
-            try:
-                if timeout is not None:
-                    sock.settimeout(timeout)
-                if source_address:
-                    sock.bind(source_address)
-                sock.connect(sa)
-                return sock
-            except OSError as exc:
-                last_err = exc
-                sock.close()
+            sock.close()
     if last_err:
         raise last_err
     raise OSError(101, "Network is unreachable")
@@ -52,12 +49,12 @@ def _connect_ipv4_first(host, port, timeout, source_address=None):
 
 class _SMTP(smtplib.SMTP):
     def _get_socket(self, host, port, timeout):
-        return _connect_ipv4_first(host, port, timeout, self.source_address)
+        return _connect_ipv4(host, port, timeout, self.source_address)
 
 
 class _SMTP_SSL(smtplib.SMTP_SSL):
     def _get_socket(self, host, port, timeout):
-        sock = _connect_ipv4_first(host, port, timeout, self.source_address)
+        sock = _connect_ipv4(host, port, timeout, self.source_address)
         return self.context.wrap_socket(sock, server_hostname=host or self._host)
 
 
@@ -101,25 +98,22 @@ def send_mail(to_email: str, subject: str, body_html: str) -> dict:
     except Exception as exc:
         return {"success": False, "message": str(exc) or type(exc).__name__}
 
-    mode = "ssl" if port == 465 else "starttls"
+    attempts = [(465, "ssl"), (port, "starttls" if port != 465 else "ssl")]
+    seen = set()
     last_exc = None
-    for attempt in range(3):
+    for try_port, mode in attempts:
+        key = (try_port, mode)
+        if key in seen:
+            continue
+        seen.add(key)
         try:
-            _send_once(host, port, mode, user, password, msg)
+            _send_once(host, try_port, mode, user, password, msg)
             return {"success": True, "message": "sent"}
         except smtplib.SMTPAuthenticationError as exc:
             return {"success": False, "message": str(exc) or "SMTP login failed."}
         except _CONNECT_ERRORS as exc:
             last_exc = exc
-            if port != 465:
-                try:
-                    _send_once(host, 465, "ssl", user, password, msg)
-                    return {"success": True, "message": "sent"}
-                except Exception as fallback_exc:
-                    last_exc = fallback_exc
-            if attempt < 2:
-                time.sleep(1.5 * (attempt + 1))
-                continue
+            continue
         except Exception as exc:
             return {"success": False, "message": str(exc) or type(exc).__name__}
     return {"success": False, "message": str(last_exc) or "Network is unreachable"}

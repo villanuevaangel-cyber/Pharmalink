@@ -1021,7 +1021,6 @@ def run_restock_if_needed() -> dict:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 scan_stock_alerts(cur)
-        result["email"] = email_alert_digest(stock_and_expiry_only=True)
         stamp = {"at": datetime.now(MANILA).isoformat(), **result}
         _last_run["restock"] = stamp
         _last_run["daily"] = stamp
@@ -1168,7 +1167,7 @@ def email_alert_digest(stock_and_expiry_only: bool = False) -> dict:
     return outcome
 
 
-def run_hourly_jobs() -> dict:
+def run_hourly_jobs(send_email: bool = True) -> dict:
     result = {"expired_lots": 0, "near_expiry_alerts": 0, "stock_alerts": 0}
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -1177,12 +1176,18 @@ def run_hourly_jobs() -> dict:
             result["near_expiry_alerts"] = scan_near_expiry(cur)
             result["stock_alerts"] = scan_stock_alerts(cur)
     result["consignment"] = run_consignment_cross_check()
-    result["email"] = email_alert_digest(stock_and_expiry_only=True)
+    if send_email:
+        result["email"] = email_alert_digest(stock_and_expiry_only=True)
     _last_run["hourly"] = {"at": datetime.now(MANILA).isoformat(), **result}
     logger.info("hourly jobs: %s", result)
     if result.get("expired_lots"):
         schedule_auto_restock_check()
     return result
+
+
+def run_startup_jobs() -> dict:
+    """Scan stock on boot without SMTP so Render can finish starting."""
+    return run_hourly_jobs(send_email=False)
 
 
 def run_daily_jobs() -> dict:
@@ -1333,7 +1338,7 @@ def start_scheduler() -> None:
     )
     scheduler.start()
     _scheduler = scheduler
-    scheduler.add_job(run_hourly_jobs, "date", run_date=datetime.now(MANILA) + timedelta(seconds=12), id="pharmalink-startup")
+    scheduler.add_job(run_startup_jobs, "date", run_date=datetime.now(MANILA) + timedelta(seconds=12), id="pharmalink-startup")
     logger.info("automation scheduler started")
 
 
