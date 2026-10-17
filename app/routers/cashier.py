@@ -1156,6 +1156,9 @@ async def create_sale(request: Request):
                     details += f" Points redeemed: {points_redeemed:.2f} (₱{points_discount_value:.2f})."
                 write_activity_log(cur, "POS Sale", details, request=request)
 
+        if not linked_order:
+            from app.automation import schedule_auto_restock_check
+            schedule_auto_restock_check()
         return {
             "status": "success",
             "sale_id": sale_id,

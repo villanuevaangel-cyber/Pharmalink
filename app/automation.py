@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import subprocess
+import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -27,6 +28,10 @@ SALES_WINDOW_DAYS = 30
 
 _scheduler = None
 _last_run: dict = {}
+_restock_lock = threading.Lock()
+_restock_timer_lock = threading.Lock()
+_restock_timer = None
+_RESTOCK_DELAY_SEC = 8
 
 
 def ensure_automation_schema(conn) -> None:
@@ -920,11 +925,20 @@ def create_auto_purchase_orders() -> dict:
 
     emailed = 0
     not_sent = 0
+    created_ids = set()
     for po in result["created"]:
-        mail = send_saved_purchase_order(int(po["po_id"]), actor="System")
+        po_id = int(po["po_id"])
+        created_ids.add(po_id)
+        mail = send_saved_purchase_order(po_id, actor="System")
         po["email_sent"] = bool(mail.get("email_sent"))
         po["email_message"] = mail.get("message") or ""
         if po["email_sent"]:
+            emailed += 1
+        else:
+            not_sent += 1
+    for po_id in _unsent_automatic_po_ids(created_ids):
+        mail = send_saved_purchase_order(po_id, actor="System")
+        if mail.get("email_sent"):
             emailed += 1
         else:
             not_sent += 1
@@ -935,6 +949,71 @@ def create_auto_purchase_orders() -> dict:
         "emailed": emailed,
         "not_sent": not_sent,
     }
+
+
+def _unsent_automatic_po_ids(exclude: set[int] | None = None) -> list[int]:
+    """Pending auto-POs that still have no successful supplier email."""
+    skip = exclude or set()
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT po.po_id
+                FROM purchase_orders po
+                WHERE po.status = 'Pending'
+                  AND po.notes ILIKE %s
+                ORDER BY po.po_id
+                """,
+                ("This is an automatic order.%",),
+            )
+            pending = [int(row["po_id"]) for row in cur.fetchall() if int(row["po_id"]) not in skip]
+            if not pending:
+                return []
+            cur.execute(
+                """
+                SELECT details
+                FROM activity_logs
+                WHERE action = 'Email Purchase Order'
+                  AND details LIKE %s
+                """,
+                ("Emailed PO-%",),
+            )
+            emailed = set()
+            for row in cur.fetchall():
+                parts = str(row.get("details") or "").split()
+                if len(parts) >= 2 and parts[0] == "Emailed":
+                    emailed.add(parts[1].rstrip(".,"))
+    return [po_id for po_id in pending if f"PO-{po_id:05d}" not in emailed]
+
+
+def run_restock_if_needed() -> dict:
+    """Create and email supplier POs as soon as reorder rules say stock is short."""
+    if not _restock_lock.acquire(blocking=False):
+        schedule_auto_restock_check()
+        return _last_run.get("restock") or {}
+    try:
+        result = create_auto_purchase_orders()
+        stamp = {"at": datetime.now(MANILA).isoformat(), **result}
+        _last_run["restock"] = stamp
+        _last_run["daily"] = stamp
+        logger.info("restock check: %s", result)
+        return result
+    except Exception:
+        logger.exception("restock check failed")
+        return _last_run.get("restock") or {}
+    finally:
+        _restock_lock.release()
+
+
+def schedule_auto_restock_check() -> None:
+    """Wait a few seconds after stock drops, then restock. Does not block checkout."""
+    global _restock_timer
+    with _restock_timer_lock:
+        if _restock_timer is not None:
+            _restock_timer.cancel()
+        _restock_timer = threading.Timer(_RESTOCK_DELAY_SEC, run_restock_if_needed)
+        _restock_timer.daemon = True
+        _restock_timer.start()
 
 
 def _admin_emails() -> list[str]:
@@ -1046,6 +1125,8 @@ def run_hourly_jobs() -> dict:
     result["email"] = email_alert_digest(stock_and_expiry_only=True)
     _last_run["hourly"] = {"at": datetime.now(MANILA).isoformat(), **result}
     logger.info("hourly jobs: %s", result)
+    if result.get("expired_lots"):
+        schedule_auto_restock_check()
     return result
 
 
@@ -1173,6 +1254,7 @@ def last_run_status() -> dict:
     return {
         "scheduler": "running" if _scheduler and _scheduler.running else "stopped",
         "timezone": "Asia/Manila",
+        "auto_po_mode": "on_restock",
         "last_run": _last_run,
         "alert_email": alert_email_status(),
     }
@@ -1183,7 +1265,6 @@ def start_scheduler() -> None:
     if _scheduler is not None:
         return
     from apscheduler.schedulers.background import BackgroundScheduler
-    from apscheduler.triggers.cron import CronTrigger
     from apscheduler.triggers.interval import IntervalTrigger
 
     scheduler = BackgroundScheduler(timezone=MANILA)
@@ -1191,14 +1272,6 @@ def start_scheduler() -> None:
         run_hourly_jobs,
         IntervalTrigger(hours=1),
         id="pharmalink-hourly",
-        replace_existing=True,
-        max_instances=1,
-        coalesce=True,
-    )
-    scheduler.add_job(
-        run_daily_jobs,
-        CronTrigger(hour=6, minute=0, timezone=MANILA),
-        id="pharmalink-daily",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

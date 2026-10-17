@@ -11,7 +11,7 @@ from psycopg2 import IntegrityError
 from psycopg2.extras import RealDictCursor
 
 from app.activity import actor_display_name, write_activity_log
-from app.automation import run_consignment_cross_check
+from app.automation import run_consignment_cross_check, schedule_auto_restock_check
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin
 from app.pricing import reprice_lots_for_category, resolve_selling_price
@@ -539,11 +539,13 @@ async def update_lot(request: Request):
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("SELECT drug_id FROM inventory_lots WHERE lot_inventory_id = %s", (lot_id,))
+                cur.execute("SELECT drug_id, current_stock FROM inventory_lots WHERE lot_inventory_id = %s", (lot_id,))
                 lot_row = cur.fetchone()
                 if not lot_row:
                     return JSONResponse({"success": False, "message": "Stock lot not found."}, status_code=404)
                 drug_id = int(lot_row["drug_id"])
+                previous_stock = int(lot_row["current_stock"] or 0)
+                new_stock = int(data.get("current_stock") or 0)
                 sell_price = resolve_selling_price(cur, drug_id, cost_price)
                 cur.execute(
                     """
@@ -553,11 +555,13 @@ async def update_lot(request: Request):
                     """,
                     (
                         str(data.get("lot_number") or "").strip(), exp_raw,
-                        int(data.get("current_stock") or 0), sell_price, cost_price, supplier, lot_id,
+                        new_stock, sell_price, cost_price, supplier, lot_id,
                     ),
                 )
                 sync_stock_status_for_drug(cur, drug_id)
                 _log(cur, request, "Update Stock Lot", f"Updated lot {data.get('lot_number') or lot_id}.")
+        if new_stock < previous_stock:
+            schedule_auto_restock_check()
         return {"success": True, "message": "Stock lot updated successfully."}
     except IntegrityError:
         return {"success": False, "message": "This lot number already exists for this drug. Please use a different lot/batch number."}
@@ -584,6 +588,7 @@ def deactivate_lot(request: Request, id: int = 0):
             cur.execute("UPDATE inventory_lots SET is_active = 0 WHERE lot_inventory_id = %s", (id,))
             detail = f"Deactivated lot {lot_label}" + (f" of {med}." if med else ".")
             _log(cur, request, "Deactivate Stock Lot", detail)
+    schedule_auto_restock_check()
     return {"success": True, "message": "Stock lot deactivated successfully."}
 
 
@@ -695,6 +700,8 @@ async def adjust_stock(request: Request):
                 "Update Stock",
                 f"{moved} of {med}, lot {lot_no}. Stock is now {new_stock} (was {previous}). Reason: {reason}.{note}",
             )
+    if change < 0:
+        schedule_auto_restock_check()
     return {"success": True, "new_stock": new_stock, "quantity_change": change}
 
 
