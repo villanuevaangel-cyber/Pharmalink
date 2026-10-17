@@ -1,12 +1,15 @@
+import logging
 import os
 import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.db import init_pool
@@ -68,6 +71,29 @@ app.include_router(admin_router)
 app.include_router(admin_ops_router)
 app.include_router(activity_ui_router)
 app.include_router(push_router)
+
+logger = logging.getLogger("pharmalink")
+
+
+@app.exception_handler(Exception)
+async def api_unhandled_error(request: Request, exc: Exception):
+    if isinstance(exc, RequestValidationError):
+        return JSONResponse(
+            {"success": False, "message": "Invalid request."},
+            status_code=422,
+        )
+    if isinstance(exc, (HTTPException, StarletteHTTPException)):
+        return JSONResponse(
+            {"success": False, "message": str(getattr(exc, "detail", "Request failed."))},
+            status_code=int(getattr(exc, "status_code", 500) or 500),
+        )
+    logger.exception("Unhandled error on %s", request.url.path)
+    if str(request.url.path).startswith("/api/"):
+        return JSONResponse(
+            {"success": False, "message": "Could not load this data. Try again."},
+            status_code=500,
+        )
+    return HTMLResponse("Internal Server Error", status_code=500)
 
 
 @app.get("/sw.js")
