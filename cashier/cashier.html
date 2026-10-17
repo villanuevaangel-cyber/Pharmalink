@@ -782,8 +782,7 @@ function computePromoDiscountPerUnit(promo, unitPrice) {
     return Math.min(promo.discount_value, unitPrice);
 }
 
-fetch('/api/cashier/promos')
-    .then(res => res.json())
+cashierJson('/api/cashier/promos')
     .then(data => {
         activePromos = Array.isArray(data) ? data : [];
         if (typeof updateCart === 'function') updateCart();
@@ -3119,14 +3118,7 @@ function renderTopMedicinesChart(start, end) {
 function updateDashboardStats(start, end) {
     const apiEndpoint = `/api/cashier/dashboard?startDate=${start}&endDate=${end}`; 
 
-    fetch(apiEndpoint)
-        .then(response => {
-            if (!response.ok) {
-                console.error("dashboard_data.php returned non-OK status.");
-                return response.text().then(text => { throw new Error(text); });
-            }
-            return response.json();
-        })
+    cashierJson(apiEndpoint)
         .then(data => {
             const formatter = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 });
             
