@@ -2109,20 +2109,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof loadCategories === 'function') loadCategories();
 });
 
-document.querySelectorAll('.nav-item').forEach(nav => {
-    nav.addEventListener('click', function () {
-        let target = this.dataset.page;
-
-        // If POS page is opened, load categories
-if (target === "pos-page") {
-    console.log("POS page activated → Loading categories & POS inventory...");
-    loadCategories();
-    loadPOSProducts();
-    if (typeof loadPOSInventory === 'function') loadPOSInventory();
-}
-    });
-});
-
 // =======================================================
 // 4. EVENT LISTENERS SETUP
 // =======================================================
