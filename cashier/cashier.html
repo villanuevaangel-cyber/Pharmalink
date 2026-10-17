@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
+    <link rel="icon" href="/assets/pmds-logo.jpg" type="image/jpeg">
     <link rel="stylesheet" href="/assets/theme.css?v=notif-new1">
     <link rel="stylesheet" href="/cashier/css/cashier.css?v=no-rx1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
@@ -2106,20 +2107,6 @@ function loadCategories() {
 
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof loadCategories === 'function') loadCategories();
-});
-
-document.querySelectorAll('.nav-item').forEach(nav => {
-    nav.addEventListener('click', function () {
-        let target = this.dataset.page;
-
-        // If POS page is opened, load categories
-if (target === "pos-page") {
-    console.log("POS page activated → Loading categories & POS inventory...");
-    loadCategories();
-    loadPOSProducts();
-    if (typeof loadPOSInventory === 'function') loadPOSInventory();
-}
-    });
 });
 
 // =======================================================

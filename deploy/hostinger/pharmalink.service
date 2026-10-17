@@ -1,0 +1,16 @@
+[Unit]
+Description=PharmaLink
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/pharmalink
+EnvironmentFile=/var/www/pharmalink/.env
+ExecStart=/var/www/pharmalink/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8080
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

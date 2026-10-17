@@ -12,7 +12,7 @@ GENERIC_FORGOT_MESSAGE = (
     "If an account matches that ID and email, a password reset link has been sent to the email on file."
 )
 
-_SMTP_TIMEOUT = 4
+_SMTP_TIMEOUT = 12
 _CONNECT_ERRORS = (
     TimeoutError,
     socket.timeout,
@@ -27,7 +27,7 @@ def _clean(value: str) -> str:
 
 
 def _connect_ipv4(host, port, timeout, source_address=None):
-    """IPv4 only. Render free instances often have no IPv6 route (errno 101)."""
+    """IPv4 only. Some hosts have no IPv6 route (errno 101)."""
     last_err = None
     try:
         infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
@@ -62,7 +62,7 @@ class _SMTP_SSL(smtplib.SMTP_SSL):
 
 
 def _send_resend(to_email: str, subject: str, body_html: str, from_name: str, from_email: str) -> dict:
-    """Send over HTTPS (port 443). Render free blocks SMTP 465/587."""
+    """Optional HTTPS mail fallback when SMTP is blocked or unset."""
     api_key = _clean(os.getenv("RESEND_API_KEY", ""))
     if not api_key:
         return {"success": False, "message": "RESEND_API_KEY is not set."}
@@ -126,47 +126,47 @@ def send_mail(to_email: str, subject: str, body_html: str) -> dict:
     if not to_email:
         return {"success": False, "message": "Missing recipient email."}
 
+    smtp_error = None
+    if user and password:
+        try:
+            msg = EmailMessage()
+            msg["Subject"] = subject
+            msg["From"] = formataddr((from_name, user))
+            msg["To"] = to_email
+            msg.set_content("Please view this purchase order in an HTML email app.")
+            msg.add_alternative(body_html or "", subtype="html")
+        except Exception as exc:
+            return {"success": False, "message": str(exc) or type(exc).__name__}
+
+        attempts = [(465, "ssl"), (port, "starttls" if port != 465 else "ssl")]
+        seen = set()
+        last_exc = None
+        for try_port, mode in attempts:
+            key = (try_port, mode)
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                _send_once(host, try_port, mode, user, password, msg)
+                return {"success": True, "message": "sent"}
+            except smtplib.SMTPAuthenticationError as exc:
+                return {"success": False, "message": str(exc) or "SMTP login failed."}
+            except _CONNECT_ERRORS as exc:
+                last_exc = exc
+                continue
+            except Exception as exc:
+                smtp_error = str(exc) or type(exc).__name__
+                break
+        if last_exc is not None and smtp_error is None:
+            smtp_error = str(last_exc) or "Could not reach the mail server."
+
     if _clean(os.getenv("RESEND_API_KEY", "")):
         https = _send_resend(to_email, subject, body_html, from_name, user)
         if https.get("success"):
             return https
-
-    if not user or not password:
-        if _clean(os.getenv("RESEND_API_KEY", "")):
+        if not user or not password:
             return https
-        return {"success": False, "message": "SMTP is not configured."}
 
-    try:
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = formataddr((from_name, user))
-        msg["To"] = to_email
-        msg.set_content("Please view this purchase order in an HTML email app.")
-        msg.add_alternative(body_html or "", subtype="html")
-    except Exception as exc:
-        return {"success": False, "message": str(exc) or type(exc).__name__}
-
-    attempts = [(465, "ssl"), (port, "starttls" if port != 465 else "ssl")]
-    seen = set()
-    last_exc = None
-    for try_port, mode in attempts:
-        key = (try_port, mode)
-        if key in seen:
-            continue
-        seen.add(key)
-        try:
-            _send_once(host, try_port, mode, user, password, msg)
-            return {"success": True, "message": "sent"}
-        except smtplib.SMTPAuthenticationError as exc:
-            return {"success": False, "message": str(exc) or "SMTP login failed."}
-        except _CONNECT_ERRORS as exc:
-            last_exc = exc
-            continue
-        except Exception as exc:
-            return {"success": False, "message": str(exc) or type(exc).__name__}
-    if os.getenv("RENDER"):
-        return {
-            "success": False,
-            "message": "Render blocked Gmail SMTP. Add RESEND_API_KEY in Render, or upgrade the instance so ports 465/587 can open.",
-        }
-    return {"success": False, "message": str(last_exc) or "Network is unreachable"}
+    if smtp_error:
+        return {"success": False, "message": smtp_error}
+    return {"success": False, "message": "SMTP is not configured."}

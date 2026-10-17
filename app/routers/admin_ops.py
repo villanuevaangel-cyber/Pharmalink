@@ -770,18 +770,12 @@ def _plain_email_problem(reason: str) -> str:
     if "no email" in low:
         return "This supplier has no email address yet. Add it on the supplier record."
     if "resend" in low or "blocked gmail smtp" in low:
-        return (
-            "Render is blocking Gmail SMTP, so the supplier email was not sent. "
-            "Add RESEND_API_KEY in Render, or upgrade the instance."
-        )
+        return "The supplier email was not sent. Check the store SMTP settings on the Hostinger VPS."
     if any(token in low for token in (
         "unreachable", "errno", "timed out", "timeout", "connection", "network",
         "getaddrinfo", "refused", "reset",
     )):
-        return (
-            "Render could not reach Gmail SMTP, so the email was not sent. "
-            "Add RESEND_API_KEY in Render, or upgrade the instance."
-        )
+        return "The server could not reach Gmail SMTP, so the email was not sent. Check SMTP settings and the VPS firewall."
     if any(token in low for token in ("smtp", "auth", "login", "not configured", "password", "credential")):
         return "The store email is not set up, so the message was not sent."
     if not text or low == "sent" or "traceback" in low or "exception" in low:
