@@ -2197,6 +2197,18 @@
         if (fromEl && toEl && fromEl.value > toEl.value) fromEl.value = toEl.value;
     }
 
+    function reportJson(url) {
+        return fetch(url, { credentials: 'same-origin' }).then((res) =>
+            res.text().then((text) => {
+                let data = {};
+                try { data = text ? JSON.parse(text) : {}; }
+                catch (e) { throw new Error('Could not load this report. Try again.'); }
+                if (!res.ok) throw new Error(data.message || ('HTTP ' + res.status));
+                return data;
+            })
+        );
+    }
+
     function loadMonthlyConsumption() {
         ensureConsumptionDates();
         const start = document.getElementById('consumptionFrom')?.value || '';
@@ -2204,8 +2216,7 @@
         const params = new URLSearchParams();
         if (start) params.set('start', start);
         if (end) params.set('end', end);
-        fetch('/api/admin/monthly-consumption?' + params.toString())
-            .then(res => res.json())
+        reportJson('/api/admin/monthly-consumption?' + params.toString())
             .then(data => {
                 consumptionData = data;
                 consumptionPage = 1;
@@ -2329,23 +2340,21 @@
         consumptionPage += 1;
         renderConsumptionTable();
     });
-    loadMonthlyConsumption();
-
     // ==========================================================
     // Procurement Cost Tracking
     // ==========================================================
     const peso = v => '₱' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     function loadProcurementCosts() {
-        fetch('/api/admin/procurement')
-            .then(res => res.json())
+        reportJson('/api/admin/procurement')
             .then(data => {
+                const summary = data.summary || {};
                 const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-                setText('procurement-total-cost', peso(data.summary.total_inventory_cost));
-                setText('procurement-total-units', data.summary.total_units.toLocaleString());
-                setText('procurement-supplier-count', data.summary.supplier_count);
-                setText('hub-procurement-cost', peso(data.summary.total_inventory_cost));
-                renderProcurementLists(data.by_supplier, data.by_category, data.summary.total_inventory_cost);
+                setText('procurement-total-cost', peso(summary.total_inventory_cost));
+                setText('procurement-total-units', Number(summary.total_units || 0).toLocaleString());
+                setText('procurement-supplier-count', summary.supplier_count || 0);
+                setText('hub-procurement-cost', peso(summary.total_inventory_cost));
+                renderProcurementLists(data.by_supplier, data.by_category, summary.total_inventory_cost);
             })
             .catch(err => console.error('Procurement cost error:', err));
     }
@@ -2379,15 +2388,12 @@
         fill('procurementCategoryList', byCategory || [], 'category');
     }
 
-    loadProcurementCosts();
-
     let capitalItems = [];
     let capitalPage = 1;
     const CAPITAL_PAGE_SIZE = 8;
 
     function loadCapitalAtRisk() {
-        fetch('/api/admin/capital-at-risk')
-            .then(res => res.json())
+        reportJson('/api/admin/capital-at-risk')
             .then(data => {
                 const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
                 setText('hub-capital-total', peso(data.total_capital));
@@ -2457,7 +2463,11 @@
         capitalPage += 1;
         renderCapitalTable();
     });
-    loadCapitalAtRisk();
+    window.loadReportHubs = function () {
+        loadMonthlyConsumption();
+        loadProcurementCosts();
+        loadCapitalAtRisk();
+    };
 
     function resizeReportCharts() {
         requestAnimationFrame(() => {
@@ -4253,6 +4263,9 @@ document.addEventListener('DOMContentLoaded', () => {
             sec.hidden = !on;
             sec.style.display = on ? 'block' : 'none';
         });
+        if (id === 'reports' && typeof window.loadReportHubs === 'function') {
+            window.loadReportHubs();
+        }
     }
     window.setAdminSection = setAdminSection;
 
@@ -5305,8 +5318,13 @@ window.loadSalesAnalytics = loadSalesAnalytics;
     function adminGetJson(url, retries) {
         retries = retries == null ? 2 : retries;
         return fetch(url, { credentials: 'same-origin' }).then((res) => {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.json();
+            return res.text().then((text) => {
+                let data = {};
+                try { data = text ? JSON.parse(text) : {}; }
+                catch (e) { throw new Error(res.ok ? 'Invalid JSON' : ('HTTP ' + res.status)); }
+                if (!res.ok) throw new Error(data.message || ('HTTP ' + res.status));
+                return data;
+            });
         }).catch((err) => {
             if (retries < 1) throw err;
             return new Promise((resolve) => setTimeout(resolve, 1500)).then(() => adminGetJson(url, retries - 1));

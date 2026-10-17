@@ -2,6 +2,7 @@ import csv
 import html
 import io
 import json
+import logging
 import math
 import re
 import subprocess
@@ -35,6 +36,7 @@ from app.stock import sync_stock_status_for_drug
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 ROOT = Path(__file__).resolve().parent.parent.parent
 MANILA = ZoneInfo("Asia/Manila")
+logger = logging.getLogger("pharmalink")
 
 
 def _manila_today():
@@ -1216,32 +1218,39 @@ def capital_at_risk(request: Request):
     """Money already paid for stock that is expired or expires within 30 days."""
     if not require_admin(request):
         return _unauthorized()
+    today = _manila_today()
     items = []
     expired_cost = soon_cost = 0.0
     expired_units = soon_units = 0
-    for row in fetch_all(
-        """
-        SELECT l.lot_inventory_id, l.lot_number, l.expiration_date, l.current_stock,
-               COALESCE(l.cost_price, 0) AS unit_cost,
-               d.generic_name, d.brand_name, d.dosage, d.form,
-               COALESCE(s.supplier_name, '') AS supplier_name,
-               (l.expiration_date - CURRENT_DATE) AS days_left,
-               CASE WHEN l.expiration_date < CURRENT_DATE THEN 'expired' ELSE 'soon' END AS bucket
-        FROM inventory_lots l
-        JOIN drugs_master d ON l.drug_id = d.drug_id
-        LEFT JOIN suppliers s ON s.supplier_id = l.supplier
-        WHERE l.current_stock > 0
-          AND (
-                l.expiration_date < CURRENT_DATE
-                OR (
-                    l.is_active = 1
-                    AND l.expiration_date >= CURRENT_DATE
-                    AND l.expiration_date <= (CURRENT_DATE + INTERVAL '30 days')
-                )
-          )
-        ORDER BY (COALESCE(l.cost_price, 0) * l.current_stock) DESC, l.expiration_date ASC, d.generic_name ASC
-        """
-    ):
+    try:
+        rows = fetch_all(
+            """
+            SELECT l.lot_inventory_id, l.lot_number, l.expiration_date, l.current_stock,
+                   COALESCE(l.cost_price, 0) AS unit_cost,
+                   d.generic_name, d.brand_name, d.dosage, d.form,
+                   COALESCE(s.supplier_name, '') AS supplier_name,
+                   (l.expiration_date::date - %s::date) AS days_left,
+                   CASE WHEN l.expiration_date::date < %s::date THEN 'expired' ELSE 'soon' END AS bucket
+            FROM inventory_lots l
+            JOIN drugs_master d ON l.drug_id = d.drug_id
+            LEFT JOIN suppliers s ON s.supplier_id = l.supplier
+            WHERE l.current_stock > 0
+              AND (
+                    l.expiration_date::date < %s::date
+                    OR (
+                        l.is_active = 1
+                        AND l.expiration_date::date >= %s::date
+                        AND l.expiration_date::date <= (%s::date + INTERVAL '30 days')
+                    )
+              )
+            ORDER BY (COALESCE(l.cost_price, 0) * l.current_stock) DESC, l.expiration_date ASC, d.generic_name ASC
+            """,
+            (today, today, today, today, today),
+        )
+    except Exception:
+        logger.exception("capital-at-risk query failed")
+        rows = []
+    for row in rows:
         qty = int(row["current_stock"] or 0)
         unit_cost = round(float(row["unit_cost"] or 0), 2)
         capital = round(qty * unit_cost, 2)
@@ -1252,6 +1261,11 @@ def capital_at_risk(request: Request):
         else:
             soon_cost += capital
             soon_units += qty
+        days_left = row.get("days_left")
+        try:
+            days_left = int(days_left or 0)
+        except (TypeError, ValueError):
+            days_left = 0
         items.append({
             "lot_inventory_id": int(row["lot_inventory_id"]),
             "generic_name": row["generic_name"],
@@ -1261,7 +1275,7 @@ def capital_at_risk(request: Request):
             "lot_number": row["lot_number"] or "",
             "supplier_name": row["supplier_name"] or "",
             "expiration_date": _jsonable(row["expiration_date"]),
-            "days_left": int(row["days_left"] or 0),
+            "days_left": days_left,
             "bucket": bucket,
             "current_stock": qty,
             "unit_cost": unit_cost,
@@ -1368,7 +1382,7 @@ def _parse_month(value: str) -> date | None:
 def monthly_consumption(request: Request, months: int = 6, start: str = "", end: str = ""):
     if not require_admin(request):
         return _unauthorized()
-    today = date.today().replace(day=1)
+    today = _manila_today().replace(day=1)
     end_month = _parse_month(end) or today
     if end_month > today:
         end_month = today
@@ -1384,18 +1398,23 @@ def monthly_consumption(request: Request, months: int = 6, start: str = "", end:
         labels.append(f"{cursor.year:04d}-{cursor.month:02d}")
         cursor = _shift_month(cursor, 1)
     range_end = _shift_month(end_month, 1)
-    raw = fetch_all(
-        """
-        SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
-               to_char(s.date_created, 'YYYY-MM') AS month_label, SUM(si.quantity) AS qty
-        FROM sales_items si JOIN sales s ON si.sale_id = s.sale_id JOIN drugs_master d ON si.drug_id = d.drug_id
-        WHERE s.status = 'completed'
-          AND s.date_created >= %s
-          AND s.date_created < %s
-        GROUP BY d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category, month_label
-        """,
-        (start_month, range_end),
-    )
+    try:
+        raw = fetch_all(
+            """
+            SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
+                   to_char(s.date_created, 'YYYY-MM') AS month_label, SUM(si.quantity) AS qty
+            FROM sales_items si JOIN sales s ON si.sale_id = s.sale_id JOIN drugs_master d ON si.drug_id = d.drug_id
+            WHERE s.status = 'completed'
+              AND s.date_created >= %s
+              AND s.date_created < %s
+            GROUP BY d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
+                     to_char(s.date_created, 'YYYY-MM')
+            """,
+            (start_month, range_end),
+        )
+    except Exception:
+        logger.exception("monthly-consumption query failed")
+        raw = []
     by_drug = {}
     for row in raw:
         did = int(row["drug_id"])
@@ -1426,55 +1445,64 @@ def monthly_consumption(request: Request, months: int = 6, start: str = "", end:
 def procurement(request: Request):
     if not require_admin(request):
         return _unauthorized()
-    summary = {"total_inventory_cost": 0, "total_units": 0, "supplier_count": 0}
-    srow = fetch_one(
-        """
-        SELECT COALESCE(SUM(COALESCE(cost_price, price, 0) * current_stock), 0) AS total_cost,
-               COALESCE(SUM(current_stock), 0) AS total_units
-        FROM inventory_lots
-        WHERE is_active = 1 AND expiration_date >= CURRENT_DATE
-        """
-    )
-    summary["total_inventory_cost"] = round(float(srow["total_cost"] or 0), 2)
-    summary["total_units"] = int(srow["total_units"] or 0)
-    by_supplier = []
-    for row in fetch_all(
-        """
-        SELECT s.supplier_id, s.supplier_name,
-               COALESCE(SUM(COALESCE(il.cost_price, il.price, 0) * il.current_stock), 0) AS total_cost,
-               COALESCE(SUM(il.current_stock), 0) AS total_units, COUNT(DISTINCT il.drug_id) AS distinct_drugs
-        FROM suppliers s JOIN inventory_lots il ON il.supplier = s.supplier_id AND il.is_active = 1
-          AND il.expiration_date >= CURRENT_DATE
-        GROUP BY s.supplier_id, s.supplier_name
-        HAVING COALESCE(SUM(il.current_stock), 0) > 0
-        ORDER BY total_cost DESC
-        """
-    ):
-        by_supplier.append({
-            "supplier_id": int(row["supplier_id"]),
-            "supplier_name": row["supplier_name"],
-            "total_cost": round(float(row["total_cost"] or 0), 2),
-            "total_units": int(row["total_units"] or 0),
-            "distinct_drugs": int(row["distinct_drugs"] or 0),
-        })
-    summary["supplier_count"] = len(by_supplier)
-    by_category = [
-        {
-            "category": r["category"],
-            "total_cost": round(float(r["total_cost"] or 0), 2),
-            "total_units": int(r["total_units"] or 0),
-        }
-        for r in fetch_all(
+    today = _manila_today()
+    summary = {"total_inventory_cost": 0.0, "total_units": 0, "supplier_count": 0}
+    try:
+        srow = fetch_one(
             """
-            SELECT d.category,
+            SELECT COALESCE(SUM(COALESCE(cost_price, price, 0) * current_stock), 0) AS total_cost,
+                   COALESCE(SUM(current_stock), 0) AS total_units
+            FROM inventory_lots
+            WHERE is_active = 1 AND expiration_date >= %s
+            """,
+            (today,),
+        ) or {}
+        summary["total_inventory_cost"] = round(float(srow.get("total_cost") or 0), 2)
+        summary["total_units"] = int(srow.get("total_units") or 0)
+        by_supplier = []
+        for row in fetch_all(
+            """
+            SELECT s.supplier_id, s.supplier_name,
                    COALESCE(SUM(COALESCE(il.cost_price, il.price, 0) * il.current_stock), 0) AS total_cost,
-                   COALESCE(SUM(il.current_stock), 0) AS total_units
-            FROM drugs_master d JOIN inventory_lots il ON il.drug_id = d.drug_id AND il.is_active = 1
-              AND il.expiration_date >= CURRENT_DATE
-            GROUP BY d.category HAVING COALESCE(SUM(il.current_stock), 0) > 0 ORDER BY total_cost DESC
-            """
-        )
-    ]
+                   COALESCE(SUM(il.current_stock), 0) AS total_units, COUNT(DISTINCT il.drug_id) AS distinct_drugs
+            FROM suppliers s JOIN inventory_lots il ON il.supplier = s.supplier_id AND il.is_active = 1
+              AND il.expiration_date >= %s
+            GROUP BY s.supplier_id, s.supplier_name
+            HAVING COALESCE(SUM(il.current_stock), 0) > 0
+            ORDER BY 3 DESC
+            """,
+            (today,),
+        ):
+            by_supplier.append({
+                "supplier_id": int(row["supplier_id"]),
+                "supplier_name": row["supplier_name"],
+                "total_cost": round(float(row["total_cost"] or 0), 2),
+                "total_units": int(row["total_units"] or 0),
+                "distinct_drugs": int(row["distinct_drugs"] or 0),
+            })
+        summary["supplier_count"] = len(by_supplier)
+        by_category = [
+            {
+                "category": r["category"],
+                "total_cost": round(float(r["total_cost"] or 0), 2),
+                "total_units": int(r["total_units"] or 0),
+            }
+            for r in fetch_all(
+                """
+                SELECT d.category,
+                       COALESCE(SUM(COALESCE(il.cost_price, il.price, 0) * il.current_stock), 0) AS total_cost,
+                       COALESCE(SUM(il.current_stock), 0) AS total_units
+                FROM drugs_master d JOIN inventory_lots il ON il.drug_id = d.drug_id AND il.is_active = 1
+                  AND il.expiration_date >= %s
+                GROUP BY d.category HAVING COALESCE(SUM(il.current_stock), 0) > 0 ORDER BY 2 DESC
+                """,
+                (today,),
+            )
+        ]
+    except Exception:
+        logger.exception("procurement query failed")
+        by_supplier = []
+        by_category = []
     return {"summary": summary, "by_supplier": by_supplier, "by_category": by_category}
 
 
