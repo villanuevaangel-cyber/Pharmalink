@@ -1,6 +1,9 @@
+import json
 import os
 import smtplib
 import socket
+import urllib.error
+import urllib.request
 from email.message import EmailMessage
 from email.utils import formataddr
 
@@ -58,6 +61,43 @@ class _SMTP_SSL(smtplib.SMTP_SSL):
         return self.context.wrap_socket(sock, server_hostname=host or self._host)
 
 
+def _send_resend(to_email: str, subject: str, body_html: str, from_name: str, from_email: str) -> dict:
+    """Send over HTTPS (port 443). Render free blocks SMTP 465/587."""
+    api_key = _clean(os.getenv("RESEND_API_KEY", ""))
+    if not api_key:
+        return {"success": False, "message": "RESEND_API_KEY is not set."}
+    sender = _clean(os.getenv("RESEND_FROM", "")) or f"{from_name} <{from_email or 'pharmalink.ph32@gmail.com'}>"
+    payload = json.dumps({
+        "from": sender,
+        "to": [to_email],
+        "subject": subject,
+        "html": body_html or "",
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if 200 <= getattr(resp, "status", 200) < 300:
+                return {"success": True, "message": "sent"}
+            return {"success": False, "message": f"Resend HTTP {resp.status}"}
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", "replace")[:200]
+        except Exception:
+            pass
+        return {"success": False, "message": detail or f"Resend HTTP {exc.code}"}
+    except Exception as exc:
+        return {"success": False, "message": str(exc) or type(exc).__name__}
+
+
 def _send_once(host: str, port: int, mode: str, user: str, password: str, msg: EmailMessage) -> None:
     if mode == "ssl":
         smtp = _SMTP_SSL(host, port, timeout=_SMTP_TIMEOUT)
@@ -83,10 +123,18 @@ def send_mail(to_email: str, subject: str, body_html: str) -> dict:
     from_name = _clean(os.getenv("SMTP_FROM_NAME", "PharmaLink")) or "PharmaLink"
     to_email = _clean(to_email)
 
-    if not user or not password:
-        return {"success": False, "message": "SMTP is not configured."}
     if not to_email:
         return {"success": False, "message": "Missing recipient email."}
+
+    if _clean(os.getenv("RESEND_API_KEY", "")):
+        https = _send_resend(to_email, subject, body_html, from_name, user)
+        if https.get("success"):
+            return https
+
+    if not user or not password:
+        if _clean(os.getenv("RESEND_API_KEY", "")):
+            return https
+        return {"success": False, "message": "SMTP is not configured."}
 
     try:
         msg = EmailMessage()
@@ -116,4 +164,9 @@ def send_mail(to_email: str, subject: str, body_html: str) -> dict:
             continue
         except Exception as exc:
             return {"success": False, "message": str(exc) or type(exc).__name__}
+    if os.getenv("RENDER"):
+        return {
+            "success": False,
+            "message": "Render blocked Gmail SMTP. Add RESEND_API_KEY in Render, or upgrade the instance so ports 465/587 can open.",
+        }
     return {"success": False, "message": str(last_exc) or "Network is unreachable"}

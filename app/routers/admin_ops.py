@@ -767,11 +767,19 @@ def _plain_email_problem(reason: str) -> str:
     low = text.lower()
     if "no email" in low:
         return "This supplier has no email address yet. Add it on the supplier record."
+    if "resend" in low or "blocked gmail smtp" in low:
+        return (
+            "Render is blocking Gmail SMTP, so the supplier email was not sent. "
+            "Add RESEND_API_KEY in Render, or upgrade the instance."
+        )
     if any(token in low for token in (
         "unreachable", "errno", "timed out", "timeout", "connection", "network",
         "getaddrinfo", "refused", "reset",
     )):
-        return "The internet connection failed, so the email was not sent. Try again."
+        return (
+            "Render could not reach Gmail SMTP, so the email was not sent. "
+            "Add RESEND_API_KEY in Render, or upgrade the instance."
+        )
     if any(token in low for token in ("smtp", "auth", "login", "not configured", "password", "credential")):
         return "The store email is not set up, so the message was not sent."
     if not text or low == "sent" or "traceback" in low or "exception" in low:
