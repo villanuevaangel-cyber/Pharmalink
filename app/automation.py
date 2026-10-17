@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import math
+import os
 import subprocess
 import threading
 from datetime import date, datetime, timedelta
@@ -613,6 +614,9 @@ def _prophet_units_by_drug(period: int = TARGET_DAYS) -> tuple[dict, str]:
                 return {int(k): int(v) for k, v in cached["demand"].items()}, "prophet"
         except Exception:
             pass
+    if os.getenv("RENDER"):
+        logger.warning("Skip Prophet fit on Render web process so cashier APIs stay up.")
+        return {}, "recent_average"
     payload = json.dumps({
         "purpose": "reorder",
         "period": period,
@@ -626,7 +630,7 @@ def _prophet_units_by_drug(period: int = TARGET_DAYS) -> tuple[dict, str]:
     if script.exists():
         for cmd in (["python", str(script)], ["py", "-3", str(script)]):
             try:
-                proc = subprocess.run(cmd, input=payload, capture_output=True, text=True, timeout=180)
+                proc = subprocess.run(cmd, input=payload, capture_output=True, text=True, timeout=25)
                 if proc.returncode != 0:
                     continue
                 decoded = json.loads(proc.stdout or "{}")

@@ -782,8 +782,7 @@ function computePromoDiscountPerUnit(promo, unitPrice) {
     return Math.min(promo.discount_value, unitPrice);
 }
 
-fetch('/api/cashier/promos')
-    .then(res => res.json())
+cashierJson('/api/cashier/promos')
     .then(data => {
         activePromos = Array.isArray(data) ? data : [];
         if (typeof updateCart === 'function') updateCart();
@@ -1007,6 +1006,18 @@ function paintOnlineOrdersTable(orders) {
     }).join('');
 }
 
+function cashierJson(url, options) {
+    return fetch(url, Object.assign({ credentials: 'same-origin' }, options || {})).then((res) =>
+        res.text().then((text) => {
+            let data = {};
+            try { data = text ? JSON.parse(text) : {}; }
+            catch (e) { throw new Error('Could not load this data. Try again.'); }
+            if (!res.ok) throw new Error(data.message || ('HTTP ' + res.status));
+            return data;
+        })
+    );
+}
+
 function fetchOnlineOrders(opts) {
     const silent = !!(opts && opts.silent);
     const onlineOrdersBody = document.getElementById('onlineOrdersBody');
@@ -1028,8 +1039,7 @@ function fetchOnlineOrders(opts) {
         dashBody.innerHTML = '<tr><td colspan="4" class="cs-empty">Loading orders...</td></tr>';
     }
 
-    fetch("/api/cashier/online-orders")
-        .then(res => res.json())
+    cashierJson("/api/cashier/online-orders")
         .then(data => {
             const orders = data.success && Array.isArray(data.orders) ? data.orders : [];
             const fp = onlineOrdersKey(orders);
@@ -2094,14 +2104,8 @@ function loadCategories() {
 }
 
 
-// Tawagin ang function kapag nag-load ang page
 document.addEventListener('DOMContentLoaded', function() {
-
-// O kung gumagamit ka ng jQuery:
-// $(document).ready(loadCategories);
-
-loadInventory();
-
+    if (typeof loadCategories === 'function') loadCategories();
 });
 
 document.querySelectorAll('.nav-item').forEach(nav => {
@@ -2907,8 +2911,7 @@ navItems.forEach(item => {
   }
 
   function loadCustomers() {
-    return fetch("/api/cashier/customers", { credentials: "same-origin" })
-      .then((res) => res.json())
+    return cashierJson("/api/cashier/customers")
       .then((data) => {
         customers = asCustomerList(data);
         filterCustomerList();
@@ -2917,12 +2920,10 @@ navItems.forEach(item => {
       .catch((err) => {
         console.error("Error loading customers:", err);
         customers = [];
-        customerList.innerHTML = "<li style='padding:8px;'>Could not load customers. Try again.</li>";
+        if (customerList) customerList.innerHTML = "<li style='padding:8px;'>Could not load customers. Try again.</li>";
         return customers;
       });
   }
-
-  loadCustomers();
 
   function openCustomerModal() {
     modal.style.display = "flex";
@@ -3117,14 +3118,7 @@ function renderTopMedicinesChart(start, end) {
 function updateDashboardStats(start, end) {
     const apiEndpoint = `/api/cashier/dashboard?startDate=${start}&endDate=${end}`; 
 
-    fetch(apiEndpoint)
-        .then(response => {
-            if (!response.ok) {
-                console.error("dashboard_data.php returned non-OK status.");
-                return response.text().then(text => { throw new Error(text); });
-            }
-            return response.json();
-        })
+    cashierJson(apiEndpoint)
         .then(data => {
             const formatter = new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 });
             

@@ -5,7 +5,8 @@ import os
 import random
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from html import escape
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -72,6 +73,31 @@ def _manila_now():
     return datetime.now(_MANILA)
 
 
+def _plain(value):
+    if isinstance(value, list):
+        return [_plain(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _plain(v) for k, v in value.items()}
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(value, date):
+        return value.isoformat()
+    return value
+
+
+def _empty_dashboard():
+    return {
+        "transaction_count": 0,
+        "total_sales": "0.00",
+        "items_sold": 0,
+        "low_stock_count": 0,
+        "out_of_stock_count": 0,
+        "pending_orders": 0,
+    }
+
+
 def _sale_date_sql(alias=None):
     col = f"{alias}.date_created" if alias else "date_created"
     return f"(({col} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date"
@@ -81,7 +107,8 @@ def _sale_date_sql(alias=None):
 def products(request: Request):
     if not require_staff(request):
         return _unauthorized()
-    rows = fetch_all(
+    try:
+        rows = fetch_all(
         """
         WITH avail AS (
             SELECT drug_id, lot_inventory_id, price, current_stock, expiration_date
@@ -107,14 +134,19 @@ def products(request: Request):
         WHERE dm.is_active = 1
         ORDER BY dm.generic_name ASC, dm.brand_name ASC
         """
-    )
+        )
+    except Exception:
+        logger.exception("cashier products query failed")
+        return []
     products = []
     for row in rows:
-        item = dict(row)
+        item = _plain(dict(row))
         item["category"] = _title(item.get("category"))
         item["generic_name"] = _title(item.get("generic_name"))
         item["brand_name"] = _title(item.get("brand_name"))
         item["form"] = _title(item.get("form"))
+        item["price"] = float(item.get("price") or 0)
+        item["current_stock"] = int(item.get("current_stock") or 0)
         products.append(item)
     return products
 
@@ -188,7 +220,11 @@ def product_by_barcode(request: Request, barcode: str = ""):
 def categories(request: Request):
     if not require_staff(request):
         return _unauthorized()
-    rows = fetch_all("SELECT DISTINCT category FROM drugs_master ORDER BY category ASC")
+    try:
+        rows = fetch_all("SELECT DISTINCT category FROM drugs_master ORDER BY category ASC")
+    except Exception:
+        logger.exception("cashier categories query failed")
+        rows = []
     out = []
     for row in rows:
         cat = _title(row.get("category"))
@@ -201,25 +237,36 @@ def categories(request: Request):
 def customers(request: Request):
     if not require_staff(request):
         return _unauthorized()
-    rows = fetch_all(
-        """
-        SELECT customer_id,
-               CONCAT_WS(' ', first_name, middle_name, last_name) AS name,
-               COALESCE(username, '') AS username,
-               COALESCE(phone_number, '') AS phone_number,
-               COALESCE(loyalty_points, 0) AS loyalty_points
-        FROM customers
-        WHERE is_active = 1
-        ORDER BY last_name ASC
-        """
-    )
-    return [{
-        "customer_id": r["customer_id"],
-        "name": r["name"],
-        "username": r["username"] or "",
-        "phone_number": r["phone_number"] or "",
-        "loyalty_points": float(r["loyalty_points"] or 0),
-    } for r in rows]
+    try:
+        rows = fetch_all(
+            """
+            SELECT customer_id, first_name, middle_name, last_name,
+                   COALESCE(username, '') AS username,
+                   COALESCE(phone_number, '') AS phone_number,
+                   COALESCE(loyalty_points, 0) AS loyalty_points
+            FROM customers
+            WHERE is_active = 1
+            ORDER BY last_name ASC
+            """
+        )
+    except Exception:
+        logger.exception("cashier customers query failed")
+        rows = []
+    out = []
+    for r in rows:
+        parts = [
+            str(r.get("first_name") or "").strip(),
+            str(r.get("middle_name") or "").strip(),
+            str(r.get("last_name") or "").strip(),
+        ]
+        out.append({
+            "customer_id": int(r["customer_id"]),
+            "name": " ".join(p for p in parts if p),
+            "username": r.get("username") or "",
+            "phone_number": r.get("phone_number") or "",
+            "loyalty_points": float(r.get("loyalty_points") or 0),
+        })
+    return out
 
 
 @router.get("/checkout-rates")
@@ -240,6 +287,14 @@ def cashier_loyalty_settings(request: Request):
 def promos(request: Request):
     if not require_staff(request):
         return _unauthorized()
+    try:
+        return _promos_payload()
+    except Exception:
+        logger.exception("cashier promos query failed")
+        return []
+
+
+def _promos_payload():
     rows = fetch_all(
         """
         SELECT promo_id, name, discount_type, discount_value, drug_id, category, segment_label
@@ -275,37 +330,52 @@ def promos(request: Request):
 def online_orders(request: Request):
     if not require_staff(request):
         return _unauthorized()
-    rows = fetch_all(
-        """
-        SELECT co.order_id, co.order_date, co.order_status, co.payment_method, co.payment_status,
-               c.first_name, c.last_name,
-               COALESCE((
-                   SELECT string_agg(
-                       COALESCE(NULLIF(TRIM(dm.brand_name), ''), dm.generic_name),
-                       ', ' ORDER BY od.detail_id
-                   )
-                   FROM order_details od
-                   JOIN drugs_master dm ON dm.drug_id = od.drug_id
-                   WHERE od.order_id = co.order_id
-               ), '') AS medicines
-        FROM customer_orders co
-        JOIN customers c ON co.customer_id = c.customer_id
-        WHERE co.order_status IN ('Pending', 'Processing', 'Ready for Pickup')
-        ORDER BY co.order_date ASC
-        """
-    )
+    try:
+        rows = fetch_all(
+            """
+            SELECT co.order_id, co.order_date, co.order_status,
+                   COALESCE(co.payment_method, 'cash') AS payment_method,
+                   COALESCE(co.payment_status, 'unpaid') AS payment_status,
+                   COALESCE(c.first_name, '') AS first_name,
+                   COALESCE(c.last_name, '') AS last_name
+            FROM customer_orders co
+            LEFT JOIN customers c ON co.customer_id = c.customer_id
+            WHERE co.order_status IN ('Pending', 'Processing', 'Ready for Pickup')
+            ORDER BY co.order_date ASC
+            """
+        )
+        order_ids = [int(r["order_id"]) for r in rows]
+        medicines = {}
+        if order_ids:
+            for item in fetch_all(
+                """
+                SELECT od.order_id,
+                       COALESCE(NULLIF(TRIM(dm.brand_name), ''), dm.generic_name) AS med_name
+                FROM order_details od
+                JOIN drugs_master dm ON dm.drug_id = od.drug_id
+                WHERE od.order_id = ANY(%s)
+                ORDER BY od.order_id ASC, od.detail_id ASC
+                """,
+                (order_ids,),
+            ):
+                medicines.setdefault(int(item["order_id"]), []).append(item["med_name"] or "")
+    except Exception:
+        logger.exception("cashier online-orders query failed")
+        rows = []
+        medicines = {}
     orders = []
     for row in rows:
         status = row["order_status"]
+        oid = int(row["order_id"])
         orders.append({
-            "order_id": row["order_id"],
-            "display_id": f"ORD-{row['order_id']}",
-            "customer_name": f"{row['first_name']} {row['last_name']}",
+            "order_id": oid,
+            "display_id": f"ORD-{oid}",
+            "customer_name": f"{row['first_name']} {row['last_name']}".strip() or "Customer",
             "status": status,
             "status_class": str(status).lower().replace(" ", "-"),
             "payment_method": row.get("payment_method") or "cash",
             "payment_status": row.get("payment_status") or "unpaid",
-            "medicines": row.get("medicines") or "",
+            "medicines": ", ".join(n for n in medicines.get(oid, []) if n),
             "date": _fmt_dt(row["order_date"], "%b %d, %Y %I:%M %p"),
         })
     return {"success": True, "orders": orders}
@@ -501,16 +571,20 @@ async def update_order_status(request: Request):
 def transactions(request: Request):
     if not require_staff(request):
         return _unauthorized()
-    rows = fetch_all(
-        """
-        SELECT sale_id AS transaction_id, total_amount, cash_received, change_amount, date_created
-        FROM sales
-        WHERE status = 'completed'
-        ORDER BY date_created DESC
-        LIMIT 10
-        """
-    )
-    return [dict(r) for r in rows]
+    try:
+        rows = fetch_all(
+            """
+            SELECT sale_id AS transaction_id, total_amount, cash_received, change_amount, date_created
+            FROM sales
+            WHERE status = 'completed'
+            ORDER BY date_created DESC
+            LIMIT 10
+            """
+        )
+        return [_plain(dict(r)) for r in rows]
+    except Exception:
+        logger.exception("cashier transactions query failed")
+        return []
 
 
 @router.get("/daily-sales")
@@ -520,14 +594,19 @@ def daily_sales(request: Request):
     labels = []
     data = []
     today = _manila_now().date()
-    for i in range(6, -1, -1):
-        day = today - timedelta(days=i)
-        labels.append(day.strftime("%a"))
-        row = fetch_one(
-            f"SELECT COALESCE(SUM(total_amount), 0) AS total FROM sales WHERE {_sale_date_sql()} = %s AND status = 'completed'",
-            (day.isoformat(),),
-        )
-        data.append(round(float(row["total"] or 0), 2))
+    try:
+        for i in range(6, -1, -1):
+            day = today - timedelta(days=i)
+            labels.append(day.strftime("%a"))
+            row = fetch_one(
+                f"SELECT COALESCE(SUM(total_amount), 0) AS total FROM sales WHERE {_sale_date_sql()} = %s AND status = 'completed'",
+                (day.isoformat(),),
+            )
+            data.append(round(float((row or {}).get("total") or 0), 2))
+    except Exception:
+        logger.exception("cashier daily-sales query failed")
+        labels = [(today - timedelta(days=i)).strftime("%a") for i in range(6, -1, -1)]
+        data = [0] * 7
     return {"labels": labels, "data": data}
 
 
@@ -537,7 +616,8 @@ def top_selling(request: Request, startDate: str = "", endDate: str = ""):
         return _unauthorized()
     start = startDate or _manila_now().strftime("%Y-%m-%d")
     end = endDate or _manila_now().strftime("%Y-%m-%d")
-    rows = fetch_all(
+    try:
+        rows = fetch_all(
         f"""
         SELECT d.generic_name, d.brand_name, COALESCE(SUM(si.quantity), 0) AS total_quantity_sold
         FROM sales_items si
@@ -549,8 +629,11 @@ def top_selling(request: Request, startDate: str = "", endDate: str = ""):
         ORDER BY total_quantity_sold DESC
         LIMIT 8
         """,
-        (start, end),
-    )
+            (start, end),
+        )
+    except Exception:
+        logger.exception("cashier top-selling query failed")
+        rows = []
     return [
         {
             "generic_name": r["generic_name"],
@@ -567,22 +650,26 @@ def recent_transactions(request: Request, startDate: str = "", endDate: str = ""
         return _unauthorized()
     start = startDate or (_manila_now() - timedelta(days=30)).strftime("%Y-%m-%d")
     end = endDate or _manila_now().strftime("%Y-%m-%d")
-    rows = fetch_all(
-        f"""
-        SELECT s.date_created,
-               COALESCE(CONCAT(c.first_name, ' ', c.last_name), 'Guest') AS customer_name,
-               s.total_amount, s.status
-        FROM sales s
-        LEFT JOIN customers c ON s.customer_id = c.customer_id
-        WHERE {_sale_date_sql("s")} BETWEEN %s AND %s
-        ORDER BY s.date_created DESC
-        LIMIT 100
-        """,
-        (start, end),
-    )
+    try:
+        rows = fetch_all(
+            f"""
+            SELECT s.date_created,
+                   COALESCE(CONCAT(c.first_name, ' ', c.last_name), 'Guest') AS customer_name,
+                   s.total_amount, s.status
+            FROM sales s
+            LEFT JOIN customers c ON s.customer_id = c.customer_id
+            WHERE {_sale_date_sql("s")} BETWEEN %s AND %s
+            ORDER BY s.date_created DESC
+            LIMIT 100
+            """,
+            (start, end),
+        )
+    except Exception:
+        logger.exception("cashier recent-transactions query failed")
+        rows = []
     out = []
     for row in rows:
-        item = dict(row)
+        item = _plain(dict(row))
         item["date_display"] = _fmt_dt(row["date_created"], "%b %d, %Y")
         item["time_display"] = _fmt_dt(row["date_created"], "%I:%M %p")
         item["total_amount"] = f"{float(row['total_amount'] or 0):.2f}"
@@ -788,57 +875,47 @@ def dashboard(request: Request, startDate: str = "", endDate: str = ""):
         return _unauthorized()
     start = startDate or _manila_now().strftime("%Y-%m-%d")
     end = endDate or _manila_now().strftime("%Y-%m-%d")
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                """
-                UPDATE drugs_master dm
-                SET stock_status = CASE
-                    WHEN COALESCE(dm.minimum_stock, 0) = 0
-                     AND NOT EXISTS (SELECT 1 FROM inventory_lots WHERE drug_id = dm.drug_id)
-                    THEN 'ok'
-                    WHEN COALESCE((SELECT SUM(current_stock) FROM inventory_lots WHERE is_active = 1 AND drug_id = dm.drug_id), 0) <= 0 THEN 'out'
-                    WHEN COALESCE((SELECT SUM(current_stock) FROM inventory_lots WHERE is_active = 1 AND drug_id = dm.drug_id), 0) <= dm.minimum_stock THEN 'low'
-                    ELSE 'ok'
-                END
-                WHERE dm.is_active = 1
-                """
-            )
-            cur.execute(
-                f"SELECT COUNT(sale_id) AS transaction_count FROM sales WHERE {_sale_date_sql()} BETWEEN %s AND %s AND status = 'completed'",
-                (start, end),
-            )
-            transaction_count = int(cur.fetchone()["transaction_count"] or 0)
-            cur.execute(
-                f"SELECT COALESCE(SUM(total_amount), 0) AS total_sales FROM sales WHERE {_sale_date_sql()} BETWEEN %s AND %s AND status = 'completed'",
-                (start, end),
-            )
-            total_sales = float(cur.fetchone()["total_sales"] or 0)
-            cur.execute(
-                f"""
-                SELECT COALESCE(SUM(si.quantity), 0) AS items_sold
-                FROM sales_items si JOIN sales s ON si.sale_id = s.sale_id
-                WHERE {_sale_date_sql("s")} BETWEEN %s AND %s AND s.status = 'completed'
-                """,
-                (start, end),
-            )
-            items_sold = int(cur.fetchone()["items_sold"] or 0)
-            cur.execute("SELECT COUNT(*) AS cnt FROM drugs_master WHERE is_active = 1 AND stock_status = 'low'")
-            low_stock_count = int(cur.fetchone()["cnt"] or 0)
-            cur.execute("SELECT COUNT(*) AS cnt FROM drugs_master WHERE is_active = 1 AND stock_status = 'out'")
-            out_of_stock_count = int(cur.fetchone()["cnt"] or 0)
-            cur.execute(
-                "SELECT COUNT(order_id) AS pending_orders FROM customer_orders WHERE order_status IN ('Pending', 'Processing')"
-            )
-            pending_orders = int(cur.fetchone()["pending_orders"] or 0)
-    return {
-        "transaction_count": transaction_count,
-        "total_sales": f"{total_sales:.2f}",
-        "items_sold": items_sold,
-        "low_stock_count": low_stock_count,
-        "out_of_stock_count": out_of_stock_count,
-        "pending_orders": pending_orders,
-    }
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    f"SELECT COUNT(sale_id) AS transaction_count FROM sales WHERE {_sale_date_sql()} BETWEEN %s AND %s AND status = 'completed'",
+                    (start, end),
+                )
+                transaction_count = int(cur.fetchone()["transaction_count"] or 0)
+                cur.execute(
+                    f"SELECT COALESCE(SUM(total_amount), 0) AS total_sales FROM sales WHERE {_sale_date_sql()} BETWEEN %s AND %s AND status = 'completed'",
+                    (start, end),
+                )
+                total_sales = float(cur.fetchone()["total_sales"] or 0)
+                cur.execute(
+                    f"""
+                    SELECT COALESCE(SUM(si.quantity), 0) AS items_sold
+                    FROM sales_items si JOIN sales s ON si.sale_id = s.sale_id
+                    WHERE {_sale_date_sql("s")} BETWEEN %s AND %s AND s.status = 'completed'
+                    """,
+                    (start, end),
+                )
+                items_sold = int(cur.fetchone()["items_sold"] or 0)
+                cur.execute("SELECT COUNT(*) AS cnt FROM drugs_master WHERE is_active = 1 AND stock_status = 'low'")
+                low_stock_count = int(cur.fetchone()["cnt"] or 0)
+                cur.execute("SELECT COUNT(*) AS cnt FROM drugs_master WHERE is_active = 1 AND stock_status = 'out'")
+                out_of_stock_count = int(cur.fetchone()["cnt"] or 0)
+                cur.execute(
+                    "SELECT COUNT(order_id) AS pending_orders FROM customer_orders WHERE order_status IN ('Pending', 'Processing')"
+                )
+                pending_orders = int(cur.fetchone()["pending_orders"] or 0)
+        return {
+            "transaction_count": transaction_count,
+            "total_sales": f"{total_sales:.2f}",
+            "items_sold": items_sold,
+            "low_stock_count": low_stock_count,
+            "out_of_stock_count": out_of_stock_count,
+            "pending_orders": pending_orders,
+        }
+    except Exception:
+        logger.exception("cashier dashboard query failed")
+        return _empty_dashboard()
 
 
 def _customer_purchase_rows():
@@ -888,24 +965,39 @@ def _customer_purchase_rows():
 def charts(request: Request):
     if not require_staff(request):
         return _unauthorized()
-    rows = _customer_purchase_rows()
-    by_frequency = sorted(rows, key=lambda r: (-int(r["order_count"] or 0), r["customer_name"] or ""))
-    type_rows = fetch_all(
-        "SELECT customer_type, COUNT(*) as total FROM customers WHERE is_active = 1 GROUP BY customer_type"
-    )
-    return {
-        "freq_labels": [r["customer_name"] for r in by_frequency],
-        "freq_data": [int(r["order_count"] or 0) for r in by_frequency],
-        "spend_labels": [r["customer_name"] for r in rows],
-        "spend_data": [float(r["total_spent"] or 0) for r in rows],
-        "type_labels": [r["customer_type"] for r in type_rows],
-        "type_data": [int(r["total"] or 0) for r in type_rows],
-    }
+    try:
+        rows = _customer_purchase_rows()
+        by_frequency = sorted(rows, key=lambda r: (-int(r["order_count"] or 0), r["customer_name"] or ""))
+        type_rows = fetch_all(
+            "SELECT customer_type, COUNT(*) as total FROM customers WHERE is_active = 1 GROUP BY customer_type"
+        )
+        return {
+            "freq_labels": [r["customer_name"] for r in by_frequency],
+            "freq_data": [int(r["order_count"] or 0) for r in by_frequency],
+            "spend_labels": [r["customer_name"] for r in rows],
+            "spend_data": [float(r["total_spent"] or 0) for r in rows],
+            "type_labels": [r["customer_type"] for r in type_rows],
+            "type_data": [int(r["total"] or 0) for r in type_rows],
+        }
+    except Exception:
+        logger.exception("cashier charts query failed")
+        return {
+            "freq_labels": [],
+            "freq_data": [],
+            "spend_labels": [],
+            "spend_data": [],
+            "type_labels": [],
+            "type_data": [],
+        }
 
 
 def _paymongo_base_url() -> str:
     configured = (os.getenv("PAYMONGO_BASE_URL") or "").strip().rstrip("/")
-    public = (os.getenv("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
+    public = (
+        os.getenv("PUBLIC_BASE_URL")
+        or os.getenv("RENDER_EXTERNAL_URL")
+        or ""
+    ).strip().rstrip("/")
     if configured and "127.0.0.1" not in configured and "localhost" not in configured:
         return configured
     return public or configured or "http://127.0.0.1:8080"
@@ -1289,6 +1381,14 @@ async def update_profile(request: Request):
 def segmentation(request: Request):
     if not require_staff(request):
         return _unauthorized()
+    try:
+        return _segmentation_payload()
+    except Exception:
+        logger.exception("cashier segmentation query failed")
+        return {"variants": {}, "engine": "none", "silhouette": 0, "debug": {}, "active_k": 3}
+
+
+def _segmentation_payload():
     spend_rows = _customer_purchase_rows()
     spend_customers = []
     spend_data = []
@@ -1470,7 +1570,7 @@ def _run_kmeans(spend_customers):
             input=json.dumps(payload),
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=8 if os.getenv("RENDER") else 20,
         )
         decoded = json.loads(proc.stdout or "{}")
         if decoded.get("success"):
