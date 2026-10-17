@@ -58,7 +58,10 @@ html, body {
     box-shadow:0 1px 3px rgba(23,26,43,.04);
     min-width:0;
 }
-#home .dash-stat-points{ border-color:#FFC857; }
+#home .dash-stat-points{ border-color:#D4C3E8; }
+#home .dash-stats .dash-stat:nth-child(1){ background:#EEF6F3; border-color:#C5E6D8; }
+#home .dash-stats .dash-stat:nth-child(2){ background:#EAF4FB; border-color:#B7D4EA; }
+#home .dash-stats .dash-stat:nth-child(3){ background:#F3EEF8; border-color:#D4C3E8; }
 #home .dash-stat span{
     display:block; color:#4BAA8B; font-size:12px; font-weight:600;
     margin-bottom:6px;

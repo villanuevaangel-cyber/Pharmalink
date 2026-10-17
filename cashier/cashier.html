@@ -6,7 +6,7 @@
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
     <link rel="icon" href="/assets/pmds-logo.jpg" type="image/jpeg">
     <link rel="stylesheet" href="/assets/theme.css?v=notif-new1">
-    <link rel="stylesheet" href="/cashier/css/cashier.css?v=no-rx1">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=no-oos1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
@@ -112,12 +112,6 @@
             <div class="stat-icon cs-icon-amber"><i class="fas fa-warehouse"></i></div>
             <div class="stat-content">
                 <h3 id="stat-low-stock">0</h3><p>Low Stock Items</p>
-            </div>
-        </div>
-        <div class="stat-card" title="Active drugs with zero stock across all lots">
-            <div class="stat-icon cs-icon-red"><i class="fas fa-circle-xmark"></i></div>
-            <div class="stat-content">
-                <h3 id="stat-out-stock">0</h3><p>Out of Stock</p>
             </div>
         </div>
         <div class="stat-card" title="Online orders awaiting processing">
@@ -3114,7 +3108,6 @@ function updateDashboardStats(start, end) {
             if(document.getElementById('stat-sales')) document.getElementById('stat-sales').textContent = '₱' + formatter.format(data.total_sales || 0); 
             if(document.getElementById('stat-items-sold')) document.getElementById('stat-items-sold').textContent = data.items_sold || '0';
             if(document.getElementById('stat-low-stock')) document.getElementById('stat-low-stock').textContent = data.low_stock_count || '0'; 
-            if(document.getElementById('stat-out-stock')) document.getElementById('stat-out-stock').textContent = data.out_of_stock_count || '0';
             if(document.getElementById('stat-pending-orders')) document.getElementById('stat-pending-orders').textContent = data.pending_orders || '0';
         })
         .catch(error => {

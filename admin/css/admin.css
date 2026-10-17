@@ -68,15 +68,20 @@
 }
 #dashboard .ad-dash-sales-card{
   margin:0; display:flex; flex-direction:column; justify-content:center;
-  background:#1E3A34 !important; border-color:#1E3A34 !important;
+  background:#EEF6F3 !important; border-color:#C5E6D8 !important;
 }
 #dashboard .ad-dash-sales-card h3{
-  color:#FFE3B3 !important; font-size:12px !important; line-height:1.35;
+  color:#1E3A34 !important; font-size:12px !important; line-height:1.35;
 }
-#dashboard .ad-dash-sales-card small{ color:#FFE3B3 !important; }
+#dashboard .ad-dash-sales-card small{ color:#4BAA8B !important; }
 #dashboard .ad-dash-sales-card .value,
-#dashboard .ad-dash-sales-card .value span{ color:#fff !important; }
-#dashboard .ad-dash-sales-card:hover{ border-color:#FFC857 !important; }
+#dashboard .ad-dash-sales-card .value span{ color:#1E3A34 !important; }
+#dashboard .ad-dash-sales-card:hover{ border-color:#C5E6D8 !important; }
+#dashboard .ad-dash-stats .dash-card:nth-child(1){ background:#EEF6F3; border-color:#C5E6D8; }
+#dashboard .ad-dash-stats .dash-card:nth-child(2){ background:#EAF4FB; border-color:#B7D4EA; }
+#dashboard .ad-dash-stats .dash-card:nth-child(3){ background:#F3EEF8; border-color:#D4C3E8; }
+#dashboard .ad-dash-stats .dash-card:nth-child(4){ background:#FFF8E8; border-color:#F3D9A4; }
+#dashboard .ad-dash-stats .dash-card:nth-child(5){ background:#FEF2F2; border-color:#FECACA; }
 #dashboard .ad-dash-split{
   display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:4px;
 }
