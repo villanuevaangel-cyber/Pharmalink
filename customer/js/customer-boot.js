@@ -13,7 +13,10 @@
         }
         const isCustomer = me && me.success && String(me.role || '').toLowerCase() === 'customer';
         if (me && me.success && !isCustomer) {
-            window.location.href = '/';
+            const role = String(me.role || '').toLowerCase();
+            if (role === 'admin') window.location.href = '/admin/admin.html';
+            else if (role === 'cashier/pharmacist') window.location.href = '/cashier/cashier.html';
+            else window.location.href = '/';
             return;
         }
 

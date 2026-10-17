@@ -141,12 +141,26 @@ def legacy_logout(request: Request):
     return RedirectResponse(url="/", status_code=302)
 
 
+def _role_home(request: Request) -> str:
+    """Page that matches the logged-in role. Guests stay on the login page."""
+    if session_user_id(request) is None:
+        return "/"
+    role = str(request.session.get("user_role") or "").lower()
+    if role == "admin":
+        return "/admin/admin.html"
+    if role == "cashier/pharmacist":
+        return "/cashier/cashier.html"
+    if role == "customer":
+        return "/customer/customer.html"
+    return "/"
+
+
 @app.get("/customer/customer.php")
 @app.get("/customer/customer.html")
 def customer_portal(request: Request):
     role = str(request.session.get("user_role") or "").lower()
     if session_user_id(request) is not None and role and role != "customer":
-        return RedirectResponse(url="/", status_code=302)
+        return RedirectResponse(url=_role_home(request), status_code=302)
     return FileResponse(ROOT / "customer" / "customer.html")
 
 
@@ -154,8 +168,8 @@ def customer_portal(request: Request):
 @app.get("/cashier/cashier.html")
 def cashier_portal(request: Request):
     role = str(request.session.get("user_role") or "").lower()
-    if session_user_id(request) is None or role not in ("cashier/pharmacist", "admin"):
-        return RedirectResponse(url="/", status_code=302)
+    if session_user_id(request) is None or role != "cashier/pharmacist":
+        return RedirectResponse(url=_role_home(request), status_code=302)
     return FileResponse(ROOT / "cashier" / "cashier.html")
 
 
@@ -171,7 +185,7 @@ def admin_legacy_pages():
 def admin_portal(request: Request):
     role = str(request.session.get("user_role") or "").lower()
     if session_user_id(request) is None or role != "admin":
-        return RedirectResponse(url="/", status_code=302)
+        return RedirectResponse(url=_role_home(request), status_code=302)
     return FileResponse(ROOT / "admin" / "admin.html")
 
 
