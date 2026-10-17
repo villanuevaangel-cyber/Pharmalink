@@ -101,6 +101,11 @@ def service_worker():
     return FileResponse(ROOT / "assets" / "sw.js", media_type="text/javascript")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(ROOT / "assets" / "pmds-logo.jpg", media_type="image/jpeg")
+
+
 @app.get("/")
 @app.get("/index.html")
 @app.get("/index.php")
