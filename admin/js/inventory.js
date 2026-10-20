@@ -952,7 +952,7 @@
 
     function fetchLots() {
         const body = document.getElementById('inventoryBody');
-        if (body) body.innerHTML = '<tr><td colspan="13" class="inv-empty">Loading...</td></tr>';
+        if (body) body.innerHTML = '<tr><td colspan="14" class="inv-empty">Loading...</td></tr>';
         const status = lotStatusFilter();
         const excludeExpired = status === 'active' ? '1' : '0';
         const params = new URLSearchParams({ status, exclude_expired: excludeExpired });
@@ -973,7 +973,7 @@
                 console.error('Failed to load inventory lots:', err);
                 inventoryDataLoaded = false;
                 const failedBody = document.getElementById('inventoryBody');
-                if (failedBody) failedBody.innerHTML = '<tr><td colspan="13" class="inv-empty is-error">Failed to load inventory.</td></tr>';
+                if (failedBody) failedBody.innerHTML = '<tr><td colspan="14" class="inv-empty is-error">Failed to load inventory.</td></tr>';
             });
     }
 
@@ -1017,7 +1017,7 @@
         updateInvPager('lots', paged.page, paged.pages, paged.total);
 
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="13" class="inv-empty">No stock lots found.</td></tr>';
+            body.innerHTML = '<tr><td colspan="14" class="inv-empty">No stock lots found.</td></tr>';
             return;
         }
 
@@ -1041,6 +1041,7 @@
                 <td class="inv-exp ${expClass}">${l.expiration_date}${expTag}</td>
                 <td class="inv-stock ${stockClass}">${l.current_stock}</td>
                 <td>${l.minimum_stock}</td>
+                <td>${l.maximum_stock || '-'}</td>
                 <td>${money(l.price)}</td>
                 <td>${l.supplier && suppliersById[l.supplier] ? escapeHtml(suppliersById[l.supplier]) : '-'}</td>
                 <td><span class="inv-badge ${isActive ? 'active' : 'archived'}">${isActive ? 'Active' : 'Archived'}</span></td>
