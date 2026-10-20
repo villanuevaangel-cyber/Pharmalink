@@ -36,10 +36,6 @@ _restock_timer_lock = threading.Lock()
 _pending_drug_ids: set[int] = set()
 _pending_all_drugs = False
 _restock_task_scheduled = False
-_AUTO_EMAIL_SUPPLIER_ID = 10
-_AUTO_EMAIL_SUPPLIER_EMAIL = "pharmalink.ph32@gmail.com"
-
-
 def ensure_automation_schema(conn) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -150,6 +146,12 @@ def ensure_automation_schema(conn) -> None:
             """
             ALTER TABLE sales
             ADD COLUMN IF NOT EXISTS discount_id_number VARCHAR(80)
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE sales
+            ADD COLUMN IF NOT EXISTS discount_id_holder VARCHAR(120)
             """
         )
         cur.execute(
@@ -995,7 +997,13 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
     }
 
 
-def create_purchase_orders_from_needs(needs, created_by: str, notes: str, raise_alerts: bool = False) -> dict:
+def create_purchase_orders_from_needs(
+    needs,
+    created_by: str,
+    notes: str,
+    raise_alerts: bool = False,
+    order_date: date | None = None,
+) -> dict:
     """Create one Pending PO per supplier from reorder-style need rows."""
     created = []
     skipped = []
@@ -1072,8 +1080,8 @@ def create_purchase_orders_from_needs(needs, created_by: str, notes: str, raise_
                     **item,
                     "quantity_ordered_boxes": requested_pieces // units_per_box,
                 })
-            order_date = datetime.now(MANILA).date()
-            expected = (order_date + timedelta(days=LEAD_DAYS)).isoformat()
+            po_order_date = order_date or datetime.now(MANILA).date()
+            expected = (po_order_date + timedelta(days=LEAD_DAYS)).isoformat()
             for supplier_id, items in by_supplier.items():
                 cur.execute(
                     "SELECT supplier_id, supplier_name FROM suppliers WHERE supplier_id = %s AND status = 'Active'",
@@ -1094,7 +1102,7 @@ def create_purchase_orders_from_needs(needs, created_by: str, notes: str, raise_
                         (po_id, supplier_id, status, order_date, expected_date, notes, created_by)
                     VALUES (%s, %s, 'Pending', %s, %s, %s, %s)
                     """,
-                    (po_id, supplier_id, order_date.isoformat(), expected, notes, created_by),
+                    (po_id, supplier_id, po_order_date.isoformat(), expected, notes, created_by),
                 )
                 for item in items:
                     item_id = next_id(cur, "purchase_order_items", "po_item_id")
@@ -1189,13 +1197,6 @@ def _low_stock_drug_ids() -> set[int]:
     }
 
 
-def _auto_email_supplier(s: dict) -> bool:
-    return (
-        int(s.get("suggested_supplier_id") or 0) == _AUTO_EMAIL_SUPPLIER_ID
-        or str(s.get("suggested_supplier_email") or "").strip().lower() == _AUTO_EMAIL_SUPPLIER_EMAIL
-    )
-
-
 def create_auto_purchase_orders(drug_ids: set[int] | None = None, use_forecast: bool = True) -> dict:
     data = compute_reorder_suggestions(use_forecast=use_forecast)
     needs = [
@@ -1206,7 +1207,6 @@ def create_auto_purchase_orders(drug_ids: set[int] | None = None, use_forecast: 
         and s.get("auto_po", True)
         and str(s.get("demand_source") or "") == "prophet"
         and _is_low_stock(int(s.get("current_stock") or 0), int(s.get("minimum_stock") or 0))
-        and _auto_email_supplier(s)
     ]
     if drug_ids is not None:
         needs = [s for s in needs if int(s["drug_id"]) in drug_ids]
@@ -1214,73 +1214,17 @@ def create_auto_purchase_orders(drug_ids: set[int] | None = None, use_forecast: 
         "This is an automatic order. PharmaLink prepared it from the Prophet 30-day sales forecast and EOQ, capped at maximum stock."
     )
     result = create_purchase_orders_from_needs(needs, "System", notes, raise_alerts=True)
-    from app.routers.admin_ops import send_saved_purchase_order
-
-    emailed = 0
-    not_sent = 0
-    created_ids = set()
-    for po in result["created"]:
-        po_id = int(po["po_id"])
-        created_ids.add(po_id)
-        mail = send_saved_purchase_order(po_id, actor="System")
-        po["email_sent"] = bool(mail.get("email_sent"))
-        po["email_message"] = mail.get("message") or ""
-        if po["email_sent"]:
-            emailed += 1
-        else:
-            not_sent += 1
-    for po_id in _unsent_automatic_po_ids(created_ids):
-        mail = send_saved_purchase_order(po_id, actor="System")
-        if mail.get("email_sent"):
-            emailed += 1
-        else:
-            not_sent += 1
     return {
         "created": result["created"],
         "skipped": len(result["skipped"]),
         "needed": len(needs),
-        "emailed": emailed,
-        "not_sent": not_sent,
+        "emailed": 0,
+        "not_sent": 0,
     }
 
 
-def _unsent_automatic_po_ids(exclude: set[int] | None = None) -> list[int]:
-    """Pending auto-POs that still have no successful supplier email."""
-    skip = exclude or set()
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                """
-                SELECT po.po_id
-                FROM purchase_orders po
-                WHERE po.status = 'Pending'
-                  AND po.notes ILIKE %s
-                ORDER BY po.po_id
-                """,
-                ("This is an automatic order.%",),
-            )
-            pending = [int(row["po_id"]) for row in cur.fetchall() if int(row["po_id"]) not in skip]
-            if not pending:
-                return []
-            cur.execute(
-                """
-                SELECT details
-                FROM activity_logs
-                WHERE action = 'Email Purchase Order'
-                  AND details LIKE %s
-                """,
-                ("Emailed PO-%",),
-            )
-            emailed = set()
-            for row in cur.fetchall():
-                parts = str(row.get("details") or "").split()
-                if len(parts) >= 2 and parts[0] == "Emailed":
-                    emailed.add(parts[1].rstrip(".,"))
-    return [po_id for po_id in pending if f"PO-{po_id:05d}" not in emailed]
-
-
 def run_restock_if_needed() -> dict:
-    """Create and email POs from the Prophet forecast as soon as stock is short."""
+    """Create Pending POs from the Prophet forecast as soon as stock is short."""
     global _pending_all_drugs
     if not _restock_lock.acquire(blocking=False):
         schedule_auto_restock_check()

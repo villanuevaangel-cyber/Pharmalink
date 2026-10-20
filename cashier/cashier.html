@@ -283,6 +283,22 @@
                         <span id="scPwdLabel">SC/PWD Discount (20%)</span>
                     </label>
                 </div>
+                <div id="scPwdDetails" hidden style="border:1px solid var(--ph-border-soft);border-radius:8px;padding:10px;margin:8px 0;">
+                    <label for="discountIdType">Discount type:</label>
+                    <select id="discountIdType" required>
+                        <option value="">Choose type</option>
+                        <option value="Senior">Senior Citizen</option>
+                        <option value="PWD">PWD</option>
+                    </select>
+                    <label for="discountIdNumber">ID number:</label>
+                    <input type="text" id="discountIdNumber" minlength="4" maxlength="30" pattern="[A-Za-z0-9-]{4,30}" autocomplete="off" required>
+                    <label for="discountIdHolderName">ID holder's full name:</label>
+                    <input type="text" id="discountIdHolderName" maxlength="120" autocomplete="name" required>
+                    <label class="pos-check-line" for="discountIdVerified">
+                        <input type="checkbox" id="discountIdVerified" required>
+                        <span class="pos-check-text">I verified the original ID in person</span>
+                    </label>
+                </div>
 
                 <p class="pos-sum-line">Subtotal: <span id="subtotalDisplay">₱0.00</span></p>
                 <p class="pos-sum-line"><span id="taxLabel">Tax (0%):</span> <span id="taxDisplay">₱0.00</span></p>
@@ -854,6 +870,56 @@ function formatCheckoutPercent(rate) {
     return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+function updateScPwdDetailsVisibility() {
+    const enabled = !!document.getElementById('scPwdToggle')?.checked;
+    const panel = document.getElementById('scPwdDetails');
+    if (panel) panel.hidden = !enabled;
+    if (!enabled) {
+        ['discountIdType', 'discountIdNumber', 'discountIdHolderName'].forEach((id) => {
+            const field = document.getElementById(id);
+            if (field) field.value = '';
+        });
+        const verified = document.getElementById('discountIdVerified');
+        if (verified) verified.checked = false;
+    }
+}
+
+function getScPwdSaleData() {
+    const enabled = !!document.getElementById('scPwdToggle')?.checked;
+    if (!enabled) {
+        return {
+            sc_pwd_applied: false,
+            discount_id_type: null,
+            discount_id_number: null,
+            discount_id_holder_name: null,
+            id_verified: false
+        };
+    }
+    const type = document.getElementById('discountIdType')?.value || '';
+    const number = document.getElementById('discountIdNumber')?.value.trim() || '';
+    const holder = document.getElementById('discountIdHolderName')?.value.trim() || '';
+    const verified = !!document.getElementById('discountIdVerified')?.checked;
+    const missing = [];
+    if (!type) missing.push(['discountIdType', 'choose Senior Citizen or PWD']);
+    if (!/^[A-Za-z0-9-]{4,30}$/.test(number)) missing.push(['discountIdNumber', 'enter a valid ID number (4-30 letters, digits, or dashes)']);
+    if (!holder || holder.length > 120 || holder.split(/\s+/).filter(Boolean).length < 2) {
+        missing.push(['discountIdHolderName', "enter the ID holder's full name"]);
+    }
+    if (!verified) missing.push(['discountIdVerified', 'confirm that the original ID was verified in person']);
+    if (missing.length) {
+        alert('SC/PWD discount requires that you ' + missing.map(([, message]) => message).join(', ') + '.');
+        document.getElementById(missing[0][0])?.focus();
+        return null;
+    }
+    return {
+        sc_pwd_applied: true,
+        discount_id_type: type,
+        discount_id_number: number,
+        discount_id_holder_name: holder,
+        id_verified: true
+    };
+}
+
 function applyCheckoutRates(data) {
     if (data && Number.isFinite(Number(data.vat_percent))) TAX_RATE = Number(data.vat_percent) / 100;
     if (data && Number.isFinite(Number(data.sc_pwd_percent))) SC_PWD_RATE = Number(data.sc_pwd_percent) / 100;
@@ -1151,6 +1217,10 @@ function switchPOSMode(mode) {
 
 window.clearCart = function() {
     if (cart.length === 0) {
+        const scPwdToggle = document.getElementById('scPwdToggle');
+        if (scPwdToggle) scPwdToggle.checked = false;
+        updateScPwdDetailsVisibility();
+        savePosDraft();
         return;
     }
 
@@ -1211,6 +1281,11 @@ window.clearCart = function() {
     const applyPointsToggle = document.getElementById('applyPointsToggle');
     if (applyPointsToggle) applyPointsToggle.checked = false;
 
+    const scPwdToggle = document.getElementById('scPwdToggle');
+    if (scPwdToggle) scPwdToggle.checked = false;
+    updateScPwdDetailsVisibility();
+    savePosDraft();
+
     alert("Cart has been cleared.");
 };
 
@@ -1244,6 +1319,11 @@ function shortTxnId(value) {
     const s = String(value || '').trim();
     const parts = /^TXN-\d+-(\d+)$/i.exec(s);
     return parts ? ('TXN-' + parts[1]) : s;
+}
+
+function maskDiscountId(value) {
+    const id = String(value || '');
+    return '*'.repeat(Math.max(0, id.length - 4)) + id.slice(-4);
 }
 
 function printReceipt(responseData, saleData, printWindow) {
@@ -1296,6 +1376,9 @@ function printReceipt(responseData, saleData, printWindow) {
         : `
             <tr><td class="right">PAYMENT METHOD:</td><td class="right">${paymentMethodDisplay}</td></tr>
             ${saleData.payment_reference ? `<tr><td class="right">REF NO.:</td><td class="right">${saleData.payment_reference}</td></tr>` : ''}`;
+    const discountIdLineHtml = saleData.sc_pwd_applied
+        ? `<tr><td class="right">SC/PWD Discount:</td><td class="right">${saleData.discount_id_type === 'Senior' ? 'Senior Citizen' : 'PWD'}, ID No.: ${maskDiscountId(saleData.discount_id_number)}</td></tr>`
+        : '';
 
     // 2. Construct Full Receipt HTML (MAY DAGDAG NA PRINT BUTTON)
     const receiptHtml = `
@@ -1328,6 +1411,7 @@ function printReceipt(responseData, saleData, printWindow) {
                 <table>
                     <tr><td class="right">Subtotal:</td><td class="right">₱${saleData.subtotal.toFixed(2)}</td></tr>
                     <tr><td class="right">Discount:</td><td class="right">₱${saleData.discount_total.toFixed(2)}</td></tr>
+                    ${discountIdLineHtml}
                     <tr><td class="right">VAT:</td><td class="right">₱${saleData.tax_total.toFixed(2)}</td></tr>
                     ${pointsLineHtml}
                     <tr class="border-top">
@@ -1771,6 +1855,10 @@ function savePosDraft() {
             } : null,
             discountPercent: discountInput ? discountInput.value : '0',
             scPwd: !!document.getElementById('scPwdToggle')?.checked,
+            discountIdType: document.getElementById('discountIdType')?.value || '',
+            discountIdNumber: document.getElementById('discountIdNumber')?.value || '',
+            discountIdHolderName: document.getElementById('discountIdHolderName')?.value || '',
+            discountIdVerified: !!document.getElementById('discountIdVerified')?.checked,
             applyPoints: !!document.getElementById('applyPointsToggle')?.checked,
             paymentMethod: document.getElementById('paymentMethodSelect')?.value || 'cash',
             cash: cashInput ? cashInput.value : '',
@@ -1822,6 +1910,11 @@ function restorePosDraft() {
 
     const scPwdToggle = document.getElementById('scPwdToggle');
     if (scPwdToggle) scPwdToggle.checked = !!draft.scPwd;
+    document.getElementById('discountIdType').value = draft.discountIdType || '';
+    document.getElementById('discountIdNumber').value = draft.discountIdNumber || '';
+    document.getElementById('discountIdHolderName').value = draft.discountIdHolderName || '';
+    document.getElementById('discountIdVerified').checked = !!draft.discountIdVerified;
+    updateScPwdDetailsVisibility();
     if (discountInput && draft.discountPercent != null) discountInput.value = draft.discountPercent;
     const applyPointsToggle = document.getElementById('applyPointsToggle');
     if (applyPointsToggle) applyPointsToggle.checked = !!draft.applyPoints;
@@ -2241,7 +2334,15 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // ===== SC/PWD TOGGLE =====
     const scPwdToggle = document.getElementById("scPwdToggle");
-    scPwdToggle.addEventListener("change", updateCart);
+    scPwdToggle.addEventListener("change", () => {
+        updateScPwdDetailsVisibility();
+        updateCart();
+    });
+    ['discountIdType', 'discountIdNumber', 'discountIdHolderName', 'discountIdVerified'].forEach((id) => {
+        const field = document.getElementById(id);
+        field?.addEventListener('input', savePosDraft);
+        field?.addEventListener('change', savePosDraft);
+    });
 
     // ===== LOYALTY POINTS TOGGLE =====
     const applyPointsToggle = document.getElementById("applyPointsToggle");
@@ -2648,6 +2749,11 @@ function finishEwalletSale() {
         paymongo_checkout_id: posEwallet.checkoutId,
         points_redeemed: pending.pointsRedeemed,
         points_discount_value: pending.pointsDiscountValue,
+        sc_pwd_applied: pending.sc_pwd_applied,
+        discount_id_type: pending.discount_id_type,
+        discount_id_number: pending.discount_id_number,
+        discount_id_holder_name: pending.discount_id_holder_name,
+        id_verified: pending.id_verified,
         items: pending.items
     };
     postCashierSale(saleData, null, false, 0, pending.paymentMethod, paymentReference);
@@ -2684,6 +2790,9 @@ confirmSale.addEventListener("click", () => {
         return; 
     }
 
+    const scPwdData = getScPwdSaleData();
+    if (!scPwdData) return;
+
     // Payment method drives how "cash"/"change" are computed. GCash/Maya/
     // Card payments are for the exact total - there's no physical change to
     // hand back - so cash_received is just set equal to the total, and we
@@ -2718,7 +2827,7 @@ confirmSale.addEventListener("click", () => {
         change = 0;
         beginEwalletPayment({
             customerId, customerName, appliedDiscount, tax, total, cash, change,
-            paymentMethod, pointsRedeemed
+            paymentMethod, pointsRedeemed, ...scPwdData
         });
         return;
     }
@@ -2756,6 +2865,7 @@ confirmSale.addEventListener("click", () => {
         paymongo_checkout_id: posEwallet.checkoutId,
         points_redeemed: pointsRedeemed,
         points_discount_value: pointsDiscountValue,
+        ...scPwdData,
         items: cart.map(item => ({
             drug_id: item.drug_id,
             lot_id: item.lot_id,
@@ -2811,6 +2921,7 @@ function postCashierSale(saleData, printWindow, isCashPayment, change, paymentMe
                               " (₱" + Number(data.points_discount_value).toFixed(2) + ")" +
                               "\nRemaining Points: " + Number(data.new_loyalty_balance).toFixed(2);
             }
+            if (data.warning) successMsg += "\n" + data.warning;
             alert(successMsg);
             const qrModal = document.getElementById('ewalletQrModal');
             if (qrModal) qrModal.style.display = 'none';
@@ -3377,6 +3488,11 @@ function reprintSalesReceipt(sale, items) {
     const pointsLine = points > 0
         ? '<tr><td class="right">Points Redeemed:</td><td class="right">' + points.toFixed(2) + ' (' + money(sale.points_discount_value) + ')</td></tr>'
         : '';
+    const discountIdLine = sale.discount_id_type
+        ? '<tr><td class="right">SC/PWD Discount:</td><td class="right">' +
+          (sale.discount_id_type === 'Senior' ? 'Senior Citizen' : 'PWD') +
+          ', ID No.: ' + srEsc(sale.discount_id_number || '') + '</td></tr>'
+        : '';
     const paymentLine = method === 'cash'
         ? '<tr><td class="right">CASH:</td><td class="right">' + money(sale.cash_received) + '</td></tr>' +
           '<tr><td class="right">CHANGE:</td><td class="right">' + money(sale.change_amount) + '</td></tr>'
@@ -3398,6 +3514,7 @@ function reprintSalesReceipt(sale, items) {
         itemsHtml + '</tbody></table><div class="border-top"></div><table>' +
         '<tr><td class="right">Subtotal:</td><td class="right">' + money(sale.subtotal) + '</td></tr>' +
         '<tr><td class="right">Discount:</td><td class="right">' + money(sale.discount_amount) + '</td></tr>' +
+        discountIdLine +
         '<tr><td class="right">VAT:</td><td class="right">' + money(sale.tax_amount) + '</td></tr>' +
         pointsLine +
         '<tr class="border-top"><td class="right"><strong>TOTAL DUE:</strong></td><td class="right"><strong>' + money(sale.total_amount) + '</strong></td></tr>' +
@@ -3449,6 +3566,9 @@ function openSalesReportDetail(saleId) {
                 '<p><strong>Cashier:</strong> ' + srEsc(s.cashier_name) + '</p>' +
                 '<p><strong>Payment:</strong> ' + srEsc(srPayLabel(s.payment_method)) +
                 (s.payment_reference ? ' · Ref ' + srEsc(s.payment_reference) : '') + '</p>' +
+                (s.discount_id_type ? '<p><strong>SC/PWD Discount:</strong> ' +
+                    srEsc(s.discount_id_type === 'Senior' ? 'Senior Citizen' : 'PWD') +
+                    ' · <strong>ID No.:</strong> ' + srEsc(s.discount_id_number || '') + '</p>' : '') +
                 '<p><strong>Subtotal:</strong> ₱' + Number(s.subtotal).toFixed(2) +
                 ' · <strong>Discount:</strong> ₱' + Number(s.discount_amount).toFixed(2) +
                 ' · <strong>Total:</strong> ₱' + Number(s.total_amount).toFixed(2) + '</p>' +

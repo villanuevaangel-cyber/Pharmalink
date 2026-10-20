@@ -1,5 +1,4 @@
 import csv
-import html
 import io
 import json
 import logging
@@ -28,7 +27,6 @@ from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin
 from app.checkout_rates import get_checkout_rates, save_checkout_rate
 from app.loyalty import get_loyalty_settings, save_loyalty_peso
-from app.mailer import send_mail
 from app.report_files import pdf_bytes, workbook_bytes
 from app.routers.admin import _jsonable, _log, _row, _rows, _unauthorized
 from app.stock import sync_stock_status_for_drug
@@ -566,309 +564,6 @@ async def create_po(request: Request):
     return {"success": True, "po_id": po_id, "po_number": po_number}
 
 
-def _esc(value) -> str:
-    return html.escape("" if value is None else str(value), quote=True)
-
-
-def _date_text(value) -> str:
-    if value is None or value == "":
-        return ""
-    if hasattr(value, "isoformat"):
-        return value.isoformat()[:10]
-    return str(value)[:10]
-
-
-def _po_email_subject(po_number: str) -> str:
-    return f"Purchase order {po_number}"
-
-
-def _po_email_html(po_number, supplier_name, _to_email, order_date, expected_date, notes, lines) -> str:
-    """One document for the on-screen preview and the message that is sent."""
-    body_rows = []
-    for line in lines:
-        qty = int(line["quantity"])
-        body_rows.append(
-            "<tr>"
-            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('generic_name') or '—')}</td>"
-            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('brand_name') or '—')}</td>"
-            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;\">{_esc(line.get('dosage') or '—')}</td>"
-            f"<td style=\"padding:8px;border-bottom:1px solid #FFE3B3;text-align:right;\">{qty}</td>"
-            "</tr>"
-        )
-    rows = "".join(body_rows) or (
-        "<tr><td colspan=\"4\" style=\"padding:8px;\">No items</td></tr>"
-    )
-    th = "padding:8px;text-align:left;font-size:12px;"
-    thr = "padding:8px;text-align:right;font-size:12px;"
-    greeting_name = (supplier_name or "").strip() or "Supplier"
-    return (
-        "<div style=\"font-family:Arial,sans-serif;color:#1E3A34;font-size:14px;line-height:1.45;\">"
-        f"<p style=\"margin:0 0 8px;\">Good day, {_esc(greeting_name)}.</p>"
-        "<p style=\"margin:0 0 16px;\">Please see the purchase order below.</p>"
-        f"<h2 style=\"margin:0 0 12px;font-size:20px;\">{_esc(po_number)}</h2>"
-        f"<p style=\"margin:0 0 4px;\"><strong>Supplier:</strong> {_esc(supplier_name or '—')}</p>"
-        f"<p style=\"margin:0 0 4px;\"><strong>Order date:</strong> {_esc(order_date or '—')}</p>"
-        f"<p style=\"margin:0 0 4px;\"><strong>Expected date:</strong> {_esc(expected_date or '—')}</p>"
-        f"<p style=\"margin:0 0 14px;\"><strong>Notes:</strong> {_esc(notes or '—')}</p>"
-        "<table style=\"width:100%;border-collapse:collapse;\">"
-        "<thead><tr style=\"background:#1E3A34;color:#ffffff;\">"
-        f"<th style=\"{th}\">Generic name</th>"
-        f"<th style=\"{th}\">Brand</th>"
-        f"<th style=\"{th}\">Dosage</th>"
-        f"<th style=\"{thr}\">Boxes</th>"
-        "</tr></thead><tbody>"
-        f"{rows}</tbody></table>"
-        "<p style=\"margin:12px 0 0;\">Please send the cost per box with the delivery.</p>"
-        "</div>"
-    )
-
-
-def _email_preview_payload(po_number, supplier_name, to_email, order_date, expected_date, notes, lines) -> dict:
-    cleaned = (to_email or "").strip()
-    html_doc = _po_email_html(
-        po_number, supplier_name, cleaned, order_date, expected_date, notes, lines
-    )
-    if cleaned:
-        return {
-            "success": True,
-            "can_send": True,
-            "to": cleaned,
-            "subject": _po_email_subject(po_number),
-            "po_number": po_number,
-            "html": html_doc,
-            "message": "",
-        }
-    return {
-        "success": True,
-        "can_send": False,
-        "to": "",
-        "subject": _po_email_subject(po_number),
-        "po_number": po_number,
-        "html": html_doc,
-        "message": "This supplier has no email. Add it on the supplier record.",
-    }
-
-
-def _lines_for_items(raw_items) -> tuple[list, str | None]:
-    wanted = []
-    for it in raw_items or []:
-        drug_id = int(it.get("drug_id") or 0)
-        qty = int(it.get("quantity_ordered") or it.get("quantity") or 0)
-        if not drug_id:
-            continue
-        if qty < 1:
-            return [], "Boxes ordered must be at least 1."
-        wanted.append((drug_id, qty))
-    if not wanted:
-        return [], "Add at least one medicine and enter at least 1 box."
-    ids = list(dict.fromkeys(drug_id for drug_id, _ in wanted))
-    drugs = {
-        int(row["drug_id"]): row
-        for row in fetch_all(
-            "SELECT drug_id, generic_name, brand_name, dosage FROM drugs_master WHERE drug_id = ANY(%s)",
-            (ids,),
-        )
-    }
-    lines = []
-    for drug_id, qty in wanted:
-        drug = drugs.get(drug_id)
-        if not drug:
-            return [], "One of the items is not in the catalog."
-        lines.append({
-            "generic_name": drug.get("generic_name") or "",
-            "brand_name": drug.get("brand_name") or "",
-            "dosage": drug.get("dosage") or "",
-            "quantity": qty,
-        })
-    return lines, None
-
-
-def _next_po_number() -> str:
-    row = fetch_one("SELECT COALESCE(MAX(po_id), 0) + 1 AS nid FROM purchase_orders")
-    nid = int(row["nid"] if isinstance(row, dict) else row[0])
-    return f"PO-{nid:05d}"
-
-
-@router.post("/purchase-orders/email-preview")
-async def preview_purchase_order_email(request: Request):
-    """Build the email document only. Nothing is saved or sent."""
-    if not require_admin(request):
-        return _unauthorized()
-    data = await request.json()
-    try:
-        po_id = int(data.get("po_id") or 0)
-    except (TypeError, ValueError):
-        return {"success": False, "message": "Invalid purchase order."}
-    if po_id:
-        po = fetch_one(
-            """
-            SELECT po.po_id, po.order_date, po.expected_date, po.notes, s.supplier_name, s.email
-            FROM purchase_orders po JOIN suppliers s ON po.supplier_id = s.supplier_id
-            WHERE po.po_id = %s
-            """,
-            (po_id,),
-        )
-        if not po:
-            return {"success": False, "message": "Purchase order not found."}
-        po = _row(po)
-        raw_items = []
-        for row in fetch_all(
-            """
-            SELECT poi.drug_id, poi.quantity_ordered, poi.unit_cost
-            FROM purchase_order_items poi
-            WHERE poi.po_id = %s ORDER BY poi.po_item_id ASC
-            """,
-            (po_id,),
-        ):
-            item = _row(row)
-            raw_items.append(item)
-        lines, err = _lines_for_items(raw_items)
-        if err:
-            return {"success": False, "message": err}
-        return _email_preview_payload(
-            f"PO-{int(po['po_id']):05d}",
-            po.get("supplier_name") or "",
-            po.get("email") or "",
-            _date_text(po.get("order_date")),
-            _date_text(po.get("expected_date")),
-            (po.get("notes") or "").strip(),
-            lines,
-        )
-
-    supplier_id = int(data.get("supplier_id") or 0)
-    if not supplier_id:
-        return {"success": False, "message": "Please select a supplier."}
-    supplier = fetch_one(
-        "SELECT supplier_id, supplier_name, email FROM suppliers WHERE supplier_id = %s AND status = 'Active'",
-        (supplier_id,),
-    )
-    if not supplier:
-        return {"success": False, "message": "Please select an active supplier."}
-    order_date = _parse_iso_date(data.get("order_date")) or _manila_today()
-    expected_date = _parse_iso_date(data.get("expected_date"))
-    today = _manila_today()
-    if order_date < today:
-        return {"success": False, "message": "Order date cannot be in the past."}
-    if expected_date and expected_date < today:
-        return {"success": False, "message": "Expected date cannot be in the past."}
-    lines, err = _lines_for_items(data.get("items") or [])
-    if err:
-        return {"success": False, "message": err}
-    return _email_preview_payload(
-        _next_po_number(),
-        supplier["supplier_name"],
-        supplier.get("email") or "",
-        order_date.isoformat(),
-        expected_date.isoformat() if expected_date else "",
-        str(data.get("notes") or "").strip(),
-        lines,
-    )
-
-
-def _plain_email_problem(reason: str) -> str:
-    text = (reason or "").strip()
-    low = text.lower()
-    if "no email" in low:
-        return "This supplier has no email address yet. Add it on the supplier record."
-    if "resend" in low or "blocked gmail smtp" in low:
-        return "The supplier email was not sent. Check the store SMTP settings on the Hostinger VPS."
-    if any(token in low for token in (
-        "unreachable", "errno", "timed out", "timeout", "connection", "network",
-        "getaddrinfo", "refused", "reset",
-    )):
-        return "The server could not reach Gmail SMTP, so the email was not sent. Check SMTP settings and the VPS firewall."
-    if any(token in low for token in ("smtp", "auth", "login", "not configured", "password", "credential")):
-        return "The store email is not set up, so the message was not sent."
-    if not text or low == "sent" or "traceback" in low or "exception" in low:
-        return "The email was not sent. Try again."
-    return text
-
-
-def _mail_fail_message(po_number, sent=None, extra=""):
-    reason = extra or ((sent or {}).get("message") or "").strip()
-    return f"{po_number} is still Pending. {_plain_email_problem(reason)}"
-
-
-@router.post("/purchase-orders/{po_id}/email")
-def email_purchase_order(po_id: int, request: Request):
-    """Email the saved purchase order. Rebuilds the document on the server."""
-    if not require_admin(request):
-        return _unauthorized()
-    try:
-        result = send_saved_purchase_order(po_id, actor=actor_display_name(request, "Admin"))
-    except Exception as exc:
-        return {
-            "success": False,
-            "email_sent": False,
-            "message": "The email was not sent. Try again.",
-        }
-    if result.get("email_sent"):
-        return {"success": True, **result}
-    if (result.get("message") or "") == "Purchase order not found.":
-        return {"success": False, "email_sent": False, **result}
-    if "no email" in (result.get("message") or "").lower():
-        return {"success": False, "email_sent": False, **result}
-    return {"success": True, **result}
-
-
-def send_saved_purchase_order(po_id: int, actor: str = "System") -> dict:
-    """Email a saved purchase order. Status stays Pending."""
-    po = fetch_one(
-        """
-        SELECT po.po_id, po.order_date, po.expected_date, po.notes, s.supplier_name, s.email
-        FROM purchase_orders po JOIN suppliers s ON po.supplier_id = s.supplier_id
-        WHERE po.po_id = %s
-        """,
-        (po_id,),
-    )
-    if not po:
-        return {"email_sent": False, "message": "Purchase order not found."}
-    po = _row(po)
-    raw_items = [_row(row) for row in fetch_all(
-        """
-        SELECT poi.drug_id, poi.quantity_ordered, poi.unit_cost
-        FROM purchase_order_items poi
-        WHERE poi.po_id = %s ORDER BY poi.po_item_id ASC
-        """,
-        (po_id,),
-    )]
-    lines, err = _lines_for_items(raw_items)
-    po_number = f"PO-{int(po['po_id']):05d}"
-    if err:
-        log_event("Email Purchase Order", f"Could not email {po_number}. {_plain_email_problem(err)}", actor=actor)
-        return {"email_sent": False, "po_number": po_number, "message": _mail_fail_message(po_number, extra=err)}
-    payload = _email_preview_payload(
-        po_number,
-        po.get("supplier_name") or "",
-        po.get("email") or "",
-        _date_text(po.get("order_date")),
-        _date_text(po.get("expected_date")),
-        (po.get("notes") or "").strip(),
-        lines,
-    )
-    if not payload.get("can_send"):
-        log_event("Email Purchase Order", f"Could not email {po_number}. This supplier has no email address yet.", actor=actor)
-        return {
-            "email_sent": False,
-            "po_number": po_number,
-            "message": "This supplier has no email. Add it on the supplier record. The purchase order stays Pending.",
-        }
-    sent = send_mail(payload["to"], payload["subject"], payload["html"])
-    if sent.get("success"):
-        log_event("Email Purchase Order", f"Emailed {po_number} to {payload['to']}.", actor=actor)
-        return {"email_sent": True, "po_number": po_number, "message": f"Emailed {po_number} to {payload['to']}."}
-    log_event(
-        "Email Purchase Order",
-        f"Could not email {po_number}. {_plain_email_problem(sent.get('message') or '')}",
-        actor=actor,
-    )
-    return {
-        "email_sent": False,
-        "po_number": po_number,
-        "message": _mail_fail_message(po_number, sent),
-    }
-
-
 @router.post("/deliveries/receive")
 async def receive_delivery(request: Request):
     if not require_admin(request):
@@ -943,8 +638,8 @@ async def receive_delivery(request: Request):
     if not reference:
         return {"success": False, "message": "Invoice / reference number is required."}
     delivery_date = _parse_iso_date(data.get("delivery_date")) or _manila_today()
-    if delivery_date < _manila_today():
-        return {"success": False, "message": "Delivery date cannot be in the past."}
+    if delivery_date > _manila_today():
+        return {"success": False, "message": "Date received cannot be in the future."}
     admin_name = request.session.get("user_first_name") or "Admin"
     try:
         with get_conn() as conn:
@@ -1411,6 +1106,12 @@ async def create_pos_from_reorder(request: Request):
     if requested_items is not None:
         if not isinstance(requested_items, list) or not requested_items:
             return JSONResponse({"success": False, "message": "Select at least one low-stock medicine."}, status_code=400)
+        raw_order_date = data.get("order_date")
+        order_date = _parse_iso_date(raw_order_date) if raw_order_date else _manila_today()
+        if not order_date:
+            return JSONResponse({"success": False, "message": "Choose a valid PO date."}, status_code=400)
+        if order_date < _manila_today():
+            return JSONResponse({"success": False, "message": "PO date cannot be in the past."}, status_code=400)
         suggestions = {
             int(row["drug_id"]): row
             for row in compute_reorder_suggestions().get("suggestions") or []
@@ -1463,6 +1164,7 @@ async def create_pos_from_reorder(request: Request):
             actor_display_name(request, fallback="Admin"),
             "Created from low-stock Purchase Orders. Order quantities are limited to 200 pieces and catalog maximum stock.",
             raise_alerts=False,
+            order_date=order_date,
         )
         if result["skipped"] and not result["created"]:
             return JSONResponse(
@@ -2075,6 +1777,8 @@ OPERATIONS_REPORT_COLUMNS = {
         ("date_created", "Date"),
         ("cashier", "Cashier"),
         ("payment_method", "Payment"),
+        ("discount_id_type", "Discount Type"),
+        ("discount_id_number", "ID No."),
         ("item_count", "Items"),
         ("units", "Units sold"),
         ("total_amount", "Total (PHP)"),
@@ -2179,6 +1883,8 @@ def operations_report(request: Request, kind: str = "", start: str = "", end: st
             SELECT s.transaction_id, s.date_created,
                    COALESCE(u.username, 'Unknown') AS cashier,
                    COALESCE(s.payment_method, '') AS payment_method,
+                   COALESCE(s.discount_id_type, '') AS discount_id_type,
+                   COALESCE(s.discount_id_number, '') AS discount_id_number,
                    COUNT(DISTINCT si.drug_id) AS item_count,
                    COALESCE(SUM(si.quantity), 0) AS units,
                    s.total_amount
@@ -2188,13 +1894,16 @@ def operations_report(request: Request, kind: str = "", start: str = "", end: st
             WHERE LOWER(COALESCE(s.status, '')) = 'completed'
               AND s.date_created >= %s::date
               AND s.date_created < (%s::date + INTERVAL '1 day')
-            GROUP BY s.sale_id, u.username
+            GROUP BY s.sale_id, u.username, s.discount_id_type, s.discount_id_number
             ORDER BY s.date_created DESC, s.sale_id DESC
             LIMIT 5000
             """,
             params,
         )
         rows = [_row(row) for row in raw_rows]
+        for row in rows:
+            id_number = str(row.get("discount_id_number") or "")
+            row["discount_id_number"] = "*" * max(0, len(id_number) - 4) + id_number[-4:] if id_number else ""
         summary = {
             "records": len(rows),
             "total_amount": round(sum(float(row.get("total_amount") or 0) for row in rows), 2),

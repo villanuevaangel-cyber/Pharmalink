@@ -224,7 +224,10 @@ CREATE TABLE sales (
   status VARCHAR(50) DEFAULT 'completed',
   date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   points_redeemed NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  points_discount_value NUMERIC(10,2) NOT NULL DEFAULT 0.00
+  points_discount_value NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+  discount_id_type VARCHAR(20),
+  discount_id_number VARCHAR(80),
+  discount_id_holder VARCHAR(120)
 );
 
 

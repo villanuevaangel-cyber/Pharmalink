@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import random
+import re
 import subprocess
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -41,6 +42,11 @@ def _unauthorized():
 
 def _title(value):
     return str(value or "").title()
+
+
+def _mask_discount_id(value):
+    value = str(value or "")
+    return "*" * max(0, len(value) - 4) + value[-4:] if value else ""
 
 
 _MANILA = ZoneInfo("Asia/Manila")
@@ -1095,7 +1101,7 @@ def sales_report_detail(request: Request, sale_id: int):
         """
         SELECT s.sale_id, s.transaction_id, s.online_order_id, s.date_created, s.total_amount, s.subtotal,
                s.discount_amount, s.tax_amount, s.cash_received, s.change_amount,
-               s.payment_method, s.status,
+               s.payment_method, s.discount_id_type, s.discount_id_number, s.status,
                COALESCE(s.points_redeemed, 0) AS points_redeemed,
                COALESCE(s.points_discount_value, 0) AS points_discount_value,
                COALESCE(NULLIF(TRIM(CONCAT(c.first_name, ' ', c.last_name)), ''), 'Guest') AS customer_name,
@@ -1138,6 +1144,8 @@ def sales_report_detail(request: Request, sale_id: int):
             "cashier_name": sale.get("cashier_name") or "Staff",
             "payment_method": str(sale.get("payment_method") or "cash").lower(),
             "payment_reference": ref,
+            "discount_id_type": sale.get("discount_id_type") or "",
+            "discount_id_number": _mask_discount_id(sale.get("discount_id_number")),
             "subtotal": round(float(sale.get("subtotal") or 0), 2),
             "discount_amount": round(float(sale.get("discount_amount") or 0), 2),
             "tax_amount": round(float(sale.get("tax_amount") or 0), 2),
@@ -1344,6 +1352,39 @@ async def create_sale(request: Request):
     if not items:
         return JSONResponse({"status": "error", "message": "Cart is empty."}, status_code=400)
 
+    sc_pwd_applied = payload.get("sc_pwd_applied") is True
+    discount_id_type = None
+    discount_id_number = None
+    discount_id_holder = None
+    if sc_pwd_applied:
+        discount_id_type = str(payload.get("discount_id_type") or "").strip()
+        discount_id_number = str(payload.get("discount_id_number") or "").strip()
+        discount_id_holder = str(payload.get("discount_id_holder_name") or "").strip()
+        if discount_id_type not in {"Senior", "PWD"}:
+            return JSONResponse(
+                {"status": "error", "message": "Choose Senior Citizen or PWD for the SC/PWD discount."},
+                status_code=400,
+            )
+        if not re.fullmatch(r"[A-Za-z0-9-]{4,30}", discount_id_number):
+            return JSONResponse(
+                {"status": "error", "message": "Enter a valid SC/PWD ID number (4-30 letters, digits, or dashes)."},
+                status_code=400,
+            )
+        if (
+            not discount_id_holder
+            or len(discount_id_holder) > 120
+            or len(discount_id_holder.split()) < 2
+        ):
+            return JSONResponse(
+                {"status": "error", "message": "Enter the ID holder's full name (up to 120 characters)."},
+                status_code=400,
+            )
+        if payload.get("id_verified") is not True:
+            return JSONResponse(
+                {"status": "error", "message": "Confirm that you verified the original SC/PWD ID in person."},
+                status_code=400,
+            )
+
     customer_id = payload.get("customer_id")
     try:
         customer_id = int(customer_id) if customer_id not in (None, "") else None
@@ -1426,6 +1467,7 @@ async def create_sale(request: Request):
             return JSONResponse({"status": "error", "message": "This e-wallet payment was already used on another sale."}, status_code=409)
 
     sold_drugs = set()
+    warning = None
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -1522,10 +1564,28 @@ async def create_sale(request: Request):
                 transaction_id = f"TXN-{_manila_now().strftime('%Y%m%d%H%M%S')}-{random.randint(1000, 9999)}"
                 discount_amount_with_points = discount_total + points_discount_value
                 sale_id = next_id(cur, "sales", "sale_id")
+                if sc_pwd_applied:
+                    cur.execute(
+                        f"""
+                        SELECT 1
+                        FROM sales s
+                        WHERE UPPER(BTRIM(COALESCE(s.discount_id_number, ''))) = UPPER(%s)
+                          AND {_sale_date_sql("s")} = %s
+                          AND LOWER(COALESCE(s.status, '')) = 'completed'
+                        LIMIT 1
+                        """,
+                        (discount_id_number, _manila_now().date().isoformat()),
+                    )
+                    if cur.fetchone():
+                        warning = (
+                            "Warning: This SC/PWD ID number was already used on another sale today. "
+                            "Please verify the original ID and eligibility."
+                        )
                 sale_params = (
                     sale_id, transaction_id, customer_id, user_id, subtotal, discount_amount_with_points,
                     tax_total, total_amount, cash_received, change_amount, payment_method, payment_reference,
                     points_redeemed, points_discount_value, online_order_id,
+                    discount_id_type, discount_id_number, discount_id_holder,
                 )
                 cur.execute("SAVEPOINT sale_header")
                 try:
@@ -1534,8 +1594,9 @@ async def create_sale(request: Request):
                         INSERT INTO sales
                             (sale_id, transaction_id, customer_id, user_id, subtotal, discount_amount, tax_amount,
                              total_amount, cash_received, change_amount, payment_method, payment_reference,
-                             points_redeemed, points_discount_value, online_order_id, status, date_created)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'completed', NOW())
+                             points_redeemed, points_discount_value, online_order_id,
+                             discount_id_type, discount_id_number, discount_id_holder, status, date_created)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'completed', NOW())
                         """,
                         sale_params,
                     )
@@ -1546,13 +1607,15 @@ async def create_sale(request: Request):
                         INSERT INTO sales
                             (sale_id, transaction_id, customer_id, user_id, subtotal, discount_amount, tax_amount,
                              total_amount, cash_received, change_amount, payment_method,
-                             points_redeemed, points_discount_value, status, date_created)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'completed', NOW())
+                             points_redeemed, points_discount_value,
+                             discount_id_type, discount_id_number, discount_id_holder, status, date_created)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'completed', NOW())
                         """,
                         (
                             sale_id, transaction_id, customer_id, user_id, subtotal, discount_amount_with_points,
                             tax_total, total_amount, cash_received, change_amount, payment_method,
                             points_redeemed, points_discount_value,
+                            discount_id_type, discount_id_number, discount_id_holder,
                         ),
                     )
                 for item in items:
@@ -1597,6 +1660,11 @@ async def create_sale(request: Request):
                     sync_stock_status_for_drug(cur, drug_id)
 
                 details = f"Sale #{sale_id} - total ₱{total_amount:.2f}, {len(items)} item(s)."
+                if sc_pwd_applied:
+                    details += (
+                        f" {discount_id_type} discount ID verified in person; "
+                        f"ID {_mask_discount_id(discount_id_number)}."
+                    )
                 if points_redeemed > 0:
                     details += f" Points redeemed: {points_redeemed:.2f} (₱{points_discount_value:.2f})."
                 write_activity_log(cur, "POS Sale", details, request=request)
@@ -1606,7 +1674,7 @@ async def create_sale(request: Request):
             from app.automation import schedule_auto_restock_check
             for drug_id in sold_drugs:
                 schedule_auto_restock_check(int(drug_id))
-        return {
+        result = {
             "status": "success",
             "sale_id": sale_id,
             "transaction_id": transaction_id,
@@ -1615,6 +1683,9 @@ async def create_sale(request: Request):
             "new_loyalty_balance": new_loyalty_balance,
             "message": "Transaction saved successfully.",
         }
+        if warning:
+            result["warning"] = warning
+        return result
     except ValueError as exc:
         return JSONResponse({"status": "error", "message": str(exc)}, status_code=409)
     except Exception as exc:
