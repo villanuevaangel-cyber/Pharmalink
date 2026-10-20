@@ -6017,15 +6017,22 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     function plannerSelectionChanged() {
         if (!body || !createButton) return;
         const rows = Array.from(body.querySelectorAll('.purchase-planner-row'));
-        const selected = rows.filter((row) => row.querySelector('.purchase-planner-select')?.checked);
+        const selectable = rows.filter((row) => !row.querySelector('.purchase-planner-select')?.disabled);
+        const selected = selectable.filter((row) => row.querySelector('.purchase-planner-select')?.checked);
         const valid = selected.length > 0 && selected.every((row) => {
             const supplier = row.querySelector('.purchase-planner-supplier')?.value;
             const quantity = Number(row.querySelector('.purchase-planner-qty')?.value);
-            return supplier && Number.isInteger(quantity) && quantity > 0;
+            const packSize = Number(row.dataset.pcsPerBox) || 1;
+            const maxQuantity = Number(row.querySelector('.purchase-planner-qty')?.max) || 0;
+            return supplier
+                && Number.isInteger(quantity)
+                && quantity >= packSize
+                && quantity <= maxQuantity
+                && quantity % packSize === 0;
         });
         createButton.disabled = !valid;
         if (selectionLabel) selectionLabel.textContent = `${selected.length} selected`;
-        if (selectAll) selectAll.checked = rows.length > 0 && selected.length === rows.length;
+        if (selectAll) selectAll.checked = selectable.length > 0 && selected.length === selectable.length;
     }
 
     async function loadPurchasePlanner() {
@@ -6056,17 +6063,19 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             ).join('');
             body.innerHTML = suggestions.map((item) => {
                 const pcsPerBox = Math.max(1, Number(item.units_per_box) || 1);
-                const quantity = Math.max(1, Number(item.suggested_qty) || 1);
-                const boxes = Math.ceil(quantity / pcsPerBox);
+                const maxOrderQty = Math.max(0, Number(item.max_order_qty) || 0);
+                const quantity = Math.min(maxOrderQty, Math.max(0, Number(item.suggested_qty) || 0));
+                const boxes = Math.floor(quantity / pcsPerBox);
+                const canOrder = boxes > 0;
                 const label = `${escapePlanner(item.generic_name)}${item.brand_name ? ` (${escapePlanner(item.brand_name)})` : ''} - ${escapePlanner(item.dosage)} ${escapePlanner(item.form)}`;
                 return `<tr class="purchase-planner-row" data-drug-id="${Number(item.drug_id)}" data-pcs-per-box="${pcsPerBox}">
-                    <td><input type="checkbox" class="purchase-planner-select" aria-label="Select ${label}"></td>
+                    <td><input type="checkbox" class="purchase-planner-select" aria-label="Select ${label}" ${canOrder ? '' : 'disabled'}></td>
                     <td>${label}</td>
                     <td>${Number(item.current_stock || 0).toLocaleString()}</td>
                     <td>${Math.max(0, Number(item.minimum_stock || 0) - Number(item.current_stock || 0)).toLocaleString()} <span style="color:var(--ph-text-faint);">to min ${Number(item.minimum_stock || 0).toLocaleString()}</span></td>
-                    <td><input type="number" class="purchase-planner-qty" min="1" max="100000" step="1" value="${quantity}" aria-label="Predicted purchase quantity in pieces"><small class="purchase-planner-boxes">${boxes} box${boxes === 1 ? '' : 'es'}</small></td>
+                    <td><input type="number" class="purchase-planner-qty" min="${pcsPerBox}" max="${maxOrderQty}" step="${pcsPerBox}" value="${quantity}" ${canOrder ? '' : 'disabled'} aria-label="Predicted purchase quantity in pieces"><small class="purchase-planner-boxes">${canOrder ? `${boxes} box${boxes === 1 ? '' : 'es'}` : 'No full box fits under the 200-piece and max-stock limits'}</small></td>
                     <td>${pcsPerBox}</td>
-                    <td><select class="purchase-planner-supplier" aria-label="Supplier for ${label}">${supplierOptions(item.suggested_supplier_id)}</select></td>
+                    <td><select class="purchase-planner-supplier" aria-label="Supplier for ${label}" ${canOrder ? '' : 'disabled'}>${supplierOptions(item.suggested_supplier_id)}</select></td>
                 </tr>`;
             }).join('');
             plannerSelectionChanged();
@@ -6084,7 +6093,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 const row = quantityInput.closest('.purchase-planner-row');
                 const pcsPerBox = Number(row?.dataset.pcsPerBox) || 1;
                 const quantity = Math.max(0, Number(quantityInput.value) || 0);
-                const boxes = Math.ceil(quantity / pcsPerBox);
+                const boxes = Math.floor(quantity / pcsPerBox);
                 const label = row?.querySelector('.purchase-planner-boxes');
                 if (label) label.textContent = `${boxes} box${boxes === 1 ? '' : 'es'}`;
             }
@@ -6092,22 +6101,20 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         });
     }
     selectAll?.addEventListener('change', () => {
-        body?.querySelectorAll('.purchase-planner-select').forEach((checkbox) => { checkbox.checked = selectAll.checked; });
+        body?.querySelectorAll('.purchase-planner-select:not(:disabled)').forEach((checkbox) => { checkbox.checked = selectAll.checked; });
         plannerSelectionChanged();
     });
     createButton?.addEventListener('click', async () => {
         const rows = Array.from(body?.querySelectorAll('.purchase-planner-row') || [])
             .filter((row) => row.querySelector('.purchase-planner-select')?.checked);
         const items = rows.map((row) => {
-            const pcsPerBox = Number(row.dataset.pcsPerBox) || 1;
-            const predictedPieces = Number(row.querySelector('.purchase-planner-qty')?.value) || 0;
             return {
                 drug_id: Number(row.dataset.drugId),
                 supplier_id: Number(row.querySelector('.purchase-planner-supplier')?.value),
-                quantity_ordered: Math.ceil(predictedPieces / pcsPerBox),
+                quantity_pieces: Number(row.querySelector('.purchase-planner-qty')?.value) || 0,
             };
         });
-        if (!items.length || items.some((item) => !item.supplier_id || item.quantity_ordered < 1)) {
+        if (!items.length || items.some((item) => !item.supplier_id || item.quantity_pieces < 1)) {
             alert('Select at least one medicine, a supplier, and a valid predicted quantity.');
             return;
         }
