@@ -31,7 +31,7 @@ def match_prescription_to_stock(cur, text: str) -> list[dict]:
     normalized = " " + re.sub(r"[^A-Za-z0-9]+", " ", text).upper() + " "
     cur.execute(
         """
-        SELECT dm.drug_id, dm.generic_name, dm.brand_name,
+        SELECT dm.drug_id, dm.generic_name, dm.brand_name, COALESCE(dm.sale_class, 'rx') AS sale_class,
                COALESCE(SUM(CASE WHEN il.is_active = 1 AND il.expiration_date >= CURRENT_DATE
                                   THEN il.current_stock ELSE 0 END), 0) AS total_stock
         FROM drugs_master dm
@@ -62,6 +62,7 @@ def match_prescription_to_stock(cur, text: str) -> list[dict]:
                 "name": matched_name,
                 "generic_name": row.get("generic_name") or "",
                 "brand_name": row.get("brand_name") or "",
+                "sale_class": row.get("sale_class") or "rx",
                 "status": "In Stock" if int(row["total_stock"] or 0) > 0 else "Out of Stock",
                 "lot_id": None,
                 "price": 0.0,

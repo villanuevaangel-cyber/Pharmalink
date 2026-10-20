@@ -785,12 +785,40 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 server_total = 0.0
                 affected = set()
+                approved_prescriptions = {}
                 for item in items:
                     lot_id = int(item.get("lot_id") or 0)
                     qty = int(item.get("quantity") or 0)
                     if lot_id <= 0 or qty <= 0:
                         raise ValueError("Invalid item in cart.")
                     drug_id = drug_id_for_lot(cur, lot_id)
+                    cur.execute(
+                        "SELECT COALESCE(sale_class, 'rx') AS sale_class FROM drugs_master WHERE drug_id = %s",
+                        (drug_id,),
+                    )
+                    drug_class = cur.fetchone()
+                    if not drug_class:
+                        raise ValueError("One of the items in your cart is no longer available.")
+                    if str(drug_class["sale_class"] or "rx").lower() == "rx":
+                        cur.execute(
+                            """
+                            SELECT id
+                            FROM prescriptions
+                            WHERE user_id = %s
+                              AND review_status = 'approved'
+                              AND %s = ANY(reviewed_drug_ids)
+                            ORDER BY reviewed_at DESC NULLS LAST, id DESC
+                            LIMIT 1
+                            FOR SHARE
+                            """,
+                            (customer_id, drug_id),
+                        )
+                        reviewed_rx = cur.fetchone()
+                        if not reviewed_rx:
+                            raise ValueError(
+                                "A pharmacist-approved prescription is required for every prescription medicine in your cart."
+                            )
+                        approved_prescriptions[drug_id] = int(reviewed_rx["id"])
                     if sellable_quantity(cur, drug_id) < qty:
                         available = sellable_quantity(cur, drug_id)
                         raise ValueError(
@@ -845,10 +873,19 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
                         detail_id = next_id(cur, "order_details", "detail_id")
                         cur.execute(
                             """
-                            INSERT INTO order_details (detail_id, order_id, drug_id, lot_inventory_id, quantity, price_per_unit)
-                            VALUES (%s, %s, %s, %s, %s, %s)
+                            INSERT INTO order_details
+                                (detail_id, order_id, drug_id, lot_inventory_id, quantity, price_per_unit, prescription_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
                             """,
-                            (detail_id, order_id, drug_id, part["lot_id"], part["qty"], unit_price),
+                            (
+                                detail_id,
+                                order_id,
+                                drug_id,
+                                part["lot_id"],
+                                part["qty"],
+                                unit_price,
+                                approved_prescriptions.get(drug_id),
+                            ),
                         )
                     affected.add(drug_id)
 
@@ -997,7 +1034,8 @@ def prescriptions(request: Request):
         return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
     rows = fetch_all(
         """
-        SELECT id, filename, extracted_text, availability_summary, ocr_status, created_at
+        SELECT id, filename, extracted_text, availability_summary, ocr_status, created_at,
+               review_status, review_note, reviewed_drug_ids
         FROM prescriptions WHERE user_id = %s ORDER BY created_at DESC
         """,
         (customer_id,),

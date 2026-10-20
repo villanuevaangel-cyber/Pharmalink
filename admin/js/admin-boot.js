@@ -16,8 +16,11 @@
             if (meRes.status === 401) { window.location.href = "/"; return; }
             if (meRes.ok) {
                 const me = await meRes.json();
-                if (!me.success || String(me.role || "").toLowerCase() !== "admin") {
-                    window.location.href = "/";
+                const role = String(me.role || "").toLowerCase();
+                if (!me.success || role !== "admin") {
+                    if (role === "cashier/pharmacist") window.location.href = "/cashier/cashier.html";
+                    else if (role === "customer") window.location.href = "/customer/customer.html";
+                    else window.location.href = "/";
                     return;
                 }
                 window.ADMIN_USER_ID = me.user_id;

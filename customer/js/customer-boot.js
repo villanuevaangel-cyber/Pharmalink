@@ -13,7 +13,10 @@
         }
         const isCustomer = me && me.success && String(me.role || '').toLowerCase() === 'customer';
         if (me && me.success && !isCustomer) {
-            window.location.href = '/';
+            const role = String(me.role || '').toLowerCase();
+            if (role === 'admin') window.location.href = '/admin/admin.html';
+            else if (role === 'cashier/pharmacist') window.location.href = '/cashier/cashier.html';
+            else window.location.href = '/';
             return;
         }
 
@@ -367,15 +370,32 @@
         function canAddMatch(m) {
             return m && m.status === 'In Stock' && m.lot_id && Number(m.stock) > 0;
         }
+        function canUseMatch(m, p) {
+            if (String(m && m.sale_class || 'rx').toLowerCase() !== 'rx') return true;
+            const approvedIds = Array.isArray(p && p.reviewed_drug_ids) ? p.reviewed_drug_ids.map(Number) : [];
+            return p && p.review_status === 'approved' && approvedIds.includes(Number(m.drug_id));
+        }
+        function reviewStatusHtml(p) {
+            const status = String(p.review_status || 'pending').toLowerCase();
+            if (status === 'approved') return '<span class="rx-pill rx-pill-ok">Approved</span>';
+            if (status === 'rejected') {
+                const note = p.review_note ? ` title="${attr(p.review_note)}"` : '';
+                return `<span class="rx-pill rx-pill-bad"${note}>Rejected</span>`;
+            }
+            return '<span class="rx-pill rx-pill-muted">Awaiting review</span>';
+        }
         function matchLabel(m) {
             const brand = String(m.brand_name || '').trim();
             const name = String(m.name || '').trim();
             return brand || name;
         }
-        function matchRowHtml(m) {
+        function matchRowHtml(m, p) {
             const ok = canAddMatch(m);
+            const requiresReview = String(m.sale_class || 'rx').toLowerCase() === 'rx' && !canUseMatch(m, p);
             const label = matchLabel(m);
-            const action = ok
+            const action = requiresReview
+                ? `<span class="rx-pill rx-pill-muted">${p.review_status === 'rejected' ? 'Upload a new prescription' : 'Awaiting pharmacist review'}</span>`
+                : ok
                 ? `<button type="button" class="rx-add-cart" data-lot-id="${attr(m.lot_id)}" data-name="${attr(label)}" data-price="${attr(m.price)}" data-drug-id="${attr(m.drug_id)}" data-stock="${attr(m.stock)}"><i class="fas fa-cart-plus"></i> Add to cart</button>`
                 : `<span class="rx-pill rx-pill-bad">Out of stock</span>`;
             return `<div class="rx-stock-row">
@@ -443,25 +463,26 @@
         function renderHistoryTable() {
             const rows = rxRows.filter(inDateRange);
             if (!rxRows.length) {
-                tbody.innerHTML = '<tr><td colspan="4" class="rx-empty-cell"><div class="rx-empty"><i class="fas fa-file-medical"></i><h4>No uploads yet</h4><p>Your prescription files will show up here.</p></div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="rx-empty-cell"><div class="rx-empty"><i class="fas fa-file-medical"></i><h4>No uploads yet</h4><p>Your prescription files will show up here.</p></div></td></tr>';
                 return;
             }
             if (!rows.length) {
-                tbody.innerHTML = '<tr><td colspan="4" class="rx-empty-cell">No prescriptions in this date range.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="rx-empty-cell">No prescriptions in this date range.</td></tr>';
                 return;
             }
             tbody.innerHTML = rows.map((p) => {
                 const canView = p.file_available && p.view_url;
                 const matches = Array.isArray(p.availability_summary) ? p.availability_summary : [];
-                const canAdd = matches.some(canAddMatch);
+                const canAdd = matches.some((m) => canAddMatch(m) && canUseMatch(m, p));
                 const fileLabel = 'Rx #' + p.id + (p.file_type ? ' · ' + p.file_type : '');
                 return `<tr>
                     <td>${escapeHtml(rxDateLabel(p))}</td>
                     <td>${escapeHtml(fileLabel)}</td>
                     <td>${renderAvailability(p)}</td>
+                    <td>${reviewStatusHtml(p)}${p.review_status === 'rejected' && p.review_note ? `<div class="rx-result-note">${escapeHtml(p.review_note)}</div>` : ''}</td>
                     <td class="rx-actions-cell">
                         <button type="button" class="rx-view-btn" data-rx-id="${attr(p.id)}" ${canView ? '' : 'disabled'} title="View prescription" aria-label="View prescription"><i class="fas fa-eye"></i></button>
-                        <button type="button" class="rx-cart-btn" data-rx-id="${attr(p.id)}" ${canAdd ? '' : 'disabled'} title="${canAdd ? 'Add to cart' : 'Nothing in stock to add'}" aria-label="Add to cart"><i class="fas fa-cart-plus"></i></button>
+                        <button type="button" class="rx-cart-btn" data-rx-id="${attr(p.id)}" ${canAdd ? '' : 'disabled'} title="${canAdd ? 'Add to cart' : 'No approved in-stock medicine to add'}" aria-label="Add to cart"><i class="fas fa-cart-plus"></i></button>
                     </td>
                 </tr>`;
             }).join('');
@@ -474,7 +495,7 @@
                     renderHistoryTable();
                 })
                 .catch(() => {
-                    tbody.innerHTML = '<tr><td colspan="4" class="rx-empty-cell rx-empty-error">Failed to load history.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="rx-empty-cell rx-empty-error">Failed to load history.</td></tr>';
                 });
         }
         function findRx(id) {
@@ -515,7 +536,7 @@
         }
         function openRxItems(p) {
             const matches = Array.isArray(p.availability_summary) ? p.availability_summary : [];
-            const addable = matches.filter(canAddMatch);
+            const addable = matches.filter((m) => canAddMatch(m) && canUseMatch(m, p));
             if (addable.length === 1) {
                 handleAddMatch(addable[0]);
                 return;
@@ -526,7 +547,7 @@
                 if (!matches.length) {
                     body.innerHTML = '<p class="rx-result-note">No matching medicines were found.</p>';
                 } else {
-                    body.innerHTML = `<div class="rx-stock-list">${matches.map(matchRowHtml).join('')}</div>`;
+                    body.innerHTML = `<div class="rx-stock-list">${matches.map((m) => matchRowHtml(m, p)).join('')}</div>`;
                 }
             }
             if (overlay) overlay.style.display = 'flex';
@@ -567,6 +588,11 @@
             handleRxAddCart(e);
         }
         tbody.addEventListener('click', handleRxTableClick);
+        document.querySelector('.nav-item[data-target="prescription"]')?.addEventListener('click', loadHistory);
+        setInterval(() => {
+            const section = document.getElementById('prescription');
+            if (section && section.classList.contains('active')) loadHistory();
+        }, 30000);
         document.getElementById('rxApplyFilter')?.addEventListener('click', renderHistoryTable);
         document.getElementById('rxViewClose')?.addEventListener('click', closeRxView);
         document.getElementById('rxViewOverlay')?.addEventListener('click', (e) => {

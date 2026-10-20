@@ -152,6 +152,8 @@ def staff_link(alert_type: str, role_name: str = "") -> dict:
     kind = (alert_type or "").lower()
     is_admin = (role_name or "").strip().lower() == "admin"
     if kind in {"online_order", "order_paid"}:
+        if is_admin:
+            return {"url": "/admin/admin.html#dashboard", "target": "dashboard", "filter": ""}
         return {"url": "/cashier/cashier.html?notice=orders", "target": "orders", "filter": ""}
     if kind == "auto_po" and is_admin:
         return {"url": "/admin/admin.html#deliveries", "target": "deliveries", "filter": ""}

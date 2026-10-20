@@ -14,8 +14,10 @@
             if (meRes.ok) {
                 const me = await meRes.json();
                 const role = String(me.role || '').toLowerCase();
-                if (!me.success || (role !== 'cashier/pharmacist' && role !== 'admin')) {
-                    window.location.href = '/';
+                if (!me.success || role !== 'cashier/pharmacist') {
+                    if (role === 'admin') window.location.href = '/admin/admin.html';
+                    else if (role === 'customer') window.location.href = '/customer/customer.html';
+                    else window.location.href = '/';
                     return;
                 }
                 let staff = me.staff || {};

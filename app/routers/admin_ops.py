@@ -1897,6 +1897,210 @@ def _match_inventory_drug(row, by_id, by_generic, by_brand):
     return drug, problems
 
 
+OPERATIONS_REPORT_COLUMNS = {
+    "orders": [
+        ("order_id", "Order ID"),
+        ("customer_name", "Customer"),
+        ("order_date", "Order date"),
+        ("order_status", "Status"),
+        ("payment_method", "Payment"),
+        ("payment_status", "Payment status"),
+        ("medicine_count", "Medicines"),
+        ("units", "Units"),
+        ("total_amount", "Total (PHP)"),
+    ],
+    "purchases": [
+        ("po_number", "PO number"),
+        ("supplier_name", "Supplier"),
+        ("order_date", "Order date"),
+        ("expected_date", "Expected date"),
+        ("status", "Status"),
+        ("medicine_count", "Medicines"),
+        ("quantity_ordered", "Units ordered"),
+        ("quantity_received", "Units received"),
+        ("estimated_cost", "Estimated cost (PHP)"),
+    ],
+    "customers": [
+        ("customer_id", "Customer ID"),
+        ("customer_name", "Customer"),
+        ("email", "Email"),
+        ("status", "Status"),
+        ("order_count", "Completed orders"),
+        ("total_spent", "Total spent (PHP)"),
+        ("loyalty_points", "Loyalty points"),
+        ("last_order", "Last order"),
+    ],
+    "suppliers": [
+        ("supplier_id", "Supplier ID"),
+        ("supplier_name", "Supplier"),
+        ("email", "Email"),
+        ("status", "Status"),
+        ("purchase_order_count", "Purchase orders"),
+        ("quantity_ordered", "Units ordered"),
+        ("quantity_received", "Units received"),
+        ("estimated_cost", "Estimated cost (PHP)"),
+    ],
+}
+
+
+@router.get("/reports/operations")
+def operations_report(request: Request, kind: str = "", start: str = "", end: str = ""):
+    if not require_admin(request):
+        return _unauthorized()
+    kind = str(kind or "").strip().lower()
+    if kind not in OPERATIONS_REPORT_COLUMNS:
+        return JSONResponse({"success": False, "message": "Unknown operations report type."}, status_code=400)
+
+    today = _manila_today()
+    start_day = _parse_iso_date(start) or (today - timedelta(days=29))
+    end_day = _parse_iso_date(end) or today
+    if start_day > end_day:
+        start_day, end_day = end_day, start_day
+    params = (start_day.isoformat(), end_day.isoformat())
+
+    if kind == "orders":
+        raw_rows = fetch_all(
+            """
+            SELECT co.order_id, CONCAT_WS(' ', c.first_name, c.last_name) AS customer_name,
+                   co.order_date, co.order_status,
+                   COALESCE(co.payment_method, 'cash') AS payment_method,
+                   COALESCE(co.payment_status, 'unpaid') AS payment_status,
+                   COUNT(DISTINCT od.drug_id) AS medicine_count,
+                   COALESCE(SUM(od.quantity), 0) AS units,
+                   co.total_amount
+            FROM customer_orders co
+            LEFT JOIN customers c ON c.customer_id = co.customer_id
+            LEFT JOIN order_details od ON od.order_id = co.order_id
+            WHERE co.order_date >= %s::date
+              AND co.order_date < (%s::date + INTERVAL '1 day')
+            GROUP BY co.order_id, c.first_name, c.last_name
+            ORDER BY co.order_date DESC
+            LIMIT 5000
+            """,
+            params,
+        )
+        rows = [_row(row) for row in raw_rows]
+        summary = {
+            "records": len(rows),
+            "total_amount": round(sum(float(row.get("total_amount") or 0) for row in rows), 2),
+        }
+        title = "Online orders"
+    elif kind == "purchases":
+        raw_rows = fetch_all(
+            """
+            SELECT po.po_id, 'PO-' || LPAD(po.po_id::text, 5, '0') AS po_number,
+                   s.supplier_name, po.order_date, po.expected_date, po.status,
+                   COUNT(DISTINCT poi.drug_id) AS medicine_count,
+                   COALESCE(SUM(poi.quantity_ordered), 0) AS quantity_ordered,
+                   COALESCE(SUM(poi.quantity_received), 0) AS quantity_received,
+                   COALESCE(SUM(poi.quantity_ordered * COALESCE(poi.unit_cost, d.cost_price, 0)), 0) AS estimated_cost
+            FROM purchase_orders po
+            JOIN suppliers s ON s.supplier_id = po.supplier_id
+            LEFT JOIN purchase_order_items poi ON poi.po_id = po.po_id
+            LEFT JOIN drugs_master d ON d.drug_id = poi.drug_id
+            WHERE po.order_date >= %s::date
+              AND po.order_date < (%s::date + INTERVAL '1 day')
+            GROUP BY po.po_id, s.supplier_name
+            ORDER BY po.order_date DESC, po.po_id DESC
+            LIMIT 5000
+            """,
+            params,
+        )
+        rows = [_row(row) for row in raw_rows]
+        summary = {
+            "records": len(rows),
+            "estimated_cost": round(sum(float(row.get("estimated_cost") or 0) for row in rows), 2),
+        }
+        title = "Purchasing"
+    elif kind == "customers":
+        raw_rows = fetch_all(
+            """
+            SELECT c.customer_id,
+                   CONCAT_WS(' ', c.first_name, c.last_name) AS customer_name,
+                   COALESCE(c.email, '') AS email,
+                   CASE WHEN COALESCE(c.is_active, 1) = 1 THEN 'Active' ELSE 'Inactive' END AS status,
+                   COALESCE(p.order_count, 0) AS order_count,
+                   COALESCE(p.total_spent, 0) AS total_spent,
+                   COALESCE(c.loyalty_points, 0) AS loyalty_points,
+                   p.last_order
+            FROM customers c
+            LEFT JOIN (
+                SELECT customer_id, COUNT(*) AS order_count,
+                       SUM(total_amount) AS total_spent, MAX(order_date) AS last_order
+                FROM (
+                    SELECT customer_id, total_amount, order_date
+                    FROM customer_orders
+                    WHERE LOWER(TRIM(order_status)) IN ('completed', 'delivered')
+                      AND order_date >= %s::date
+                      AND order_date < (%s::date + INTERVAL '1 day')
+                    UNION ALL
+                    SELECT customer_id, total_amount, date_created
+                    FROM sales
+                    WHERE LOWER(TRIM(COALESCE(status, ''))) = 'completed'
+                      AND online_order_id IS NULL
+                      AND customer_id IS NOT NULL
+                      AND date_created >= %s::date
+                      AND date_created < (%s::date + INTERVAL '1 day')
+                ) purchases
+                GROUP BY customer_id
+            ) p ON p.customer_id = c.customer_id
+            ORDER BY total_spent DESC, customer_name
+            LIMIT 5000
+            """,
+            (params[0], params[1], params[0], params[1]),
+        )
+        rows = [_row(row) for row in raw_rows]
+        summary = {
+            "records": len(rows),
+            "customers_with_orders": sum(1 for row in rows if int(row.get("order_count") or 0) > 0),
+            "total_spent": round(sum(float(row.get("total_spent") or 0) for row in rows), 2),
+        }
+        title = "Customer activity"
+    else:
+        raw_rows = fetch_all(
+            """
+            SELECT s.supplier_id, s.supplier_name, COALESCE(s.email, '') AS email, s.status,
+                   COALESCE(p.purchase_order_count, 0) AS purchase_order_count,
+                   COALESCE(p.quantity_ordered, 0) AS quantity_ordered,
+                   COALESCE(p.quantity_received, 0) AS quantity_received,
+                   COALESCE(p.estimated_cost, 0) AS estimated_cost
+            FROM suppliers s
+            LEFT JOIN (
+                SELECT po.supplier_id, COUNT(DISTINCT po.po_id) AS purchase_order_count,
+                       COALESCE(SUM(poi.quantity_ordered), 0) AS quantity_ordered,
+                       COALESCE(SUM(poi.quantity_received), 0) AS quantity_received,
+                       COALESCE(SUM(poi.quantity_ordered * COALESCE(poi.unit_cost, d.cost_price, 0)), 0) AS estimated_cost
+                FROM purchase_orders po
+                LEFT JOIN purchase_order_items poi ON poi.po_id = po.po_id
+                LEFT JOIN drugs_master d ON d.drug_id = poi.drug_id
+                WHERE po.order_date >= %s::date
+                  AND po.order_date < (%s::date + INTERVAL '1 day')
+                GROUP BY po.supplier_id
+            ) p ON p.supplier_id = s.supplier_id
+            ORDER BY s.supplier_name
+            LIMIT 5000
+            """,
+            params,
+        )
+        rows = [_row(row) for row in raw_rows]
+        summary = {
+            "records": len(rows),
+            "estimated_cost": round(sum(float(row.get("estimated_cost") or 0) for row in rows), 2),
+        }
+        title = "Supplier activity"
+
+    return {
+        "success": True,
+        "kind": kind,
+        "title": title,
+        "start_date": start_day.isoformat(),
+        "end_date": end_day.isoformat(),
+        "columns": [{"key": key, "label": label} for key, label in OPERATIONS_REPORT_COLUMNS[kind]],
+        "rows": rows,
+        "summary": summary,
+    }
+
+
 @router.get("/reports/sales-template")
 def sales_template(request: Request):
     if not require_admin(request):
@@ -2144,6 +2348,18 @@ def export_report(request: Request, kind: str = "", format: str = "xlsx", period
             ])
         title = "Medicine capital at risk (30 days)"
         filename = "capital-at-risk"
+    elif kind in OPERATIONS_REPORT_COLUMNS:
+        data = operations_report(request, kind=kind, start=start, end=end)
+        if hasattr(data, "body"):
+            return data
+        columns = data["columns"]
+        headers = [column["label"] for column in columns]
+        rows = [
+            [row.get(column["key"]) for column in columns]
+            for row in data.get("rows") or []
+        ]
+        title = data["title"]
+        filename = f"{kind}-{data['start_date']}-to-{data['end_date']}"
     else:
         return {"success": False, "message": "Unknown report type."}
 
@@ -2152,6 +2368,10 @@ def export_report(request: Request, kind: str = "", format: str = "xlsx", period
         "consumption": "Monthly consumption",
         "procurement": "Procurement cost",
         "capital": "Medicine capital at risk",
+        "orders": "Online orders",
+        "purchases": "Purchasing",
+        "customers": "Customer activity",
+        "suppliers": "Supplier activity",
     }.get(kind, title)
     log_event("Generate Report", f"Generated the {kind_label} report as {fmt.upper()}.", request=request)
 
@@ -2159,4 +2379,3 @@ def export_report(request: Request, kind: str = "", format: str = "xlsx", period
         return _file_response(pdf_bytes(title, headers, rows), f"{filename}.pdf", "pdf")
     sheets = [(title[:31], headers, rows)]
     return _file_response(workbook_bytes(title, sheets), f"{filename}.xlsx", "xlsx")
-

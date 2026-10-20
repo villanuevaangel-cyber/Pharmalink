@@ -294,7 +294,7 @@ def list_drugs(request: Request, status: str = "active"):
         return _unauthorized()
     sql = """
         SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
-               d.minimum_stock, d.cost_price,
+               d.minimum_stock, COALESCE(d.maximum_stock, 0) AS maximum_stock, d.cost_price,
                COALESCE(d.procurement_type, 'purchase') AS procurement_type,
                COALESCE(d.sale_class, 'rx') AS sale_class,
                d.is_active, d.barcode, cm.markup_percent
@@ -310,6 +310,7 @@ def list_drugs(request: Request, status: str = "active"):
     for row in rows:
         item = _row(row)
         item["minimum_stock"] = int(item.get("minimum_stock") or 0)
+        item["maximum_stock"] = int(item.get("maximum_stock") or 0)
         item["is_active"] = int(item.get("is_active") or 0)
         cost = item.get("cost_price")
         markup = item.get("markup_percent")
@@ -337,7 +338,7 @@ async def add_drug(request: Request):
     category = str(data.get("category") or "").strip()
     barcode_in = str(data.get("barcode") or "").strip()
     drug_err = validate_drug_fields(
-        generic_name, dosage, form, category, data.get("minimum_stock"), brand_name, barcode_in
+        generic_name, dosage, form, category, data.get("minimum_stock"), brand_name, barcode_in, data.get("maximum_stock")
     )
     if drug_err:
         return {"success": False, "message": drug_err}
@@ -345,6 +346,10 @@ async def add_drug(request: Request):
     if procurement not in {"purchase", "consignment"}:
         return {"success": False, "message": "Choose Purchased or Consignment. This is not set automatically."}
     sale_class = _sale_class(data, generic_name, category, dosage)
+    min_stock = int(data.get("minimum_stock") or 0)
+    max_stock = int(data.get("maximum_stock") or 0)
+    if max_stock <= min_stock:
+        max_stock = max(min_stock * 3, min_stock + 20)
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             drug_id = next_id(cur, "drugs_master", "drug_id")
@@ -352,8 +357,8 @@ async def add_drug(request: Request):
             try:
                 cur.execute(
                     """
-                    INSERT INTO drugs_master (drug_id, generic_name, brand_name, dosage, form, category, minimum_stock, procurement_type, barcode, sale_class)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO drugs_master (drug_id, generic_name, brand_name, dosage, form, category, minimum_stock, maximum_stock, procurement_type, barcode, sale_class)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         drug_id,
@@ -362,7 +367,8 @@ async def add_drug(request: Request):
                         dosage,
                         form,
                         category,
-                        int(data.get("minimum_stock") or 0),
+                        min_stock,
+                        max_stock,
                         procurement,
                         barcode,
                         sale_class,
@@ -393,7 +399,7 @@ async def update_drug(request: Request):
     barcode_in = str(data.get("barcode") or "").strip()
     barcode = barcode_in or f"PLK{drug_id:06d}"
     drug_err = validate_drug_fields(
-        generic_name, dosage, form, category, data.get("minimum_stock"), brand_name, barcode_in
+        generic_name, dosage, form, category, data.get("minimum_stock"), brand_name, barcode_in, data.get("maximum_stock")
     )
     if drug_err:
         return {"success": False, "message": drug_err}
@@ -401,13 +407,17 @@ async def update_drug(request: Request):
     if procurement not in {"purchase", "consignment"}:
         return {"success": False, "message": "Choose Purchased or Consignment. This is not set automatically."}
     sale_class = _sale_class(data, generic_name, category, dosage)
+    min_stock = int(data.get("minimum_stock") or 0)
+    max_stock = int(data.get("maximum_stock") or 0)
+    if max_stock <= min_stock:
+        max_stock = max(min_stock * 3, min_stock + 20)
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             try:
                 cur.execute(
                     """
                     UPDATE drugs_master
-                    SET generic_name=%s, brand_name=%s, dosage=%s, form=%s, category=%s, minimum_stock=%s, barcode=%s, procurement_type=%s, sale_class=%s
+                    SET generic_name=%s, brand_name=%s, dosage=%s, form=%s, category=%s, minimum_stock=%s, maximum_stock=%s, barcode=%s, procurement_type=%s, sale_class=%s
                     WHERE drug_id=%s
                     """,
                     (
@@ -416,7 +426,8 @@ async def update_drug(request: Request):
                         dosage,
                         form,
                         category,
-                        int(data.get("minimum_stock") or 0),
+                        min_stock,
+                        max_stock,
                         barcode,
                         procurement,
                         sale_class,
@@ -481,7 +492,7 @@ def list_lots(request: Request, status: str = "active", exclude_expired: str = "
         SELECT l.lot_inventory_id, l.lot_number, l.expiration_date, l.current_stock, l.price, l.cost_price,
                l.supplier, l.is_active, l.return_status, s.consignment_policy AS supplier_consignment_policy,
                d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
-               d.minimum_stock, d.stock_status
+               d.minimum_stock, COALESCE(d.maximum_stock, 0) AS maximum_stock, d.stock_status
         FROM inventory_lots l
         JOIN drugs_master d ON l.drug_id = d.drug_id
         LEFT JOIN suppliers s ON l.supplier = s.supplier_id
@@ -503,6 +514,7 @@ def list_lots(request: Request, status: str = "active", exclude_expired: str = "
         item = _row(row)
         item["current_stock"] = int(item.get("current_stock") or 0)
         item["minimum_stock"] = int(item.get("minimum_stock") or 0)
+        item["maximum_stock"] = int(item.get("maximum_stock") or 0)
         item["price"] = float(item.get("price") or 0)
         item["is_active"] = int(item.get("is_active") or 0)
         out.append(item)

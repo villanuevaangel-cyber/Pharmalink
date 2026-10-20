@@ -146,7 +146,8 @@ CREATE TABLE order_details (
   drug_id INTEGER NOT NULL,
   lot_inventory_id INTEGER NOT NULL,
   quantity INTEGER NOT NULL,
-  price_per_unit NUMERIC(10,2) NOT NULL
+  price_per_unit NUMERIC(10,2) NOT NULL,
+  prescription_id INTEGER DEFAULT NULL
 );
 
 
@@ -169,7 +170,12 @@ CREATE TABLE prescriptions (
   extracted_text text DEFAULT NULL,
   created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   availability_summary TEXT DEFAULT NULL,
-  ocr_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+  ocr_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  review_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  review_note TEXT DEFAULT NULL,
+  reviewed_by INTEGER DEFAULT NULL,
+  reviewed_at TIMESTAMPTZ DEFAULT NULL,
+  reviewed_drug_ids INTEGER[] NOT NULL DEFAULT '{}'
 );
 
 
@@ -454,7 +460,9 @@ CREATE INDEX idx_inventory_lots_fk_supplier_id ON inventory_lots (supplier);
 CREATE INDEX idx_order_details_order_id ON order_details (order_id);
 CREATE INDEX idx_order_details_drug_id ON order_details (drug_id);
 CREATE INDEX idx_order_details_lot_inventory_id ON order_details (lot_inventory_id);
+CREATE INDEX idx_order_details_prescription_id ON order_details (prescription_id);
 CREATE INDEX idx_prescriptions_user_id ON prescriptions (user_id);
+CREATE INDEX idx_prescriptions_review_status ON prescriptions (review_status, created_at DESC);
 CREATE INDEX idx_returns_sales_item_id ON returns (sales_item_id);
 CREATE INDEX idx_returns_cashier_id ON returns (cashier_id);
 CREATE INDEX idx_sales_user_id ON sales (user_id);
