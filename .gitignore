@@ -20,6 +20,7 @@ uploads/prescriptions/*
 uploads/profile_pictures/*
 !uploads/prescriptions/.gitkeep
 !uploads/profile_pictures/.gitkeep
+private_uploads/
 
 cache/*
 !cache/.gitkeep

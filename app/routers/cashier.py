@@ -24,7 +24,7 @@ from app.mailer import send_mail
 from app.payments import CASHIER_PAYMENT_KEYS, CUSTOMER_EWALLET_KEYS
 from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
 from app.profile_photos import resolve_photo_url, staff_photo_url
-from app.rx_files import rx_file_response
+from app.rx_files import rx_file_response, rx_id_file_response, rx_id_filepath
 from app.stock import allocate_expiring_first, drug_id_for_lot, restore_order_stock, sellable_quantity, split_money, sync_stock_status_for_drug
 from app.validation import prepare_profile_fields
 
@@ -336,12 +336,12 @@ def pharmacist_prescriptions(request: Request):
         SELECT p.id, p.user_id, p.filename, p.extracted_text, p.availability_summary,
                p.ocr_status, p.created_at, p.review_status, p.review_note,
                p.reviewed_by, p.reviewed_at, p.reviewed_drug_ids,
+               p.id_filename, p.identity_verified,
                c.first_name, c.last_name
         FROM prescriptions p
         LEFT JOIN customers c ON c.customer_id = p.user_id
-        WHERE p.review_status <> 'approved'
-        ORDER BY CASE WHEN p.review_status = 'pending' THEN 0 ELSE 1 END,
-                 p.created_at DESC
+        WHERE p.review_status = 'pending'
+        ORDER BY p.created_at DESC
         LIMIT 200
         """
     )
@@ -357,6 +357,11 @@ def pharmacist_prescriptions(request: Request):
         item["availability_summary"] = summary if isinstance(summary, list) else []
         item["reviewed_drug_ids"] = [int(drug_id) for drug_id in (item.get("reviewed_drug_ids") or [])]
         item["file_url"] = f"/api/cashier/prescriptions/{int(item['id'])}/file"
+        item["id_file_url"] = (
+            f"/api/cashier/prescriptions/{int(item['id'])}/id-file"
+            if item.get("id_filename")
+            else ""
+        )
         item["customer_name"] = " ".join(
             part for part in (str(item.get("first_name") or "").strip(), str(item.get("last_name") or "").strip()) if part
         ) or f"Customer #{int(item['user_id'])}"
@@ -377,6 +382,19 @@ def pharmacist_prescription_file(request: Request, prescription_id: int):
     if not row or not row.get("filename"):
         return JSONResponse({"success": False, "message": "Prescription not found."}, status_code=404)
     return rx_file_response(row["filename"])
+
+
+@router.get("/prescriptions/{prescription_id}/id-file")
+def pharmacist_prescription_id_file(request: Request, prescription_id: int):
+    if not require_staff(request):
+        return _unauthorized()
+    row = fetch_one(
+        "SELECT id_filename FROM prescriptions WHERE id = %s AND review_status = 'pending'",
+        (prescription_id,),
+    )
+    if not row or not row.get("id_filename"):
+        return JSONResponse({"success": False, "message": "ID document not found."}, status_code=404)
+    return rx_id_file_response(row["id_filename"])
 
 
 @router.get("/prescription-medicines")
@@ -444,16 +462,22 @@ async def review_prescription(request: Request, prescription_id: int):
         )
 
     user_id = int(require_staff(request))
+    id_filename_to_remove = None
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
-                    "SELECT user_id, extracted_text FROM prescriptions WHERE id = %s FOR UPDATE",
+                    "SELECT user_id, extracted_text, id_filename, review_status FROM prescriptions WHERE id = %s FOR UPDATE",
                     (prescription_id,),
                 )
                 prescription = cur.fetchone()
                 if not prescription:
                     return JSONResponse({"success": False, "message": "Prescription not found."}, status_code=404)
+                if str(prescription.get("review_status") or "pending").lower() != "pending":
+                    return JSONResponse(
+                        {"success": False, "message": "This prescription is no longer awaiting review."},
+                        status_code=409,
+                    )
                 cur.execute(
                     "SELECT 1 FROM order_details WHERE prescription_id = %s LIMIT 1",
                     (prescription_id,),
@@ -465,6 +489,21 @@ async def review_prescription(request: Request, prescription_id: int):
                     )
 
                 if decision == "approved":
+                    if not prescription.get("id_filename"):
+                        return JSONResponse(
+                            {"success": False, "message": "A government-issued ID is required before approval."},
+                            status_code=409,
+                        )
+                    if not rx_id_filepath(prescription["id_filename"]).is_file():
+                        return JSONResponse(
+                            {"success": False, "message": "The uploaded ID document is unavailable. Ask the customer to upload it again."},
+                            status_code=409,
+                        )
+                    if payload.get("id_verified") is not True:
+                        return JSONResponse(
+                            {"success": False, "message": "Verify the customer ID and prescription document before approval."},
+                            status_code=400,
+                        )
                     cur.execute(
                         """
                         SELECT drug_id FROM drugs_master
@@ -488,11 +527,21 @@ async def review_prescription(request: Request, prescription_id: int):
                         review_note = %s,
                         reviewed_by = %s,
                         reviewed_at = NOW(),
-                        reviewed_drug_ids = %s
-                    WHERE id = %s
+                        reviewed_drug_ids = %s,
+                        identity_verified = %s,
+                        id_filename = NULL
+                    WHERE id = %s AND review_status = 'pending'
                     """,
-                    (decision, note or None, user_id, reviewed_ids, prescription_id),
+                    (
+                        decision,
+                        note or None,
+                        user_id,
+                        reviewed_ids,
+                        payload.get("id_verified") is True,
+                        prescription_id,
+                    ),
                 )
+                id_filename_to_remove = prescription.get("id_filename")
                 write_activity_log(
                     cur,
                     "Review Prescription",
@@ -501,6 +550,15 @@ async def review_prescription(request: Request, prescription_id: int):
                 )
     except ValueError as exc:
         return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
+    if id_filename_to_remove:
+        try:
+            rx_id_filepath(id_filename_to_remove).unlink(missing_ok=True)
+        except OSError:
+            logger.warning(
+                "Could not remove reviewed ID document for prescription %s.",
+                prescription_id,
+                exc_info=True,
+            )
     return {"success": True, "review_status": decision}
 
 

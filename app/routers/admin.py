@@ -294,7 +294,8 @@ def list_drugs(request: Request, status: str = "active"):
         return _unauthorized()
     sql = """
         SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
-               d.minimum_stock, COALESCE(d.maximum_stock, 0) AS maximum_stock, d.cost_price,
+               d.minimum_stock, COALESCE(d.maximum_stock, 0) AS maximum_stock,
+               COALESCE(d.units_per_box, 1) AS units_per_box, d.cost_price,
                COALESCE(d.procurement_type, 'purchase') AS procurement_type,
                COALESCE(d.sale_class, 'rx') AS sale_class,
                d.is_active, d.barcode, cm.markup_percent
@@ -311,6 +312,7 @@ def list_drugs(request: Request, status: str = "active"):
         item = _row(row)
         item["minimum_stock"] = int(item.get("minimum_stock") or 0)
         item["maximum_stock"] = int(item.get("maximum_stock") or 0)
+        item["units_per_box"] = max(1, int(item.get("units_per_box") or 1))
         item["is_active"] = int(item.get("is_active") or 0)
         cost = item.get("cost_price")
         markup = item.get("markup_percent")
@@ -348,6 +350,12 @@ async def add_drug(request: Request):
     sale_class = _sale_class(data, generic_name, category, dosage)
     min_stock = int(data.get("minimum_stock") or 0)
     max_stock = int(data.get("maximum_stock") or 0)
+    try:
+        units_per_box = int(data.get("units_per_box") or 0)
+    except (TypeError, ValueError):
+        return {"success": False, "message": "Pieces per box must be a whole number."}
+    if units_per_box < 1 or units_per_box > 100000:
+        return {"success": False, "message": "Pieces per box must be between 1 and 100,000."}
     if max_stock <= min_stock:
         max_stock = max(min_stock * 3, min_stock + 20)
     with get_conn() as conn:
@@ -357,8 +365,8 @@ async def add_drug(request: Request):
             try:
                 cur.execute(
                     """
-                    INSERT INTO drugs_master (drug_id, generic_name, brand_name, dosage, form, category, minimum_stock, maximum_stock, procurement_type, barcode, sale_class)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO drugs_master (drug_id, generic_name, brand_name, dosage, form, category, minimum_stock, maximum_stock, units_per_box, procurement_type, barcode, sale_class)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         drug_id,
@@ -369,6 +377,7 @@ async def add_drug(request: Request):
                         category,
                         min_stock,
                         max_stock,
+                        units_per_box,
                         procurement,
                         barcode,
                         sale_class,
@@ -409,6 +418,12 @@ async def update_drug(request: Request):
     sale_class = _sale_class(data, generic_name, category, dosage)
     min_stock = int(data.get("minimum_stock") or 0)
     max_stock = int(data.get("maximum_stock") or 0)
+    try:
+        units_per_box = int(data.get("units_per_box") or 0)
+    except (TypeError, ValueError):
+        return {"success": False, "message": "Pieces per box must be a whole number."}
+    if units_per_box < 1 or units_per_box > 100000:
+        return {"success": False, "message": "Pieces per box must be between 1 and 100,000."}
     if max_stock <= min_stock:
         max_stock = max(min_stock * 3, min_stock + 20)
     with get_conn() as conn:
@@ -417,7 +432,7 @@ async def update_drug(request: Request):
                 cur.execute(
                     """
                     UPDATE drugs_master
-                    SET generic_name=%s, brand_name=%s, dosage=%s, form=%s, category=%s, minimum_stock=%s, maximum_stock=%s, barcode=%s, procurement_type=%s, sale_class=%s
+                    SET generic_name=%s, brand_name=%s, dosage=%s, form=%s, category=%s, minimum_stock=%s, maximum_stock=%s, units_per_box=%s, barcode=%s, procurement_type=%s, sale_class=%s
                     WHERE drug_id=%s
                     """,
                     (
@@ -428,6 +443,7 @@ async def update_drug(request: Request):
                         category,
                         min_stock,
                         max_stock,
+                        units_per_box,
                         barcode,
                         procurement,
                         sale_class,
@@ -1440,4 +1456,3 @@ async def user_actions(request: Request):
             )
             _log(cur, request, "Create Staff", f"Created staff {first_name} {last_name} ({role}).")
             return {"status": "success", "user_id": user_id}
-

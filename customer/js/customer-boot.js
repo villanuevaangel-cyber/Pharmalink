@@ -350,6 +350,7 @@
     function initPrescriptions() {
         const form = document.getElementById('prescriptionUploadForm');
         const fileInput = document.getElementById('prescriptionFile');
+        const idFileInput = document.getElementById('prescriptionIdFile');
         const msg = document.getElementById('prescriptionUploadMsg');
         const tbody = document.getElementById('prescriptionHistoryBody');
         if (!form || !tbody) return;
@@ -382,6 +383,7 @@
                 const note = p.review_note ? ` title="${attr(p.review_note)}"` : '';
                 return `<span class="rx-pill rx-pill-bad"${note}>Rejected</span>`;
             }
+            if (status === 'cancelled') return '<span class="rx-pill rx-pill-muted">Cancelled</span>';
             return '<span class="rx-pill rx-pill-muted">Awaiting review</span>';
         }
         function matchLabel(m) {
@@ -474,6 +476,7 @@
                 const canView = p.file_available && p.view_url;
                 const matches = Array.isArray(p.availability_summary) ? p.availability_summary : [];
                 const canAdd = matches.some((m) => canAddMatch(m) && canUseMatch(m, p));
+                const canCancel = String(p.review_status || 'pending').toLowerCase() === 'pending';
                 const fileLabel = 'Rx #' + p.id + (p.file_type ? ' · ' + p.file_type : '');
                 return `<tr>
                     <td>${escapeHtml(rxDateLabel(p))}</td>
@@ -483,6 +486,7 @@
                     <td class="rx-actions-cell">
                         <button type="button" class="rx-view-btn" data-rx-id="${attr(p.id)}" ${canView ? '' : 'disabled'} title="View prescription" aria-label="View prescription"><i class="fas fa-eye"></i></button>
                         <button type="button" class="rx-cart-btn" data-rx-id="${attr(p.id)}" ${canAdd ? '' : 'disabled'} title="${canAdd ? 'Add to cart' : 'No approved in-stock medicine to add'}" aria-label="Add to cart"><i class="fas fa-cart-plus"></i></button>
+                        ${canCancel ? `<button type="button" class="rx-cancel-btn" data-rx-id="${attr(p.id)}">Cancel</button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
@@ -572,6 +576,12 @@
             }
         }
         function handleRxTableClick(e) {
+            const cancelBtn = e.target.closest('.rx-cancel-btn');
+            if (cancelBtn) {
+                e.preventDefault();
+                cancelPrescription(cancelBtn);
+                return;
+            }
             const viewBtn = e.target.closest('.rx-view-btn');
             if (viewBtn) {
                 e.preventDefault();
@@ -586,6 +596,25 @@
                 return;
             }
             handleRxAddCart(e);
+        }
+        async function cancelPrescription(button) {
+            const id = button.getAttribute('data-rx-id');
+            if (!id || !window.confirm('Cancel this prescription submission?')) return;
+            button.disabled = true;
+            try {
+                const response = await fetch(`/api/customer/prescriptions/${encodeURIComponent(id)}`, {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.message || 'Could not cancel this prescription.');
+                loadHistory();
+            } catch (error) {
+                button.disabled = false;
+                const text = error.message || 'Could not cancel this prescription.';
+                if (typeof window.phAlert === 'function') window.phAlert(text);
+                else window.alert(text);
+            }
         }
         tbody.addEventListener('click', handleRxTableClick);
         document.querySelector('.nav-item[data-target="prescription"]')?.addEventListener('click', loadHistory);
@@ -604,6 +633,7 @@
         });
         document.getElementById('rxItemsBody')?.addEventListener('click', handleRxAddCart);
         const fileNameEl = document.getElementById('rxFileName');
+        const idFileNameEl = document.getElementById('rxIdFileName');
         const dropzone = document.getElementById('rxDropzone');
         const allowedExt = { jpg: 1, jpeg: 1, png: 1, webp: 1, pdf: 1 };
         const allowedMime = {
@@ -629,14 +659,14 @@
             const parts = String(name || '').split('.');
             return parts.length > 1 ? parts.pop().toLowerCase() : '';
         }
-        function validateRxFile(file) {
-            if (!file) return 'Please choose a file to upload.';
+        function validateRxFile(file, label = 'Prescription file') {
+            if (!file) return `Please choose a ${label.toLowerCase()} to upload.`;
             const ext = fileExt(file.name);
             const type = String(file.type || '').toLowerCase();
             const typeOk = allowedExt[ext] || allowedMime[type];
-            if (!typeOk) return 'Only JPG, PNG, WEBP, or PDF files are allowed.';
-            if (file.size > maxBytes) return 'File must be under 5MB.';
-            if (file.size <= 0) return 'That file is empty. Please choose another one.';
+            if (!typeOk) return `${label} must be a JPG, PNG, WEBP, or PDF file.`;
+            if (file.size > maxBytes) return `${label} must be under 5MB.`;
+            if (file.size <= 0) return `${label} is empty. Please choose another one.`;
             return '';
         }
         function applySelectedFile(file, fromDrop) {
@@ -667,6 +697,22 @@
             applySelectedFile(fileInput.files[0], false);
         }
         fileInput.addEventListener('change', showSelectedFile);
+        idFileInput?.addEventListener('change', () => {
+            const file = idFileInput.files[0];
+            if (!file) {
+                if (idFileNameEl) idFileNameEl.textContent = 'No ID selected';
+                return;
+            }
+            const err = validateRxFile(file, 'ID document');
+            if (err) {
+                idFileInput.value = '';
+                if (idFileNameEl) idFileNameEl.textContent = 'No ID selected';
+                showRxError(err);
+                return;
+            }
+            clearRxError();
+            if (idFileNameEl) idFileNameEl.textContent = file.name;
+        });
 
         const cameraBtn = document.getElementById('rxCameraBtn');
         const cameraCapture = document.getElementById('prescriptionCameraCapture');
@@ -755,8 +801,15 @@
                 showRxError(err);
                 return;
             }
+            const idFile = idFileInput?.files[0];
+            const idErr = validateRxFile(idFile, 'ID document');
+            if (idErr) {
+                showRxError(idErr);
+                return;
+            }
             const fd = new FormData();
             fd.append('prescription_file', file);
+            fd.append('id_file', idFile);
             msg.style.color = '#555';
             msg.textContent = 'Uploading and reading prescription...';
             fetch('/api/customer/prescriptions', { method: 'POST', body: fd, credentials: 'same-origin' })
@@ -767,6 +820,7 @@
                     if (d.success) {
                         form.reset();
                         showSelectedFile();
+                        if (idFileNameEl) idFileNameEl.textContent = 'No ID selected';
                         loadHistory();
                     }
                 })

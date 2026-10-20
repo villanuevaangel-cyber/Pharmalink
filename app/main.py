@@ -197,4 +197,8 @@ app.mount("/cashier/css", StaticFiles(directory=ROOT / "cashier" / "css"), name=
 app.mount("/cashier/js", StaticFiles(directory=ROOT / "cashier" / "js"), name="cashier_js")
 app.mount("/admin/css", StaticFiles(directory=ROOT / "admin" / "css"), name="admin_css")
 app.mount("/admin/js", StaticFiles(directory=ROOT / "admin" / "js"), name="admin_js")
-app.mount("/uploads", StaticFiles(directory=ROOT / "uploads"), name="uploads")
+app.mount(
+    "/uploads/profile_pictures",
+    StaticFiles(directory=ROOT / "uploads" / "profile_pictures"),
+    name="profile_pictures",
+)
