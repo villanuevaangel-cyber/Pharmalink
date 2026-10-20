@@ -997,7 +997,13 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
     }
 
 
-def create_purchase_orders_from_needs(needs, created_by: str, notes: str, raise_alerts: bool = False) -> dict:
+def create_purchase_orders_from_needs(
+    needs,
+    created_by: str,
+    notes: str,
+    raise_alerts: bool = False,
+    order_date: date | None = None,
+) -> dict:
     """Create one Pending PO per supplier from reorder-style need rows."""
     created = []
     skipped = []
@@ -1074,8 +1080,8 @@ def create_purchase_orders_from_needs(needs, created_by: str, notes: str, raise_
                     **item,
                     "quantity_ordered_boxes": requested_pieces // units_per_box,
                 })
-            order_date = datetime.now(MANILA).date()
-            expected = (order_date + timedelta(days=LEAD_DAYS)).isoformat()
+            po_order_date = order_date or datetime.now(MANILA).date()
+            expected = (po_order_date + timedelta(days=LEAD_DAYS)).isoformat()
             for supplier_id, items in by_supplier.items():
                 cur.execute(
                     "SELECT supplier_id, supplier_name FROM suppliers WHERE supplier_id = %s AND status = 'Active'",
@@ -1096,7 +1102,7 @@ def create_purchase_orders_from_needs(needs, created_by: str, notes: str, raise_
                         (po_id, supplier_id, status, order_date, expected_date, notes, created_by)
                     VALUES (%s, %s, 'Pending', %s, %s, %s, %s)
                     """,
-                    (po_id, supplier_id, order_date.isoformat(), expected, notes, created_by),
+                    (po_id, supplier_id, po_order_date.isoformat(), expected, notes, created_by),
                 )
                 for item in items:
                     item_id = next_id(cur, "purchase_order_items", "po_item_id")

@@ -914,16 +914,21 @@ def list_suppliers(request: Request):
     )
     med_rows = fetch_all(
         """
-        SELECT DISTINCT supplier_id, generic_name, brand_name, dosage
+        SELECT DISTINCT supplier_id, drug_id, generic_name, brand_name, dosage
         FROM (
-            SELECT i.supplier AS supplier_id, d.generic_name, d.brand_name, d.dosage
+            SELECT i.supplier AS supplier_id, d.drug_id, d.generic_name, d.brand_name, d.dosage
             FROM inventory_lots i
             JOIN drugs_master d ON d.drug_id = i.drug_id
             WHERE i.supplier IS NOT NULL
             UNION
-            SELECT sd.supplier_id, d.generic_name, d.brand_name, d.dosage
+            SELECT sd.supplier_id, d.drug_id, d.generic_name, d.brand_name, d.dosage
             FROM supplier_drugs sd
             JOIN drugs_master d ON d.drug_id = sd.drug_id
+            UNION
+            SELECT po.supplier_id, d.drug_id, d.generic_name, d.brand_name, d.dosage
+            FROM purchase_orders po
+            JOIN purchase_order_items poi ON poi.po_id = po.po_id
+            JOIN drugs_master d ON d.drug_id = poi.drug_id
         ) linked
         ORDER BY generic_name, brand_name, dosage
         """
@@ -931,7 +936,10 @@ def list_suppliers(request: Request):
     by_supplier = {}
     for med in med_rows:
         item = _row(med)
-        by_supplier.setdefault(int(item["supplier_id"]), []).append({
+        supplier_id = int(item["supplier_id"])
+        by_supplier.setdefault(supplier_id, {"medicines": [], "drug_ids": set()})
+        by_supplier[supplier_id]["drug_ids"].add(int(item["drug_id"]))
+        by_supplier[supplier_id]["medicines"].append({
             "generic_name": item.get("generic_name") or "",
             "brand_name": item.get("brand_name") or "",
             "dosage": item.get("dosage") or "",
@@ -939,7 +947,9 @@ def list_suppliers(request: Request):
     out = []
     for row in rows:
         item = _row(row)
-        item["medicines_supplied"] = by_supplier.get(int(item["supplier_id"]), [])
+        supplied = by_supplier.get(int(item["supplier_id"]), {"medicines": [], "drug_ids": set()})
+        item["medicines_supplied"] = supplied["medicines"]
+        item["drug_ids"] = sorted(supplied["drug_ids"])
         out.append(item)
     return out
 

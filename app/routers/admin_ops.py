@@ -638,8 +638,8 @@ async def receive_delivery(request: Request):
     if not reference:
         return {"success": False, "message": "Invoice / reference number is required."}
     delivery_date = _parse_iso_date(data.get("delivery_date")) or _manila_today()
-    if delivery_date < _manila_today():
-        return {"success": False, "message": "Delivery date cannot be in the past."}
+    if delivery_date > _manila_today():
+        return {"success": False, "message": "Date received cannot be in the future."}
     admin_name = request.session.get("user_first_name") or "Admin"
     try:
         with get_conn() as conn:
@@ -1106,6 +1106,12 @@ async def create_pos_from_reorder(request: Request):
     if requested_items is not None:
         if not isinstance(requested_items, list) or not requested_items:
             return JSONResponse({"success": False, "message": "Select at least one low-stock medicine."}, status_code=400)
+        raw_order_date = data.get("order_date")
+        order_date = _parse_iso_date(raw_order_date) if raw_order_date else _manila_today()
+        if not order_date:
+            return JSONResponse({"success": False, "message": "Choose a valid PO date."}, status_code=400)
+        if order_date < _manila_today():
+            return JSONResponse({"success": False, "message": "PO date cannot be in the past."}, status_code=400)
         suggestions = {
             int(row["drug_id"]): row
             for row in compute_reorder_suggestions().get("suggestions") or []
@@ -1158,6 +1164,7 @@ async def create_pos_from_reorder(request: Request):
             actor_display_name(request, fallback="Admin"),
             "Created from low-stock Purchase Orders. Order quantities are limited to 200 pieces and catalog maximum stock.",
             raise_alerts=False,
+            order_date=order_date,
         )
         if result["skipped"] and not result["created"]:
             return JSONResponse(
