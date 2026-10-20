@@ -1,0 +1,63 @@
+name: Deploy PharmaLink to Hostinger
+
+on:
+  push:
+    branches:
+      - cursor/render-deploy
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pharmalink-hostinger-deploy
+  cancel-in-progress: false
+
+jobs:
+  validate-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate changed source syntax
+        run: |
+          python -m compileall -q app
+          node --check customer/js/customer-boot.js
+          node --check cashier/js/prescriptions.js
+
+      - name: Configure SSH
+        env:
+          HOSTINGER_SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+          HOSTINGER_KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOSTINGER_SSH_KEY"
+          test -n "$HOSTINGER_KNOWN_HOSTS"
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$HOSTINGER_SSH_KEY" > "$HOME/.ssh/pharmalink_deploy"
+          chmod 600 "$HOME/.ssh/pharmalink_deploy"
+          printf '%s\n' "$HOSTINGER_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy and restart service
+        env:
+          HOSTINGER_HOST: ${{ secrets.HOSTINGER_HOST }}
+          HOSTINGER_USER: ${{ secrets.HOSTINGER_USER }}
+          HOSTINGER_PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          set -euo pipefail
+          test -n "$HOSTINGER_HOST"
+          test -n "$HOSTINGER_USER"
+          port="${HOSTINGER_PORT:-22}"
+          ssh \
+            -i "$HOME/.ssh/pharmalink_deploy" \
+            -p "$port" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$HOSTINGER_USER@$HOSTINGER_HOST" \
+            'sudo -n -u www-data /usr/bin/git -C /var/www/pharmalink pull --ff-only origin cursor/render-deploy &&
+             sudo -n -u www-data /var/www/pharmalink/venv/bin/pip install -r /var/www/pharmalink/requirements.txt &&
+             sudo -n /usr/bin/systemctl restart pharmalink &&
+             sudo -n /usr/bin/systemctl is-active --quiet pharmalink'

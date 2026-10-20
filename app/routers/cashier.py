@@ -24,6 +24,7 @@ from app.mailer import send_mail
 from app.payments import CASHIER_PAYMENT_KEYS, CUSTOMER_EWALLET_KEYS
 from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
 from app.profile_photos import resolve_photo_url, staff_photo_url
+from app.rx_files import rx_file_response
 from app.stock import allocate_expiring_first, drug_id_for_lot, restore_order_stock, sellable_quantity, split_money, sync_stock_status_for_drug
 from app.validation import prepare_profile_fields
 
@@ -326,6 +327,183 @@ def _promos_payload():
     return out
 
 
+@router.get("/prescriptions")
+def pharmacist_prescriptions(request: Request):
+    if not require_staff(request):
+        return _unauthorized()
+    rows = fetch_all(
+        """
+        SELECT p.id, p.user_id, p.filename, p.extracted_text, p.availability_summary,
+               p.ocr_status, p.created_at, p.review_status, p.review_note,
+               p.reviewed_by, p.reviewed_at, p.reviewed_drug_ids,
+               c.first_name, c.last_name
+        FROM prescriptions p
+        LEFT JOIN customers c ON c.customer_id = p.user_id
+        WHERE p.review_status <> 'approved'
+        ORDER BY CASE WHEN p.review_status = 'pending' THEN 0 ELSE 1 END,
+                 p.created_at DESC
+        LIMIT 200
+        """
+    )
+    prescriptions = []
+    for raw in rows:
+        item = dict(raw)
+        summary = item.get("availability_summary")
+        if isinstance(summary, str) and summary:
+            try:
+                summary = json.loads(summary)
+            except json.JSONDecodeError:
+                summary = []
+        item["availability_summary"] = summary if isinstance(summary, list) else []
+        item["reviewed_drug_ids"] = [int(drug_id) for drug_id in (item.get("reviewed_drug_ids") or [])]
+        item["file_url"] = f"/api/cashier/prescriptions/{int(item['id'])}/file"
+        item["customer_name"] = " ".join(
+            part for part in (str(item.get("first_name") or "").strip(), str(item.get("last_name") or "").strip()) if part
+        ) or f"Customer #{int(item['user_id'])}"
+        item["created_at"] = _fmt_dt(item.get("created_at"), "%b %d, %Y %I:%M %p")
+        item["reviewed_at"] = _fmt_dt(item.get("reviewed_at"), "%b %d, %Y %I:%M %p") or ""
+        prescriptions.append(_plain(item))
+    return {"success": True, "prescriptions": prescriptions}
+
+
+@router.get("/prescriptions/{prescription_id}/file")
+def pharmacist_prescription_file(request: Request, prescription_id: int):
+    if not require_staff(request):
+        return _unauthorized()
+    row = fetch_one(
+        "SELECT filename FROM prescriptions WHERE id = %s",
+        (prescription_id,),
+    )
+    if not row or not row.get("filename"):
+        return JSONResponse({"success": False, "message": "Prescription not found."}, status_code=404)
+    return rx_file_response(row["filename"])
+
+
+@router.get("/prescription-medicines")
+def prescription_medicines(request: Request, search: str = ""):
+    if not require_staff(request):
+        return _unauthorized()
+    term = str(search or "").strip()
+    if len(term) < 2:
+        return {"success": True, "medicines": []}
+    rows = fetch_all(
+        """
+        SELECT drug_id, generic_name, brand_name, dosage, form
+        FROM drugs_master
+        WHERE is_active = 1
+          AND COALESCE(sale_class, 'rx') = 'rx'
+          AND (
+              generic_name ILIKE %s OR COALESCE(brand_name, '') ILIKE %s
+              OR COALESCE(dosage, '') ILIKE %s OR COALESCE(form, '') ILIKE %s
+          )
+        ORDER BY generic_name, brand_name
+        LIMIT 30
+        """,
+        tuple(f"%{term}%" for _ in range(4)),
+    )
+    return {
+        "success": True,
+        "medicines": [
+            {
+                "drug_id": int(row["drug_id"]),
+                "generic_name": row.get("generic_name") or "",
+                "brand_name": row.get("brand_name") or "",
+                "dosage": row.get("dosage") or "",
+                "form": row.get("form") or "",
+            }
+            for row in rows
+        ],
+    }
+
+
+@router.post("/prescriptions/{prescription_id}/review")
+async def review_prescription(request: Request, prescription_id: int):
+    if not require_staff(request):
+        return _unauthorized()
+    payload = await request.json()
+    decision = str(payload.get("decision") or "").strip().lower()
+    note = str(payload.get("note") or "").strip()
+    if decision not in {"approved", "rejected"}:
+        return JSONResponse({"success": False, "message": "Choose approve or reject."}, status_code=400)
+    if len(note) > 1000:
+        return JSONResponse({"success": False, "message": "Review note must be 1,000 characters or fewer."}, status_code=400)
+    if decision == "rejected" and not note:
+        return JSONResponse({"success": False, "message": "Add a reason before rejecting this prescription."}, status_code=400)
+
+    raw_ids = payload.get("drug_ids") or []
+    if not isinstance(raw_ids, list):
+        return JSONResponse({"success": False, "message": "Selected medicines are invalid."}, status_code=400)
+    try:
+        drug_ids = list(dict.fromkeys(int(drug_id) for drug_id in raw_ids if int(drug_id) > 0))
+    except (TypeError, ValueError):
+        return JSONResponse({"success": False, "message": "Selected medicines are invalid."}, status_code=400)
+    if decision == "approved" and not drug_ids:
+        return JSONResponse(
+            {"success": False, "message": "Select at least one prescription-only medicine to approve."},
+            status_code=400,
+        )
+
+    user_id = int(require_staff(request))
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT user_id, extracted_text FROM prescriptions WHERE id = %s FOR UPDATE",
+                    (prescription_id,),
+                )
+                prescription = cur.fetchone()
+                if not prescription:
+                    return JSONResponse({"success": False, "message": "Prescription not found."}, status_code=404)
+                cur.execute(
+                    "SELECT 1 FROM order_details WHERE prescription_id = %s LIMIT 1",
+                    (prescription_id,),
+                )
+                if cur.fetchone():
+                    return JSONResponse(
+                        {"success": False, "message": "This prescription has already been attached to an order and can no longer be changed."},
+                        status_code=409,
+                    )
+
+                if decision == "approved":
+                    cur.execute(
+                        """
+                        SELECT drug_id FROM drugs_master
+                        WHERE drug_id = ANY(%s)
+                          AND is_active = 1
+                          AND COALESCE(sale_class, 'rx') = 'rx'
+                        """,
+                        (drug_ids,),
+                    )
+                    valid_ids = {int(row["drug_id"]) for row in cur.fetchall()}
+                    if valid_ids != set(drug_ids):
+                        return JSONResponse(
+                            {"success": False, "message": "Select active prescription-only medicines from the catalog."},
+                            status_code=400,
+                        )
+                reviewed_ids = drug_ids if decision == "approved" else []
+                cur.execute(
+                    """
+                    UPDATE prescriptions
+                    SET review_status = %s,
+                        review_note = %s,
+                        reviewed_by = %s,
+                        reviewed_at = NOW(),
+                        reviewed_drug_ids = %s
+                    WHERE id = %s
+                    """,
+                    (decision, note or None, user_id, reviewed_ids, prescription_id),
+                )
+                write_activity_log(
+                    cur,
+                    "Review Prescription",
+                    f"Prescription #{prescription_id} {decision} by staff #{user_id}.",
+                    request=request,
+                )
+    except ValueError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
+    return {"success": True, "review_status": decision}
+
+
 @router.get("/online-orders")
 def online_orders(request: Request):
     if not require_staff(request):
@@ -404,11 +582,21 @@ def online_order_details(order_id: int, request: Request):
     items = fetch_all(
         """
         SELECT od.drug_id, od.lot_inventory_id, od.quantity AS ordered_qty, od.price_per_unit,
+               od.prescription_id, COALESCE(dm.sale_class, 'rx') AS sale_class,
                dm.brand_name, dm.generic_name, dm.category, il.current_stock
         FROM order_details od
         JOIN drugs_master dm ON od.drug_id = dm.drug_id
         JOIN inventory_lots il ON od.lot_inventory_id = il.lot_inventory_id
         WHERE od.order_id = %s
+        """,
+        (order_id,),
+    )
+    completed_sale = fetch_one(
+        """
+        SELECT sale_id FROM sales
+        WHERE online_order_id = %s
+          AND LOWER(COALESCE(status, '')) = 'completed'
+        LIMIT 1
         """,
         (order_id,),
     )
@@ -422,6 +610,7 @@ def online_order_details(order_id: int, request: Request):
         "payment_method": header.get("payment_method") or "cash",
         "payment_status": header.get("payment_status") or "unpaid",
         "payment_reference": header.get("payment_reference") or "",
+        "sale_completed": bool(completed_sale),
         "items": [dict(i) for i in items],
     }
 
@@ -490,8 +679,7 @@ async def update_order_status(request: Request):
     payload = await request.json()
     order_id = int(payload.get("order_id") or 0)
     status = str(payload.get("status") or "").strip()
-    allowed = {"Pending", "Processing", "Ready for Pickup", "Completed", "Cancelled"}
-    if order_id <= 0 or status not in allowed:
+    if order_id <= 0 or status not in {"Processing", "Ready for Pickup", "Completed", "Cancelled"}:
         return {"success": False, "message": "Invalid order_id or status."}
     recipient = None
     try:
@@ -512,28 +700,74 @@ async def update_order_status(request: Request):
                     return {"success": False, "message": "Order not found."}
                 previous = str(row["order_status"] or "")
                 if previous != status:
-                    if status == "Cancelled" and previous == "Completed":
-                        return {"success": False, "message": "Completed sales stay as they are."}
-                    if status == "Cancelled":
-                        cur.execute("SAVEPOINT sold_check")
-                        sold = None
-                        try:
-                            cur.execute(
-                                """
-                                SELECT sale_id FROM sales
-                                WHERE online_order_id = %s AND LOWER(COALESCE(status, '')) = 'completed'
-                                LIMIT 1
-                                """,
-                                (order_id,),
+                    transitions = {
+                        "Pending": {"Processing", "Cancelled"},
+                        "Processing": {"Ready for Pickup", "Cancelled"},
+                        "Ready for Pickup": {"Completed", "Cancelled"},
+                    }
+                    if status not in transitions.get(previous, set()):
+                        return JSONResponse(
+                            {"success": False, "message": f"Order cannot move from {previous} to {status}."},
+                            status_code=409,
+                        )
+                    if status in {"Processing", "Ready for Pickup"}:
+                        cur.execute(
+                            """
+                            SELECT od.drug_id, od.prescription_id, dm.sale_class,
+                                   p.user_id AS prescription_user_id,
+                                   p.review_status, p.reviewed_drug_ids
+                            FROM order_details od
+                            JOIN drugs_master dm ON dm.drug_id = od.drug_id
+                            LEFT JOIN prescriptions p ON p.id = od.prescription_id
+                            WHERE od.order_id = %s
+                            """,
+                            (order_id,),
+                        )
+                        for line in cur.fetchall():
+                            if str(line.get("sale_class") or "rx").lower() != "rx":
+                                continue
+                            approved_ids = [int(value) for value in (line.get("reviewed_drug_ids") or [])]
+                            if (
+                                line.get("review_status") != "approved"
+                                or int(line.get("prescription_user_id") or 0) != int(row["customer_id"])
+                                or int(line["drug_id"]) not in approved_ids
+                            ):
+                                return JSONResponse(
+                                    {
+                                        "success": False,
+                                        "message": "This order contains a prescription medicine without a valid pharmacist approval.",
+                                    },
+                                    status_code=409,
+                                )
+                    if status == "Completed":
+                        cur.execute(
+                            """
+                            SELECT sale_id FROM sales
+                            WHERE online_order_id = %s
+                              AND LOWER(COALESCE(status, '')) = 'completed'
+                            LIMIT 1
+                            """,
+                            (order_id,),
+                        )
+                        if not cur.fetchone():
+                            return JSONResponse(
+                                {"success": False, "message": "Complete the pickup sale before closing this order."},
+                                status_code=409,
                             )
-                            sold = cur.fetchone()
-                        except Exception:
-                            cur.execute("ROLLBACK TO SAVEPOINT sold_check")
-                            sold = None
+                    if status == "Cancelled":
+                        cur.execute(
+                            """
+                            SELECT sale_id FROM sales
+                            WHERE online_order_id = %s
+                              AND LOWER(COALESCE(status, '')) = 'completed'
+                            LIMIT 1
+                            """,
+                            (order_id,),
+                        )
+                        sold = cur.fetchone()
                         if sold:
                             return {"success": False, "message": "This order was already sold. Completed sales stay as they are."}
-                        if previous in ("Pending", "Processing", "Ready for Pickup"):
-                            restore_order_stock(cur, order_id)
+                        restore_order_stock(cur, order_id)
                     cur.execute(
                         "UPDATE customer_orders SET order_status = %s, is_read = 0 WHERE order_id = %s",
                         (status, order_id),
@@ -1079,19 +1313,28 @@ async def create_sale(request: Request):
     if online_order_id:
         linked_order = fetch_one(
             """
-            SELECT payment_method, payment_status, payment_reference
+            SELECT customer_id, order_status, total_amount, payment_method, payment_status, payment_reference
             FROM customer_orders WHERE order_id = %s
             """,
             (online_order_id,),
         )
-        if linked_order:
-            order_method = str(linked_order.get("payment_method") or "").strip().lower()
-            if order_method in CASHIER_PAYMENT_KEYS:
-                payment_method = order_method
-            if order_method in ("gcash", "maya"):
-                payment_reference = str(linked_order.get("payment_reference") or payment_reference or "").strip() or None
-                cash_received = total_amount
-                change_amount = 0.0
+        if not linked_order:
+            return JSONResponse({"status": "error", "message": "Online order not found."}, status_code=404)
+        if linked_order.get("order_status") != "Ready for Pickup":
+            return JSONResponse(
+                {"status": "error", "message": "An online order must be ready for pickup before payment."},
+                status_code=409,
+            )
+        if customer_id is not None and int(linked_order["customer_id"]) != customer_id:
+            return JSONResponse({"status": "error", "message": "The selected customer does not match this order."}, status_code=409)
+        customer_id = int(linked_order["customer_id"])
+        order_method = str(linked_order.get("payment_method") or "").strip().lower()
+        if order_method in CASHIER_PAYMENT_KEYS:
+            payment_method = order_method
+        if order_method in ("gcash", "maya"):
+            payment_reference = str(linked_order.get("payment_reference") or payment_reference or "").strip() or None
+            cash_received = total_amount
+            change_amount = 0.0
 
     if payment_method not in CASHIER_PAYMENT_KEYS:
         return JSONResponse({"status": "error", "message": "Invalid payment method."}, status_code=400)
@@ -1129,6 +1372,57 @@ async def create_sale(request: Request):
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 affected = set()
+                if online_order_id:
+                    cur.execute(
+                        """
+                        SELECT customer_id, order_status
+                        FROM customer_orders
+                        WHERE order_id = %s
+                        FOR UPDATE
+                        """,
+                        (online_order_id,),
+                    )
+                    locked_order = cur.fetchone()
+                    if not locked_order or locked_order["order_status"] != "Ready for Pickup":
+                        raise ValueError("This online order is no longer ready for pickup.")
+                    if int(locked_order["customer_id"]) != customer_id:
+                        raise ValueError("The selected customer does not match this order.")
+                    cur.execute(
+                        """
+                        SELECT sale_id FROM sales
+                        WHERE online_order_id = %s
+                          AND LOWER(COALESCE(status, '')) = 'completed'
+                        LIMIT 1
+                        """,
+                        (online_order_id,),
+                    )
+                    if cur.fetchone():
+                        raise ValueError("This online order already has a completed pickup sale.")
+
+                    cur.execute(
+                        """
+                        SELECT lot_inventory_id, drug_id, SUM(quantity) AS quantity
+                        FROM order_details
+                        WHERE order_id = %s
+                        GROUP BY lot_inventory_id, drug_id
+                        """,
+                        (online_order_id,),
+                    )
+                    expected = {
+                        (int(row["lot_inventory_id"]), int(row["drug_id"])): int(row["quantity"])
+                        for row in cur.fetchall()
+                    }
+                    requested = {}
+                    for item in items:
+                        lot_id = int(item.get("lot_id") or 0)
+                        qty = int(item.get("qty") or 0)
+                        if lot_id <= 0 or qty <= 0:
+                            raise ValueError("Invalid item in the online order.")
+                        drug_id = drug_id_for_lot(cur, lot_id)
+                        key = (lot_id, drug_id)
+                        requested[key] = requested.get(key, 0) + qty
+                    if requested != expected:
+                        raise ValueError("The cart no longer matches this online order. Reload the order before payment.")
                 for item in items:
                     lot_id = int(item.get("lot_id") or 0)
                     qty = int(item.get("qty") or 0)

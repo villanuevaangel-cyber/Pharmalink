@@ -370,6 +370,10 @@
         if (overwrite || document.getElementById('new_minimum_stock')?.value === '20' || !document.getElementById('new_minimum_stock')?.value) {
             setVal('new_minimum_stock', String(drug.minimum_stock ?? 20));
         }
+        if (overwrite || document.getElementById('new_maximum_stock')?.value === '60' || !document.getElementById('new_maximum_stock')?.value) {
+            const minVal = Number(drug.minimum_stock ?? 20);
+            setVal('new_maximum_stock', String(drug.maximum_stock || Math.max(minVal * 3, minVal + 20)));
+        }
         const proc = String(drug.procurement_type || 'purchase').toLowerCase() === 'consignment' ? 'consignment' : 'purchase';
         const procEl = document.getElementById('new_procurement_type');
         if (procEl && (overwrite || !procEl.value)) procEl.value = proc;
@@ -428,6 +432,9 @@
         if (!payload.category) return 'Category is required.';
         const min = Number(payload.minimum_stock);
         if (!Number.isInteger(min) || min < 1 || min > 500) return 'Minimum stock must be a whole number from 1 to 500.';
+        const max = Number(payload.maximum_stock);
+        if (!Number.isInteger(max) || max < 2 || max > 5000) return 'Maximum stock must be a whole number from 2 to 5000.';
+        if (max <= min) return 'Maximum stock must be higher than the minimum stock.';
         if (payload.barcode && !/^[A-Za-z0-9\-._]{4,64}$/.test(payload.barcode)) return 'Barcode must be 4-64 letters, numbers, dash, dot, or underscore.';
         if (!payload.procurement_type || !['purchase', 'consignment'].includes(payload.procurement_type)) {
             return 'Choose Purchased or Consignment. It is not set automatically.';
@@ -595,6 +602,7 @@
                 <td>${escapeHtml(d.category)}${String(d.procurement_type || '') === 'consignment' ? ' <span class="inv-chip">Consignment</span>' : ''}</td>
                 <td><span class="inv-chip">${d.sale_class === 'otc' ? 'OTC' : 'Needs Rx'}</span></td>
                 <td>${d.minimum_stock}</td>
+                <td>${d.maximum_stock || '-'}</td>
                 <td>${formatCatalogPrice(d.selling_price)}</td>
                 <td class="inv-mono">${escapeHtml(d.barcode) || '-'}</td>
                 ${statusCell}

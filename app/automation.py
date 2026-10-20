@@ -27,6 +27,7 @@ LEAD_DAYS = 7
 TARGET_DAYS = 30
 OVERSTOCK_DAYS = 90
 SALES_WINDOW_DAYS = 30
+MAX_EOQ_ORDER_UNITS = 200
 
 _scheduler = None
 _last_run: dict = {}
@@ -43,6 +44,55 @@ def ensure_automation_schema(conn) -> None:
     with conn.cursor() as cur:
         cur.execute(
             """
+            ALTER TABLE prescriptions
+            ADD COLUMN IF NOT EXISTS review_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE prescriptions
+            ADD COLUMN IF NOT EXISTS review_note TEXT
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE prescriptions
+            ADD COLUMN IF NOT EXISTS reviewed_by INTEGER
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE prescriptions
+            ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE prescriptions
+            ADD COLUMN IF NOT EXISTS reviewed_drug_ids INTEGER[] NOT NULL DEFAULT '{}'
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE order_details
+            ADD COLUMN IF NOT EXISTS prescription_id INTEGER
+            """
+        )
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_order_details_prescription_id
+            ON order_details (prescription_id)
+            WHERE prescription_id IS NOT NULL
+            """
+        )
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_prescriptions_review_status
+            ON prescriptions (review_status, created_at DESC)
+            """
+        )
+        cur.execute(
+            """
             ALTER TABLE drugs_master
             ADD COLUMN IF NOT EXISTS procurement_type VARCHAR(20) NOT NULL DEFAULT 'purchase'
             """
@@ -57,6 +107,31 @@ def ensure_automation_schema(conn) -> None:
             """
             ALTER TABLE drugs_master
             ADD COLUMN IF NOT EXISTS cost_price NUMERIC(12,4)
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE drugs_master
+            ADD COLUMN IF NOT EXISTS maximum_stock INTEGER
+            """
+        )
+        cur.execute(
+            """
+            UPDATE drugs_master
+            SET maximum_stock = GREATEST(COALESCE(minimum_stock, 20) * 3, COALESCE(minimum_stock, 20) + 20)
+            WHERE maximum_stock IS NULL OR maximum_stock <= COALESCE(minimum_stock, 0)
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE sales
+            ADD COLUMN IF NOT EXISTS discount_id_type VARCHAR(20)
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE sales
+            ADD COLUMN IF NOT EXISTS discount_id_number VARCHAR(80)
             """
         )
         cur.execute(
@@ -658,6 +733,24 @@ def _prophet_units_by_drug(period: int = TARGET_DAYS) -> tuple[dict, str]:
     return demand, "prophet"
 
 
+EOQ_ORDER_COST = 50.0
+EOQ_HOLDING_RATE = 0.20
+
+
+def _eoq_units(annual_demand: float, unit_cost: float) -> int:
+    """Classic EOQ = sqrt(2DS/H). S is peso per order; H is 20% of unit cost per year."""
+    demand = max(0.0, float(annual_demand or 0))
+    if demand <= 0:
+        return 0
+    holding = max(float(unit_cost or 0) * EOQ_HOLDING_RATE, 1.0)
+    return max(1, int(math.ceil(math.sqrt((2.0 * demand * EOQ_ORDER_COST) / holding))))
+
+
+def _default_maximum(minimum: int) -> int:
+    minimum = max(1, int(minimum or 0))
+    return max(minimum * 3, minimum + 20)
+
+
 def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
     lead, target, overstock, window = LEAD_DAYS, TARGET_DAYS, OVERSTOCK_DAYS, SALES_WINDOW_DAYS
     if use_forecast:
@@ -670,7 +763,9 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             cur.execute(
                 f"""
                 SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
-                       d.minimum_stock, COALESCE(d.procurement_type, 'purchase') AS procurement_type,
+                       d.minimum_stock, COALESCE(d.maximum_stock, 0) AS maximum_stock,
+                       COALESCE(d.cost_price, 0) AS unit_cost,
+                       COALESCE(d.procurement_type, 'purchase') AS procurement_type,
                        COALESCE(stock.on_hand, 0) AS current_stock, COALESCE(recent.sold, 0) AS units_sold_30d,
                        recent_supplier.supplier_id AS suggested_supplier_id,
                        recent_supplier.supplier_name AS suggested_supplier_name,
@@ -759,15 +854,39 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
         else:
             signal = ""
         action, qty, reduce_qty, reasoning = "ok", 0, 0, ""
+        maximum = int(row["maximum_stock"] or 0)
+        if maximum <= minimum:
+            maximum = _default_maximum(minimum)
+        unit_cost = float(row.get("unit_cost") or 0)
+        annual_demand = avg * 365.0 if has_demand else 0.0
+        eoq = _eoq_units(annual_demand, unit_cost)
+        room = max(0, maximum - stock_for_order)
         below_minimum = minimum > 0 and stock_for_order <= minimum
-        if below_minimum or (has_demand and stock_for_order <= reorder_point):
-            action = "increase"
-            qty = max(1, int(math.ceil(target_stock - stock_for_order)))
-            counted = f" Unexpired stock is {current}."
+        at_or_above_max = maximum > 0 and stock_for_order >= maximum
+        if at_or_above_max:
+            action = "decrease"
+            qty = 0
+            reduce_qty = max(0, stock_for_order - maximum)
             reasoning = (
-                f"{signal}.{counted} Order {qty} to cover that forecast and still keep the minimum of {minimum}."
+                f"{signal}. Stock ({current}) is at or above the maximum ({maximum})"
+                + (f" - {reduce_qty} units can wait." if reduce_qty else ".")
+            )
+        elif below_minimum:
+            action = "increase"
+            qty = eoq if eoq > 0 else room
+            if room > 0:
+                qty = min(max(int(qty or 0), 1), room, MAX_EOQ_ORDER_UNITS)
+            else:
+                qty = min(max(int(qty or 0), 1), MAX_EOQ_ORDER_UNITS)
+            counted = f" Unexpired stock is {current} (min {minimum}, max {maximum})."
+            eoq_text = (
+                f" Default order is EOQ {eoq} piece(s), capped at {MAX_EOQ_ORDER_UNITS} "
+                "and so stock does not pass the maximum."
+            )
+            reasoning = (
+                f"{signal}.{counted}{eoq_text} Order {qty}."
                 if has_demand
-                else f"Stock counted for reorder is at or below minimum ({minimum}); no forecasted demand - minimum-buffer refill."
+                else f"{counted} No forecasted demand; fill toward the maximum. Order {qty}."
             )
         elif has_demand and days_of_stock is not None and days_of_stock > overstock:
             action = "decrease"
@@ -802,6 +921,8 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             "auto_po": auto_po,
             "current_stock": current,
             "minimum_stock": minimum,
+            "maximum_stock": maximum,
+            "eoq_qty": eoq,
             "avg_daily_sales": round(avg, 2),
             "forecast_units": int(round(predicted)) if predicted is not None else None,
             "demand_source": source,
@@ -829,6 +950,10 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             "overstock_days": overstock,
             "sales_window_days": window,
             "demand_model": demand_engine,
+            "order_qty_model": "eoq",
+            "max_eoq_order_units": MAX_EOQ_ORDER_UNITS,
+            "eoq_order_cost": EOQ_ORDER_COST,
+            "eoq_holding_rate": EOQ_HOLDING_RATE,
             "unexpired_stock_only": True,
         },
         "suggestions": suggestions,
@@ -922,6 +1047,70 @@ def create_purchase_orders_from_needs(needs, created_by: str, notes: str, raise_
     return {"created": created, "skipped": skipped}
 
 
+def _is_low_stock(current: int, minimum: int, status: str = "") -> bool:
+    """True when on-hand is at or below the minimum, including out of stock."""
+    st = str(status or "").lower()
+    if st in {"low", "out"}:
+        return True
+    if int(current or 0) <= 0:
+        return True
+    return int(minimum or 0) > 0 and int(current or 0) <= int(minimum or 0)
+
+
+def _drug_is_low_stock(drug_id: int) -> bool:
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT stock_status, COALESCE(minimum_stock, 0) AS minimum_stock,
+                       COALESCE((
+                           SELECT SUM(current_stock) FROM inventory_lots
+                           WHERE is_active = 1
+                             AND expiration_date >= CURRENT_DATE
+                             AND drug_id = dm.drug_id
+                       ), 0) AS on_hand
+                FROM drugs_master dm
+                WHERE dm.drug_id = %s AND dm.is_active = 1
+                """,
+                (int(drug_id),),
+            )
+            row = cur.fetchone()
+    if not row:
+        return False
+    return _is_low_stock(int(row["on_hand"] or 0), int(row["minimum_stock"] or 0), row.get("stock_status"))
+
+
+def _low_stock_drug_ids() -> set[int]:
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT dm.drug_id, dm.stock_status, COALESCE(dm.minimum_stock, 0) AS minimum_stock,
+                       COALESCE((
+                           SELECT SUM(current_stock) FROM inventory_lots
+                           WHERE is_active = 1
+                             AND expiration_date >= CURRENT_DATE
+                             AND drug_id = dm.drug_id
+                       ), 0) AS on_hand
+                FROM drugs_master dm
+                WHERE dm.is_active = 1
+                """
+            )
+            rows = cur.fetchall()
+    return {
+        int(row["drug_id"])
+        for row in rows
+        if _is_low_stock(int(row["on_hand"] or 0), int(row["minimum_stock"] or 0), row.get("stock_status"))
+    }
+
+
+def _auto_email_supplier(s: dict) -> bool:
+    return (
+        int(s.get("suggested_supplier_id") or 0) == _AUTO_EMAIL_SUPPLIER_ID
+        or str(s.get("suggested_supplier_email") or "").strip().lower() == _AUTO_EMAIL_SUPPLIER_EMAIL
+    )
+
+
 def create_auto_purchase_orders(drug_ids: set[int] | None = None, use_forecast: bool = True) -> dict:
     data = compute_reorder_suggestions(use_forecast=use_forecast)
     needs = [
@@ -930,15 +1119,14 @@ def create_auto_purchase_orders(drug_ids: set[int] | None = None, use_forecast: 
         if s["action"] == "increase"
         and s["suggested_qty"] > 0
         and s.get("auto_po", True)
-        and (
-            int(s.get("suggested_supplier_id") or 0) == _AUTO_EMAIL_SUPPLIER_ID
-            or str(s.get("suggested_supplier_email") or "").strip().lower() == _AUTO_EMAIL_SUPPLIER_EMAIL
-        )
+        and str(s.get("demand_source") or "") == "prophet"
+        and _is_low_stock(int(s.get("current_stock") or 0), int(s.get("minimum_stock") or 0))
+        and _auto_email_supplier(s)
     ]
     if drug_ids is not None:
         needs = [s for s in needs if int(s["drug_id"]) in drug_ids]
     notes = (
-        "This is an automatic order. PharmaLink prepared it from the Prophet 30-day sales forecast."
+        "This is an automatic order. PharmaLink prepared it from the Prophet 30-day sales forecast and EOQ, capped at maximum stock."
     )
     result = create_purchase_orders_from_needs(needs, "System", notes, raise_alerts=True)
     from app.routers.admin_ops import send_saved_purchase_order
@@ -1054,8 +1242,10 @@ async def _restock_in_request_threadpool() -> None:
 
 
 def schedule_auto_restock_check(drug_id: int | None = None) -> None:
-    """Email restock from the request threadpool so Gmail SMTP can connect."""
+    """Email restock only after low stock, using Prophet, from the request threadpool."""
     global _pending_all_drugs, _restock_task_scheduled
+    if drug_id is not None and not _drug_is_low_stock(int(drug_id)):
+        return
     with _restock_timer_lock:
         if drug_id is None:
             _pending_all_drugs = True
@@ -1184,8 +1374,8 @@ def run_hourly_jobs(send_email: bool = True) -> dict:
         result["email"] = email_alert_digest(stock_and_expiry_only=True)
     _last_run["hourly"] = {"at": datetime.now(MANILA).isoformat(), **result}
     logger.info("hourly jobs: %s", result)
-    if result.get("expired_lots"):
-        schedule_auto_restock_check()
+    for drug_id in _low_stock_drug_ids():
+        schedule_auto_restock_check(int(drug_id))
     return result
 
 

@@ -151,6 +151,7 @@ def validate_drug_fields(
     minimum_stock,
     brand_name: str = "",
     barcode: str = "",
+    maximum_stock=None,
 ) -> str | None:
     generic_name = (generic_name or "").strip()
     brand_name = (brand_name or "").strip()
@@ -183,6 +184,15 @@ def validate_drug_fields(
         return "Minimum stock must be a whole number."
     if min_stock < 1 or min_stock > 500:
         return "Minimum stock must be between 1 and 500."
+    if maximum_stock is not None:
+        try:
+            max_stock = int(maximum_stock)
+        except (TypeError, ValueError):
+            return "Maximum stock must be a whole number."
+        if max_stock < 2 or max_stock > 5000:
+            return "Maximum stock must be between 2 and 5000."
+        if max_stock <= min_stock:
+            return "Maximum stock must be higher than the minimum stock. This is the EOQ fill-up cap."
     if barcode and not BARCODE_RE.match(barcode):
         return "Barcode must be 4-64 characters (letters, numbers, dash, dot, underscore)."
     return None

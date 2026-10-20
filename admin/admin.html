@@ -45,6 +45,11 @@
         }
         .report-hub-card .hub-actions{ margin-top:auto; padding-top:12px; }
         .modal-header .rpt-export-row{ margin-top:0; }
+        .report-section-title{ margin:22px 0 4px; color:#1E3A34; font-size:18px; }
+        .report-section-hint{ margin:0 0 10px; color:#6b7280; font-size:13px; }
+        .existing-reports{ margin-top:22px; border:1px solid #e5e7eb; border-radius:12px; background:#fff; }
+        .existing-reports summary{ padding:14px 16px; color:#1E3A34; font-weight:700; cursor:pointer; }
+        .existing-reports[open] .report-hub{ margin:0; padding:0 14px 14px; }
         #forecast .forecast-controls{
             display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:22px; width:100%;
         }
@@ -556,6 +561,7 @@
                                     <th>Expiration Date</th>
                                     <th>Current Stock</th>
                                     <th>Minimum Stock</th>
+                                    <th>Maximum Stock</th>
                                     <th>Price</th>
                                     <th>Supplier</th>
                                     <th>Status</th>
@@ -605,7 +611,7 @@
                         <div class="um-card-head">
                             <div>
                                 <h3>Reorder Suggestions</h3>
-                                <p>Prophet forecast for the next 30 days. Select items, then create a purchase order.</p>
+                                <p>Reorder when stock hits the minimum. Default quantity is EOQ from the Prophet forecast, capped at maximum stock.</p>
                             </div>
                             <button type="button" id="createDraftPoBtn" class="action-btn" disabled>
                                 <i class="fas fa-file-invoice"></i> Create PO (<span id="draftPoSelectedCount">0</span>)
@@ -640,6 +646,8 @@
                                         <th>Type</th>
                                         <th>Stock</th>
                                         <th>Min</th>
+                                        <th>Max</th>
+                                        <th>EOQ</th>
                                         <th>Per day</th>
                                         <th>Days left</th>
                                         <th>Action</th>
@@ -1145,7 +1153,53 @@
         <p class="rpt-filename" id="rptFileName">No file selected</p>
         <p id="rptUploadMsg"></p>
     </div>
+    <h3 class="report-section-title">Comprehensive reports</h3>
+    <p class="report-section-hint">Operational reports requested for online orders, purchasing, customer activity, and supplier activity.</p>
     <div class="report-hub">
+        <div class="report-hub-card">
+            <h3><i class="fas fa-receipt"></i> Online orders</h3>
+            <span class="hub-value" style="color:#24544C;">Order activity</span>
+            <p class="hub-hint">Status, payment, items, and totals · last 30 days</p>
+            <div class="hub-actions">
+                <button type="button" class="rpt-btn navy" data-operations-report="orders"><i class="fas fa-list"></i> Open</button>
+                <button type="button" class="rpt-btn pdf" data-rpt-kind="orders" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button type="button" class="rpt-btn xlsx" data-rpt-kind="orders" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
+            </div>
+        </div>
+        <div class="report-hub-card">
+            <h3><i class="fas fa-truck-ramp-box"></i> Purchasing</h3>
+            <span class="hub-value" style="color:#24544C;">Purchase orders</span>
+            <p class="hub-hint">Supplier, quantities, receipts, and estimated cost</p>
+            <div class="hub-actions">
+                <button type="button" class="rpt-btn navy" data-operations-report="purchases"><i class="fas fa-list"></i> Open</button>
+                <button type="button" class="rpt-btn pdf" data-rpt-kind="purchases" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button type="button" class="rpt-btn xlsx" data-rpt-kind="purchases" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
+            </div>
+        </div>
+        <div class="report-hub-card">
+            <h3><i class="fas fa-users"></i> Customer activity</h3>
+            <span class="hub-value" style="color:#24544C;">Orders and spend</span>
+            <p class="hub-hint">Completed online and walk-in purchases</p>
+            <div class="hub-actions">
+                <button type="button" class="rpt-btn navy" data-operations-report="customers"><i class="fas fa-list"></i> Open</button>
+                <button type="button" class="rpt-btn pdf" data-rpt-kind="customers" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button type="button" class="rpt-btn xlsx" data-rpt-kind="customers" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
+            </div>
+        </div>
+        <div class="report-hub-card">
+            <h3><i class="fas fa-truck"></i> Supplier activity</h3>
+            <span class="hub-value" style="color:#24544C;">Purchasing by supplier</span>
+            <p class="hub-hint">Purchase-order volume and estimated cost</p>
+            <div class="hub-actions">
+                <button type="button" class="rpt-btn navy" data-operations-report="suppliers"><i class="fas fa-list"></i> Open</button>
+                <button type="button" class="rpt-btn pdf" data-rpt-kind="suppliers" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button type="button" class="rpt-btn xlsx" data-rpt-kind="suppliers" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
+            </div>
+        </div>
+    </div>
+    <details class="existing-reports">
+        <summary>Existing inventory and sales reports</summary>
+        <div class="report-hub">
         <div class="report-hub-card" title="Monthly consumption. Check this before a bulk order.">
             <h3><i class="fas fa-calendar-days"></i> Pieces sold each month</h3>
             <span class="hub-value" id="hub-consumption-total" style="color:#4BAA8B;">-</span>
@@ -1176,7 +1230,8 @@
                 <button type="button" class="rpt-btn xlsx" data-rpt-kind="capital" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
             </div>
         </div>
-    </div>
+        </div>
+    </details>
 </section>
 
 <div id="consumptionReportModal" class="modal">
@@ -1323,6 +1378,35 @@
     </div>
 </div>
 
+<div id="operationsReportModal" class="modal">
+    <div class="modal-content modal-wide">
+        <div class="modal-header">
+            <h2 id="operationsReportTitle">Operations report</h2>
+            <div class="rpt-export-row" style="margin:0 12px 0 auto;">
+                <button type="button" class="rpt-btn pdf" id="operationsReportPdf"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button type="button" class="rpt-btn xlsx" id="operationsReportExcel"><i class="fas fa-file-excel"></i> Excel</button>
+            </div>
+            <span class="close" data-close-report-modal="operationsReportModal">&times;</span>
+        </div>
+        <div class="cons-filters">
+            <label>From
+                <input type="date" id="operationsReportStart">
+            </label>
+            <label>To
+                <input type="date" id="operationsReportEnd">
+            </label>
+            <button type="button" class="rpt-btn navy" id="operationsReportApply">Apply</button>
+        </div>
+        <p id="operationsReportSummary" class="hub-hint" aria-live="polite">Loading report...</p>
+        <div class="table-wrap">
+            <table id="operationsReportTable">
+                <thead><tr></tr></thead>
+                <tbody><tr><td>Loading report...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <section id="maintenance" style="display:none;">
     <div class="dashboard-header">
         <h2>Maintenance</h2>
@@ -1431,6 +1515,7 @@
                         <th>Category</th>
                         <th>Type</th>
                         <th>Min Stock</th>
+                        <th>Max Stock</th>
                         <th>Price</th>
                         <th>Barcode</th>
                         <th>Status</th>
@@ -2494,6 +2579,71 @@
             openReportModal(id);
         });
     });
+    const operationsReportTitles = {
+        orders: 'Online orders',
+        purchases: 'Purchasing',
+        customers: 'Customer activity',
+        suppliers: 'Supplier activity'
+    };
+    let activeOperationsReport = '';
+    function reportEscape(value) {
+        const el = document.createElement('span');
+        el.textContent = value == null ? '' : String(value);
+        return el.innerHTML;
+    }
+    async function loadOperationsReport() {
+        const body = document.querySelector('#operationsReportTable tbody');
+        const head = document.querySelector('#operationsReportTable thead tr');
+        const summary = document.getElementById('operationsReportSummary');
+        if (!body || !head || !activeOperationsReport) return;
+        body.innerHTML = '<tr><td>Loading report...</td></tr>';
+        head.innerHTML = '';
+        if (summary) summary.textContent = 'Loading report...';
+        const url = new URL('/api/admin/reports/operations', window.location.origin);
+        url.searchParams.set('kind', activeOperationsReport);
+        url.searchParams.set('start', document.getElementById('operationsReportStart')?.value || '');
+        url.searchParams.set('end', document.getElementById('operationsReportEnd')?.value || '');
+        try {
+            const res = await fetch(url.toString(), { credentials: 'same-origin' });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.message || 'Could not load report.');
+            head.innerHTML = (data.columns || []).map((column) => `<th>${reportEscape(column.label)}</th>`).join('');
+            const rows = Array.isArray(data.rows) ? data.rows : [];
+            body.innerHTML = rows.length
+                ? rows.map((row) => `<tr>${data.columns.map((column) => `<td>${reportEscape(row[column.key])}</td>`).join('')}</tr>`).join('')
+                : `<tr><td colspan="${Math.max(1, data.columns.length)}">No records in this date range.</td></tr>`;
+            const totals = data.summary || {};
+            const totalText = totals.total_amount !== undefined
+                ? ` · Total sales ₱${Number(totals.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                : totals.total_spent !== undefined
+                    ? ` · Customer spend ₱${Number(totals.total_spent).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                    : totals.estimated_cost !== undefined
+                        ? ` · Estimated purchasing cost ₱${Number(totals.estimated_cost).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                        : '';
+            if (summary) summary.textContent = `${rows.length} record(s) · ${data.start_date} to ${data.end_date}${totalText}`;
+        } catch (err) {
+            console.error('Operations report load failed:', err);
+            body.innerHTML = '<tr><td>Failed to load this report. Please try again.</td></tr>';
+            if (summary) summary.textContent = err.message || 'Failed to load report.';
+        }
+    }
+    document.querySelectorAll('[data-operations-report]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            activeOperationsReport = btn.getAttribute('data-operations-report') || '';
+            const title = document.getElementById('operationsReportTitle');
+            if (title) title.textContent = operationsReportTitles[activeOperationsReport] || 'Operations report';
+            const modal = document.getElementById('operationsReportModal');
+            if (modal) modal.style.display = 'flex';
+            loadOperationsReport();
+        });
+    });
+    document.getElementById('operationsReportApply')?.addEventListener('click', loadOperationsReport);
+    document.getElementById('operationsReportPdf')?.addEventListener('click', () => {
+        if (activeOperationsReport) window.downloadAdminReport(activeOperationsReport, 'pdf');
+    });
+    document.getElementById('operationsReportExcel')?.addEventListener('click', () => {
+        if (activeOperationsReport) window.downloadAdminReport(activeOperationsReport, 'xlsx');
+    });
     document.querySelectorAll('[data-close-report-modal]').forEach(btn => {
         btn.addEventListener('click', () => closeReportModal(btn.getAttribute('data-close-report-modal')));
     });
@@ -2505,6 +2655,10 @@
         if (kind === 'consumption') {
             url.searchParams.set('start', document.getElementById('consumptionFrom')?.value || '');
             url.searchParams.set('end', document.getElementById('consumptionTo')?.value || '');
+        }
+        if (['orders', 'purchases', 'customers', 'suppliers'].includes(kind)) {
+            url.searchParams.set('start', document.getElementById('operationsReportStart')?.value || '');
+            url.searchParams.set('end', document.getElementById('operationsReportEnd')?.value || '');
         }
         try {
             const res = await fetch(url.toString(), { credentials: 'same-origin' });
@@ -4012,6 +4166,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="text" id="new_category_custom" placeholder="New category name" maxlength="60" style="display:none;margin-top:6px;">
                 <label for="new_minimum_stock">Minimum Stock Level:</label>
                 <input type="number" id="new_minimum_stock" min="1" max="500" step="1" value="20" required>
+                <label for="new_maximum_stock">Maximum Stock Level:</label>
+                <input type="number" id="new_maximum_stock" min="2" max="5000" step="1" value="60" required>
+                <p class="barcode-hint">Reorder at minimum. EOQ fills toward this maximum.</p>
                 <label for="new_sale_class">Type:</label>
                 <select id="new_sale_class" required>
                     <option value="otc">OTC</option>
@@ -4060,6 +4217,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="text" id="edit_category_custom" placeholder="New category name" maxlength="60" style="display:none;margin-top:6px;">
                 <label for="edit_minimum_stock">Minimum Stock Level:</label>
                 <input type="number" id="edit_minimum_stock" min="1" max="500" step="1" required>
+                <label for="edit_maximum_stock">Maximum Stock Level:</label>
+                <input type="number" id="edit_maximum_stock" min="2" max="5000" step="1" required>
+                <p class="barcode-hint">Reorder at minimum. EOQ fills toward this maximum.</p>
                 <label for="edit_sale_class">Type:</label>
                 <select id="edit_sale_class" required>
                     <option value="otc">OTC</option>
@@ -4244,7 +4404,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <script defer src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-    <script src="/admin/js/inventory.js?v=inv-open1"></script>
+    <script src="/admin/js/inventory.js?v=eoq-max1"></script>
     <script src="/admin/js/supplier.js?v=no-policy1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
