@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg2
 from fastapi import APIRouter, File, Request, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from psycopg2.extras import RealDictCursor
 
 from app.activity import actor_display_name, log_event, write_activity_log
@@ -427,6 +427,7 @@ def po_details(po_id: int, request: Request):
     for row in fetch_all(
         """
         SELECT poi.po_item_id, poi.drug_id, poi.quantity_ordered, poi.quantity_received, poi.unit_cost,
+               COALESCE(d.units_per_box, 1) AS units_per_box,
                d.generic_name, d.brand_name, d.dosage, d.form, d.category, d.barcode, d.cost_price AS catalog_cost
         FROM purchase_order_items poi JOIN drugs_master d ON poi.drug_id = d.drug_id
         WHERE poi.po_id = %s ORDER BY poi.po_item_id ASC
@@ -877,7 +878,13 @@ async def receive_delivery(request: Request):
     if not po_id:
         return {"success": False, "message": "Missing po_id."}
     po_items = {int(r["po_item_id"]): r for r in fetch_all(
-        "SELECT po_item_id, drug_id, quantity_ordered, quantity_received FROM purchase_order_items WHERE po_id = %s",
+        """
+        SELECT poi.po_item_id, poi.drug_id, poi.quantity_ordered, poi.quantity_received,
+               COALESCE(dm.units_per_box, 1) AS units_per_box
+        FROM purchase_order_items poi
+        JOIN drugs_master dm ON dm.drug_id = poi.drug_id
+        WHERE poi.po_id = %s
+        """,
         (po_id,),
     )}
     if not po_items:
@@ -897,12 +904,9 @@ async def receive_delivery(request: Request):
         if qty > remaining.get(po_item_id, 0):
             return {"success": False, "message": "Quantity cannot exceed the ordered amount still outstanding on this purchase order."}
         remaining[po_item_id] = remaining[po_item_id] - qty
-        try:
-            pcs_per_box = int(it.get("pieces_per_box") or 0)
-        except (TypeError, ValueError):
-            pcs_per_box = 0
+        pcs_per_box = max(1, int(po_items[po_item_id].get("units_per_box") or 1))
         if pcs_per_box < 1:
-            return {"success": False, "message": "Each received item needs pieces per box (at least 1)."}
+            return {"success": False, "message": "The catalog has an invalid pieces-per-box value for a received item."}
         lot_number = str(it.get("lot_number") or "").strip()
         expiration_date = it.get("expiration_date") or ""
         if not lot_number or not expiration_date:
@@ -1137,9 +1141,20 @@ def moving_items(request: Request):
             "name": f"{row['generic_name']}" + (f" ({row['brand_name']})" if row.get("brand_name") else ""),
             "qty_sold": int(row["qty_sold"] or 0),
         })
-    slow = []
-    for row in fetch_all(
-        """
+    slow = [
+        {
+            "name": f"{row['generic_name']}" + (f" ({row['brand_name']})" if row.get("brand_name") else ""),
+            "on_hand": int(row["on_hand"] or 0),
+            "recent_sold": int(row["recent_sold"] or 0),
+            "stock_status": row.get("stock_status") or "ok",
+        }
+        for row in _slow_moving_rows(limit=8)
+    ]
+    return {"fast_moving": fast, "slow_moving": slow}
+
+
+def _slow_moving_rows(limit: int | None = None):
+    query = """
         SELECT d.generic_name, d.brand_name, d.stock_status,
                COALESCE(SUM(il.current_stock), 0) AS on_hand, COALESCE(recent.sold, 0) AS recent_sold
         FROM drugs_master d
@@ -1153,16 +1168,13 @@ def moving_items(request: Request):
         WHERE d.is_active = 1
         GROUP BY d.drug_id, d.generic_name, d.brand_name, d.stock_status, recent.sold
         HAVING COALESCE(SUM(il.current_stock), 0) > 0 AND COALESCE(recent.sold, 0) <= 2
-        ORDER BY on_hand DESC, recent_sold ASC LIMIT 8
-        """
-    ):
-        slow.append({
-            "name": f"{row['generic_name']}" + (f" ({row['brand_name']})" if row.get("brand_name") else ""),
-            "on_hand": int(row["on_hand"] or 0),
-            "recent_sold": int(row["recent_sold"] or 0),
-            "stock_status": row.get("stock_status") or "ok",
-        })
-    return {"fast_moving": fast, "slow_moving": slow}
+        ORDER BY on_hand DESC, recent_sold ASC
+    """
+    params = ()
+    if limit is not None:
+        query += "\nLIMIT %s"
+        params = (max(1, int(limit)),)
+    return fetch_all(query, params)
 
 
 @router.get("/expiring")
@@ -1299,6 +1311,55 @@ async def create_pos_from_reorder(request: Request):
     if not require_admin(request):
         return _unauthorized()
     data = await request.json()
+    requested_items = data.get("items")
+    if requested_items is not None:
+        if not isinstance(requested_items, list) or not requested_items:
+            return JSONResponse({"success": False, "message": "Select at least one low-stock medicine."}, status_code=400)
+        suggestions = {
+            int(row["drug_id"]): row
+            for row in compute_reorder_suggestions().get("suggestions") or []
+        }
+        needs = []
+        seen_ids = set()
+        active_suppliers = {
+            int(row["supplier_id"])
+            for row in fetch_all("SELECT supplier_id FROM suppliers WHERE status = 'Active'")
+        }
+        for selected in requested_items:
+            try:
+                drug_id = int(selected.get("drug_id") or 0)
+                supplier_id = int(selected.get("supplier_id") or 0)
+                quantity_ordered = int(selected.get("quantity_ordered") or 0)
+            except (AttributeError, TypeError, ValueError):
+                return JSONResponse({"success": False, "message": "Invalid medicine, supplier, or order quantity."}, status_code=400)
+            row = suggestions.get(drug_id)
+            if not row or row.get("action") != "increase" or int(row.get("suggested_qty") or 0) <= 0:
+                return JSONResponse({"success": False, "message": f"Medicine #{drug_id} no longer needs reorder. Refresh the list."}, status_code=409)
+            if drug_id in seen_ids:
+                return JSONResponse({"success": False, "message": "A medicine can only be added once per purchase order."}, status_code=400)
+            if supplier_id not in active_suppliers:
+                return JSONResponse({"success": False, "message": "Choose an active supplier for every medicine."}, status_code=400)
+            if quantity_ordered < 1 or quantity_ordered > 100000:
+                return JSONResponse({"success": False, "message": "Order quantity must be between 1 and 100,000 boxes."}, status_code=400)
+            seen_ids.add(drug_id)
+            needs.append({
+                **row,
+                "suggested_supplier_id": supplier_id,
+                "suggested_qty": quantity_ordered,
+            })
+        result = create_purchase_orders_from_needs(
+            needs,
+            actor_display_name(request, fallback="Admin"),
+            "Created from low-stock Purchase Orders. Quantity is in boxes; review details before receiving.",
+            raise_alerts=False,
+        )
+        if result["skipped"] and not result["created"]:
+            return JSONResponse(
+                {"success": False, "message": "No purchase orders were created.", "skipped": result["skipped"]},
+                status_code=409,
+            )
+        return {"success": True, "created": result["created"], "skipped": result["skipped"]}
+
     try:
         drug_ids = [int(x) for x in (data.get("drug_ids") or [])]
     except (TypeError, ValueError):
@@ -1898,6 +1959,15 @@ def _match_inventory_drug(row, by_id, by_generic, by_brand):
 
 
 OPERATIONS_REPORT_COLUMNS = {
+    "sales": [
+        ("transaction_id", "Transaction"),
+        ("date_created", "Date"),
+        ("cashier", "Cashier"),
+        ("payment_method", "Payment"),
+        ("item_count", "Items"),
+        ("units", "Units sold"),
+        ("total_amount", "Total (PHP)"),
+    ],
     "orders": [
         ("order_id", "Order ID"),
         ("customer_name", "Customer"),
@@ -1939,6 +2009,13 @@ OPERATIONS_REPORT_COLUMNS = {
         ("quantity_ordered", "Units ordered"),
         ("quantity_received", "Units received"),
         ("estimated_cost", "Estimated cost (PHP)"),
+    ],
+    "slow_moving": [
+        ("generic_name", "Medicine"),
+        ("brand_name", "Brand"),
+        ("on_hand", "Stock on hand"),
+        ("recent_sold", "Units sold (90 days)"),
+        ("stock_status", "Stock status"),
     ],
 }
 
@@ -1985,6 +2062,33 @@ def operations_report(request: Request, kind: str = "", start: str = "", end: st
             "total_amount": round(sum(float(row.get("total_amount") or 0) for row in rows), 2),
         }
         title = "Online orders"
+    elif kind == "sales":
+        raw_rows = fetch_all(
+            """
+            SELECT s.transaction_id, s.date_created,
+                   COALESCE(u.username, 'Unknown') AS cashier,
+                   COALESCE(s.payment_method, '') AS payment_method,
+                   COUNT(DISTINCT si.drug_id) AS item_count,
+                   COALESCE(SUM(si.quantity), 0) AS units,
+                   s.total_amount
+            FROM sales s
+            LEFT JOIN users u ON u.user_id = s.user_id
+            LEFT JOIN sales_items si ON si.sale_id = s.sale_id
+            WHERE LOWER(COALESCE(s.status, '')) = 'completed'
+              AND s.date_created >= %s::date
+              AND s.date_created < (%s::date + INTERVAL '1 day')
+            GROUP BY s.sale_id, u.username
+            ORDER BY s.date_created DESC, s.sale_id DESC
+            LIMIT 5000
+            """,
+            params,
+        )
+        rows = [_row(row) for row in raw_rows]
+        summary = {
+            "records": len(rows),
+            "total_amount": round(sum(float(row.get("total_amount") or 0) for row in rows), 2),
+        }
+        title = "Sales"
     elif kind == "purchases":
         raw_rows = fetch_all(
             """
@@ -2012,6 +2116,25 @@ def operations_report(request: Request, kind: str = "", start: str = "", end: st
             "estimated_cost": round(sum(float(row.get("estimated_cost") or 0) for row in rows), 2),
         }
         title = "Purchasing"
+    elif kind == "slow_moving":
+        raw_rows = _slow_moving_rows(limit=5000)
+        rows = [
+            {
+                "generic_name": row.get("generic_name") or "",
+                "brand_name": row.get("brand_name") or "",
+                "on_hand": int(row.get("on_hand") or 0),
+                "recent_sold": int(row.get("recent_sold") or 0),
+                "stock_status": row.get("stock_status") or "ok",
+            }
+            for row in raw_rows
+        ]
+        summary = {
+            "records": len(rows),
+            "units_on_hand": sum(row["on_hand"] for row in rows),
+            "period_days": 90,
+            "sales_threshold": 2,
+        }
+        title = "Slow-moving medicines"
     elif kind == "customers":
         raw_rows = fetch_all(
             """
@@ -2359,12 +2482,17 @@ def export_report(request: Request, kind: str = "", format: str = "xlsx", period
             for row in data.get("rows") or []
         ]
         title = data["title"]
-        filename = f"{kind}-{data['start_date']}-to-{data['end_date']}"
+        filename = (
+            "slow-moving-medicines-90d"
+            if kind == "slow_moving"
+            else f"{kind}-{data['start_date']}-to-{data['end_date']}"
+        )
     else:
         return {"success": False, "message": "Unknown report type."}
 
     kind_label = {
         "forecast": "Sales forecast",
+        "sales": "Sales",
         "consumption": "Monthly consumption",
         "procurement": "Procurement cost",
         "capital": "Medicine capital at risk",
@@ -2372,6 +2500,7 @@ def export_report(request: Request, kind: str = "", format: str = "xlsx", period
         "purchases": "Purchasing",
         "customers": "Customer activity",
         "suppliers": "Supplier activity",
+        "slow_moving": "Slow-moving medicines",
     }.get(kind, title)
     log_event("Generate Report", f"Generated the {kind_label} report as {fmt.upper()}.", request=request)
 

@@ -51,6 +51,18 @@ def ensure_automation_schema(conn) -> None:
         cur.execute(
             """
             ALTER TABLE prescriptions
+            ADD COLUMN IF NOT EXISTS id_filename VARCHAR(255)
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE prescriptions
+            ADD COLUMN IF NOT EXISTS identity_verified BOOLEAN NOT NULL DEFAULT FALSE
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE prescriptions
             ADD COLUMN IF NOT EXISTS review_note TEXT
             """
         )
@@ -113,6 +125,12 @@ def ensure_automation_schema(conn) -> None:
             """
             ALTER TABLE drugs_master
             ADD COLUMN IF NOT EXISTS maximum_stock INTEGER
+            """
+        )
+        cur.execute(
+            """
+            ALTER TABLE drugs_master
+            ADD COLUMN IF NOT EXISTS units_per_box INTEGER NOT NULL DEFAULT 1
             """
         )
         cur.execute(
@@ -764,6 +782,7 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
                 f"""
                 SELECT d.drug_id, d.generic_name, d.brand_name, d.dosage, d.form, d.category,
                        d.minimum_stock, COALESCE(d.maximum_stock, 0) AS maximum_stock,
+                       COALESCE(d.units_per_box, 1) AS units_per_box,
                        COALESCE(d.cost_price, 0) AS unit_cost,
                        COALESCE(d.procurement_type, 'purchase') AS procurement_type,
                        COALESCE(stock.on_hand, 0) AS current_stock, COALESCE(recent.sold, 0) AS units_sold_30d,
@@ -922,6 +941,7 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             "current_stock": current,
             "minimum_stock": minimum,
             "maximum_stock": maximum,
+            "units_per_box": max(1, int(row.get("units_per_box") or 1)),
             "eoq_qty": eoq,
             "avg_daily_sales": round(avg, 2),
             "forecast_units": int(round(predicted)) if predicted is not None else None,

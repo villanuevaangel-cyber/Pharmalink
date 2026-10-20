@@ -276,6 +276,7 @@
             <div class="nav-item active" data-target="dashboard"><i class="fas fa-home"></i><span>Dashboard</span></div>
             <div class="nav-item" data-target="inventory"><i class="fas fa-boxes"></i><span>Inventory</span></div>
             <div class="nav-item" data-target="supplier-section"><i class="fas fa-truck"></i><span>Supplier</span></div>
+            <div class="nav-item" data-target="purchase-orders"><i class="fas fa-file-invoice"></i><span>Purchase Orders</span></div>
             <div class="nav-item" data-target="deliveries"><i class="fas fa-truck-loading"></i><span>Deliveries</span></div>
             <div class="nav-item" data-target="forecast"><i class="fas fa-chart-line"></i><span>Forecast</span></div>
             <div class="nav-item" data-target="reports"><i class="fas fa-file-alt"></i><span>Reports</span></div>
@@ -613,9 +614,6 @@
                                 <h3>Reorder Suggestions</h3>
                                 <p>Reorder when stock hits the minimum. Default quantity is EOQ from the Prophet forecast, capped at maximum stock.</p>
                             </div>
-                            <button type="button" id="createDraftPoBtn" class="action-btn" disabled>
-                                <i class="fas fa-file-invoice"></i> Create PO (<span id="draftPoSelectedCount">0</span>)
-                            </button>
                         </div>
                         <div style="display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
                             <div class="card" data-reorder-filter="increase" style="flex:1; min-width:160px; padding:12px; border-radius:8px; background:#fff; cursor:pointer;">
@@ -640,7 +638,6 @@
                             <table id="reorderSuggestionsTable">
                                 <thead>
                                     <tr>
-                                        <th style="width:34px;"><input type="checkbox" id="reorderSelectAll" title="Select the rows on this page"></th>
                                         <th>Drug</th>
                                         <th>Category</th>
                                         <th>Type</th>
@@ -655,7 +652,7 @@
                                         <th>Note</th>
                                     </tr>
                                 </thead>
-                                <tbody id="reorderSuggestionsBody"><tr><td colspan="11" class="inv-empty">Loading...</td></tr></tbody>
+                                <tbody id="reorderSuggestionsBody"><tr><td colspan="12" class="inv-empty">Loading...</td></tr></tbody>
                             </table>
                         </div>
                         <div class="um-pagination ph-pagination" id="reorderPager" style="display:none;">
@@ -962,6 +959,35 @@
     </div>
 </section>
 
+<section id="purchase-orders" style="display:none;">
+    <div class="dashboard-header">
+        <h2>Purchase Orders</h2>
+        <p>Low-stock medicines with recommended order quantities. Choose a supplier for each item before creating the purchase order.</p>
+    </div>
+    <div class="table-wrap">
+        <table id="purchasePlannerTable">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="purchasePlannerSelectAll" aria-label="Select all low-stock medicines"></th>
+                    <th>Medicine</th>
+                    <th>Current qty (pcs)</th>
+                    <th>Needed stock (pcs)</th>
+                    <th>Predicted qty (pcs)</th>
+                    <th>Pcs / box</th>
+                    <th>Supplier</th>
+                </tr>
+            </thead>
+            <tbody id="purchasePlannerBody">
+                <tr><td colspan="7" style="text-align:center;padding:16px;">Open this module to load low-stock medicines.</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:14px;">
+        <span id="purchasePlannerSelection">0 selected</span>
+        <button type="button" id="createSelectedPurchaseOrders" class="action-btn" disabled><i class="fas fa-file-circle-plus"></i> Create purchase orders</button>
+    </div>
+</section>
+
 <section id="deliveries" style="display:none;">
     <div class="dashboard-header">
         <h2>Deliveries from Suppliers</h2>
@@ -979,7 +1005,6 @@
                 <option value="">All</option>
             </select>
         </div>
-        <button type="button" id="createPoBtn"><i class="fas fa-plus"></i> Create Purchase Order</button>
     </div>
 
     <div class="table-wrap">
@@ -999,56 +1024,6 @@
         </table>
     </div>
 </section>
-
-<!-- Create Purchase Order Modal -->
-<div id="createPoModal" class="modal" style="z-index:2600;">
-    <div class="modal-content" style="width:min(760px, 96vw);">
-        <div class="modal-header">
-            <h2 id="createPoTitle"><i class="fas fa-file-invoice"></i> Create Purchase Order</h2>
-            <span class="close" id="closeCreatePoModal">&times;</span>
-        </div>
-
-        <div id="createPoFormPane">
-        <div class="form-group">
-            <label for="po_supplier">Supplier:</label>
-            <select id="po_supplier"></select>
-        </div>
-
-        <div style="display:flex; gap:10px;">
-            <div class="form-group" style="flex:1;">
-                <label for="po_order_date">Order Date:</label>
-                <input type="date" id="po_order_date">
-            </div>
-            <div class="form-group" style="flex:1;">
-                <label for="po_expected_date">Expected Date (optional):</label>
-                <input type="date" id="po_expected_date">
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label for="po_notes">Notes (optional):</label>
-            <textarea id="po_notes" rows="2"></textarea>
-        </div>
-
-        <div class="form-group">
-            <label>Items:</label>
-            <div id="poItemsContainer" style="max-height:240px;overflow-y:auto;border:1.5px solid var(--ph-border);border-radius:var(--ph-radius-sm);padding:10px;margin-bottom:8px;"></div>
-            <button type="button" id="addPoItemRowBtn" class="action-btn" style="background:var(--ph-surface-2);color:var(--ph-text-soft);"><i class="fas fa-plus"></i> Add Item</button>
-        </div>
-
-        <button type="button" id="submitPoBtn" style="width:100%;"><i class="fas fa-envelope"></i> Review email</button>
-        </div>
-
-        <div id="createPoPreviewPane" hidden>
-            <p id="poEmailMissing" class="po-email-missing" hidden>This supplier has no email. Add it on the supplier record.</p>
-            <div id="poEmailPreview" class="po-email-preview"></div>
-            <div class="po-email-actions">
-                <button type="button" id="poEmailBack" class="po-email-back">Back</button>
-                <button type="button" id="poEmailConfirm"><i class="fas fa-paper-plane"></i> Confirm and send</button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- View / Receive Purchase Order Modal -->
 <div id="viewPoModal" class="modal">
@@ -1154,8 +1129,18 @@
         <p id="rptUploadMsg"></p>
     </div>
     <h3 class="report-section-title">Comprehensive reports</h3>
-    <p class="report-section-hint">Operational reports requested for online orders, purchasing, customer activity, and supplier activity.</p>
+    <p class="report-section-hint">Operational reports for completed sales, online orders, purchasing, customer activity, supplier activity, and slow-moving stock.</p>
     <div class="report-hub">
+        <div class="report-hub-card">
+            <h3><i class="fas fa-cash-register"></i> Sales</h3>
+            <span class="hub-value" style="color:#24544C;">Completed POS sales</span>
+            <p class="hub-hint">Filter transactions by date and export the results</p>
+            <div class="hub-actions">
+                <button type="button" class="rpt-btn navy" data-operations-report="sales"><i class="fas fa-list"></i> Open</button>
+                <button type="button" class="rpt-btn pdf" data-rpt-kind="sales" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button type="button" class="rpt-btn xlsx" data-rpt-kind="sales" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
+            </div>
+        </div>
         <div class="report-hub-card">
             <h3><i class="fas fa-receipt"></i> Online orders</h3>
             <span class="hub-value" style="color:#24544C;">Order activity</span>
@@ -1194,6 +1179,16 @@
                 <button type="button" class="rpt-btn navy" data-operations-report="suppliers"><i class="fas fa-list"></i> Open</button>
                 <button type="button" class="rpt-btn pdf" data-rpt-kind="suppliers" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
                 <button type="button" class="rpt-btn xlsx" data-rpt-kind="suppliers" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
+            </div>
+        </div>
+        <div class="report-hub-card">
+            <h3><i class="fas fa-hourglass-half"></i> Slow-moving medicines</h3>
+            <span class="hub-value" style="color:#24544C;">Inventory movement</span>
+            <p class="hub-hint">In-stock medicines with 2 or fewer units sold in the last 90 days</p>
+            <div class="hub-actions">
+                <button type="button" class="rpt-btn navy" data-operations-report="slow_moving"><i class="fas fa-list"></i> Open</button>
+                <button type="button" class="rpt-btn pdf" data-rpt-kind="slow_moving" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button type="button" class="rpt-btn xlsx" data-rpt-kind="slow_moving" data-rpt-format="xlsx"><i class="fas fa-file-excel"></i> Excel</button>
             </div>
         </div>
     </div>
@@ -1516,6 +1511,7 @@
                         <th>Type</th>
                         <th>Min Stock</th>
                         <th>Max Stock</th>
+                        <th>Pcs / Box</th>
                         <th>Price</th>
                         <th>Barcode</th>
                         <th>Status</th>
@@ -2580,10 +2576,12 @@
         });
     });
     const operationsReportTitles = {
+        sales: 'Sales',
         orders: 'Online orders',
         purchases: 'Purchasing',
         customers: 'Customer activity',
-        suppliers: 'Supplier activity'
+        suppliers: 'Supplier activity',
+        slow_moving: 'Slow-moving medicines'
     };
     let activeOperationsReport = '';
     function reportEscape(value) {
@@ -2595,7 +2593,9 @@
         const body = document.querySelector('#operationsReportTable tbody');
         const head = document.querySelector('#operationsReportTable thead tr');
         const summary = document.getElementById('operationsReportSummary');
+        const filters = document.querySelector('#operationsReportModal .cons-filters');
         if (!body || !head || !activeOperationsReport) return;
+        if (filters) filters.style.display = activeOperationsReport === 'slow_moving' ? 'none' : '';
         body.innerHTML = '<tr><td>Loading report...</td></tr>';
         head.innerHTML = '';
         if (summary) summary.textContent = 'Loading report...';
@@ -2609,9 +2609,12 @@
             if (!res.ok || !data.success) throw new Error(data.message || 'Could not load report.');
             head.innerHTML = (data.columns || []).map((column) => `<th>${reportEscape(column.label)}</th>`).join('');
             const rows = Array.isArray(data.rows) ? data.rows : [];
+            const emptyMessage = activeOperationsReport === 'slow_moving'
+                ? 'No slow-moving medicines found.'
+                : 'No records in this date range.';
             body.innerHTML = rows.length
                 ? rows.map((row) => `<tr>${data.columns.map((column) => `<td>${reportEscape(row[column.key])}</td>`).join('')}</tr>`).join('')
-                : `<tr><td colspan="${Math.max(1, data.columns.length)}">No records in this date range.</td></tr>`;
+                : `<tr><td colspan="${Math.max(1, data.columns.length)}">${emptyMessage}</td></tr>`;
             const totals = data.summary || {};
             const totalText = totals.total_amount !== undefined
                 ? ` · Total sales ₱${Number(totals.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
@@ -2620,7 +2623,11 @@
                     : totals.estimated_cost !== undefined
                         ? ` · Estimated purchasing cost ₱${Number(totals.estimated_cost).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
                         : '';
-            if (summary) summary.textContent = `${rows.length} record(s) · ${data.start_date} to ${data.end_date}${totalText}`;
+            if (summary) {
+                summary.textContent = activeOperationsReport === 'slow_moving'
+                    ? `${rows.length} medicine(s) · ${Number(totals.units_on_hand || 0).toLocaleString()} units on hand · 2 or fewer units sold in the last 90 days`
+                    : `${rows.length} record(s) · ${data.start_date} to ${data.end_date}${totalText}`;
+            }
         } catch (err) {
             console.error('Operations report load failed:', err);
             body.innerHTML = '<tr><td>Failed to load this report. Please try again.</td></tr>';
@@ -2656,7 +2663,7 @@
             url.searchParams.set('start', document.getElementById('consumptionFrom')?.value || '');
             url.searchParams.set('end', document.getElementById('consumptionTo')?.value || '');
         }
-        if (['orders', 'purchases', 'customers', 'suppliers'].includes(kind)) {
+        if (['sales', 'orders', 'purchases', 'customers', 'suppliers'].includes(kind)) {
             url.searchParams.set('start', document.getElementById('operationsReportStart')?.value || '');
             url.searchParams.set('end', document.getElementById('operationsReportEnd')?.value || '');
         }
@@ -2778,7 +2785,7 @@
         if (!body) return;
         const allRows = reorderFilter === 'all' ? reorderData : reorderData.filter(r => r.action === reorderFilter);
         if (!allRows.length) {
-            body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:#4BAA8B;padding:15px;"><i class="fas fa-circle-check"></i> Nothing here right now.</td></tr>`;
+            body.innerHTML = `<tr><td colspan="12" style="text-align:center;color:#4BAA8B;padding:15px;"><i class="fas fa-circle-check"></i> Nothing here right now.</td></tr>`;
             updateReorderPager(0, 0);
             updateDraftPoButtonState();
             return;
@@ -2806,22 +2813,18 @@
                 actionBadge = `<span class="reorder-action-badge is-ok">Enough</span>`;
                 note = 'Stock is enough.';
             }
-            // Only "needs reorder" rows are selectable for a draft PO -
-            // overstocked/sufficient rows have nothing to order.
-            const checkboxCell = r.action === 'increase' && r.auto_po !== false
-                ? `<input type="checkbox" class="reorder-select-cb" data-drug-id="${r.drug_id}" ${reorderSelectedIds.has(r.drug_id) ? 'checked' : ''}>`
-                : '';
             const supplierText = r.suggested_supplier_name
                 ? r.suggested_supplier_name
                 : (r.action === 'increase' ? '<span style="color:#9ca3af;">No supplier</span>' : '-');
             return `
             <tr>
-                <td>${checkboxCell}</td>
                 <td>${label}</td>
                 <td>${r.category}</td>
                 <td>${r.procurement_type === 'consignment' ? 'Consignment' : 'Purchase'}</td>
                 <td>${r.current_stock}</td>
                 <td>${r.minimum_stock}</td>
+                <td>${r.maximum_stock}</td>
+                <td>${r.eoq_qty}</td>
                 <td>${r.avg_daily_sales}</td>
                 <td>${daysText}</td>
                 <td class="reorder-action-cell">${actionBadge}</td>
@@ -2830,15 +2833,6 @@
             </tr>`;
         }).join('');
 
-        body.querySelectorAll('.reorder-select-cb').forEach(cb => {
-            cb.addEventListener('change', () => {
-                const drugId = parseInt(cb.dataset.drugId, 10);
-                if (cb.checked) reorderSelectedIds.add(drugId);
-                else reorderSelectedIds.delete(drugId);
-                updateDraftPoButtonState();
-            });
-        });
-        updateDraftPoButtonState();
     }
 
     function updateReorderPager(page, totalPages) {
@@ -3584,8 +3578,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <td>${po.item_count} item(s) - ${po.quantity_received_total}/${po.quantity_ordered_total}</td>
                             <td><span class="status ${statusClass}">${escapeHtmlPo(po.status)}</span></td>
                             <td>
-                                <button type="button" class="view-po-btn action-btn" data-po-id="${po.po_id}"><i class="fas fa-eye"></i> View / Receive</button>
-                                ${po.status === 'Pending' ? `<button type="button" class="email-po-btn action-btn" data-po-id="${po.po_id}"><i class="fas fa-envelope"></i> Email supplier</button>` : ''}
+                                <button type="button" class="view-po-btn action-btn" data-po-id="${po.po_id}"><i class="fas fa-truck-loading"></i> ${po.status === 'Received' ? 'View delivery' : 'Receive delivery'}</button>
                             </td>
                         </tr>`;
                 }).join('');
@@ -3595,14 +3588,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (body) body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--ph-danger);padding:15px;">Failed to load purchase orders: ${escapeHtmlPo(err.message)}.</td></tr>`;
             });
     }
+    window.loadPurchaseOrders = loadPurchaseOrders;
 
     document.getElementById('poStatusFilter')?.addEventListener('change', loadPurchaseOrders);
 
     document.getElementById('poBody')?.addEventListener('click', e => {
         const viewBtn = e.target.closest('.view-po-btn');
         if (viewBtn) openViewPoModal(parseInt(viewBtn.dataset.poId, 10));
-        const emailBtn = e.target.closest('.email-po-btn');
-        if (emailBtn) openSavedPoEmail(parseInt(emailBtn.dataset.poId, 10));
     });
 
     // ---------- Create Purchase Order modal ----------
@@ -3993,7 +3985,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </div>
                                 <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(110px, 1fr));gap:8px;">
                                     <div><label style="${labelStyle}">Quantity</label><input type="number" class="recv-qty" min="1" max="${it.quantity_outstanding}" step="1" value="${Math.max(it.quantity_outstanding, 0)}" ${done ? 'disabled' : ''}></div>
-                                    <div><label style="${labelStyle}">Pcs / box</label><input type="number" class="recv-pcs" min="1" step="1" placeholder="e.g. 100" ${done ? 'disabled' : ''}></div>
+                                    <div><label style="${labelStyle}">Pcs / box</label><input type="number" class="recv-pcs" min="1" step="1" value="${Math.max(1, Number(it.units_per_box) || 1)}" readonly tabindex="-1" ${done ? 'disabled' : ''}></div>
                                     <div><label style="${labelStyle}">Lot #</label><input type="text" class="recv-lot" placeholder="Lot #" ${done ? 'disabled' : ''}></div>
                                     <div><label style="${labelStyle}">Expiration</label><input type="date" class="recv-exp" min="${manilaTodayYmd()}" ${done ? 'disabled' : ''}></div>
                                     <div><label style="${labelStyle}">Cost / box</label><input type="number" class="recv-cost" min="0" step="0.01" placeholder="Cost per box" value="" ${done ? 'disabled' : ''}></div>
@@ -4022,6 +4014,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const modal = document.getElementById('viewPoModal');
                 if (modal) modal.style.display = 'flex';
+                const receiveButton = document.getElementById('submitReceiveBtn');
+                if (receiveButton) {
+                    const isReceived = po.status === 'Received';
+                    receiveButton.disabled = isReceived;
+                    receiveButton.innerHTML = isReceived
+                        ? '<i class="fas fa-circle-check"></i> Fully received'
+                        : '<i class="fas fa-truck-ramp-box"></i> Receive This Delivery';
+                }
             })
             .catch(err => alert('Error loading purchase order: ' + err.message));
     }
@@ -4169,6 +4169,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <label for="new_maximum_stock">Maximum Stock Level:</label>
                 <input type="number" id="new_maximum_stock" min="2" max="5000" step="1" value="60" required>
                 <p class="barcode-hint">Reorder at minimum. EOQ fills toward this maximum.</p>
+                <label for="new_units_per_box">Pieces per Box:</label>
+                <input type="number" id="new_units_per_box" min="1" max="100000" step="1" value="1" required>
                 <label for="new_sale_class">Type:</label>
                 <select id="new_sale_class" required>
                     <option value="otc">OTC</option>
@@ -4220,6 +4222,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <label for="edit_maximum_stock">Maximum Stock Level:</label>
                 <input type="number" id="edit_maximum_stock" min="2" max="5000" step="1" required>
                 <p class="barcode-hint">Reorder at minimum. EOQ fills toward this maximum.</p>
+                <label for="edit_units_per_box">Pieces per Box:</label>
+                <input type="number" id="edit_units_per_box" min="1" max="100000" step="1" required>
                 <label for="edit_sale_class">Type:</label>
                 <select id="edit_sale_class" required>
                     <option value="otc">OTC</option>
@@ -5997,5 +6001,148 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
 });
 </script>
 <script src="/assets/theme.js?v=load1"></script>
+<script>
+(() => {
+    const body = document.getElementById('purchasePlannerBody');
+    const selectAll = document.getElementById('purchasePlannerSelectAll');
+    const createButton = document.getElementById('createSelectedPurchaseOrders');
+    const selectionLabel = document.getElementById('purchasePlannerSelection');
+
+    function escapePlanner(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[char]));
+    }
+
+    function plannerSelectionChanged() {
+        if (!body || !createButton) return;
+        const rows = Array.from(body.querySelectorAll('.purchase-planner-row'));
+        const selected = rows.filter((row) => row.querySelector('.purchase-planner-select')?.checked);
+        const valid = selected.length > 0 && selected.every((row) => {
+            const supplier = row.querySelector('.purchase-planner-supplier')?.value;
+            const quantity = Number(row.querySelector('.purchase-planner-qty')?.value);
+            return supplier && Number.isInteger(quantity) && quantity > 0;
+        });
+        createButton.disabled = !valid;
+        if (selectionLabel) selectionLabel.textContent = `${selected.length} selected`;
+        if (selectAll) selectAll.checked = rows.length > 0 && selected.length === rows.length;
+    }
+
+    async function loadPurchasePlanner() {
+        if (!body) return;
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:16px;">Loading low-stock medicines...</td></tr>';
+        try {
+            const [suggestionResponse, supplierResponse] = await Promise.all([
+                fetch('/api/admin/reorder-suggestions', { credentials: 'same-origin' }),
+                fetch('/api/admin/suppliers', { credentials: 'same-origin' }),
+            ]);
+            if (!suggestionResponse.ok || !supplierResponse.ok) throw new Error('Could not load low-stock medicines or suppliers.');
+            const [suggestionData, supplierData] = await Promise.all([
+                suggestionResponse.json(),
+                supplierResponse.json(),
+            ]);
+            const suppliers = (Array.isArray(supplierData) ? supplierData : [])
+                .filter((supplier) => String(supplier.status || '').toLowerCase() === 'active')
+                .sort((a, b) => String(a.supplier_name || '').localeCompare(String(b.supplier_name || '')));
+            const suggestions = (suggestionData.suggestions || [])
+                .filter((item) => item.action === 'increase' && item.auto_po !== false);
+            if (!suggestions.length) {
+                body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:16px;">No medicines currently need reordering.</td></tr>';
+                plannerSelectionChanged();
+                return;
+            }
+            const supplierOptions = (selectedId) => '<option value="">Choose supplier</option>' + suppliers.map((supplier) =>
+                `<option value="${Number(supplier.supplier_id)}"${Number(supplier.supplier_id) === Number(selectedId) ? ' selected' : ''}>${escapePlanner(supplier.supplier_name)}</option>`
+            ).join('');
+            body.innerHTML = suggestions.map((item) => {
+                const pcsPerBox = Math.max(1, Number(item.units_per_box) || 1);
+                const quantity = Math.max(1, Number(item.suggested_qty) || 1);
+                const boxes = Math.ceil(quantity / pcsPerBox);
+                const label = `${escapePlanner(item.generic_name)}${item.brand_name ? ` (${escapePlanner(item.brand_name)})` : ''} - ${escapePlanner(item.dosage)} ${escapePlanner(item.form)}`;
+                return `<tr class="purchase-planner-row" data-drug-id="${Number(item.drug_id)}" data-pcs-per-box="${pcsPerBox}">
+                    <td><input type="checkbox" class="purchase-planner-select" aria-label="Select ${label}"></td>
+                    <td>${label}</td>
+                    <td>${Number(item.current_stock || 0).toLocaleString()}</td>
+                    <td>${Math.max(0, Number(item.minimum_stock || 0) - Number(item.current_stock || 0)).toLocaleString()} <span style="color:var(--ph-text-faint);">to min ${Number(item.minimum_stock || 0).toLocaleString()}</span></td>
+                    <td><input type="number" class="purchase-planner-qty" min="1" max="100000" step="1" value="${quantity}" aria-label="Predicted purchase quantity in pieces"><small class="purchase-planner-boxes">${boxes} box${boxes === 1 ? '' : 'es'}</small></td>
+                    <td>${pcsPerBox}</td>
+                    <td><select class="purchase-planner-supplier" aria-label="Supplier for ${label}">${supplierOptions(item.suggested_supplier_id)}</select></td>
+                </tr>`;
+            }).join('');
+            plannerSelectionChanged();
+        } catch (error) {
+            console.error('Purchase planner load failed:', error);
+            body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--ph-danger);padding:16px;">${escapePlanner(error.message || 'Failed to load purchase suggestions.')}</td></tr>`;
+        }
+    }
+
+    if (body) {
+        body.addEventListener('change', plannerSelectionChanged);
+        body.addEventListener('input', (event) => {
+            const quantityInput = event.target.closest('.purchase-planner-qty');
+            if (quantityInput) {
+                const row = quantityInput.closest('.purchase-planner-row');
+                const pcsPerBox = Number(row?.dataset.pcsPerBox) || 1;
+                const quantity = Math.max(0, Number(quantityInput.value) || 0);
+                const boxes = Math.ceil(quantity / pcsPerBox);
+                const label = row?.querySelector('.purchase-planner-boxes');
+                if (label) label.textContent = `${boxes} box${boxes === 1 ? '' : 'es'}`;
+            }
+            plannerSelectionChanged();
+        });
+    }
+    selectAll?.addEventListener('change', () => {
+        body?.querySelectorAll('.purchase-planner-select').forEach((checkbox) => { checkbox.checked = selectAll.checked; });
+        plannerSelectionChanged();
+    });
+    createButton?.addEventListener('click', async () => {
+        const rows = Array.from(body?.querySelectorAll('.purchase-planner-row') || [])
+            .filter((row) => row.querySelector('.purchase-planner-select')?.checked);
+        const items = rows.map((row) => {
+            const pcsPerBox = Number(row.dataset.pcsPerBox) || 1;
+            const predictedPieces = Number(row.querySelector('.purchase-planner-qty')?.value) || 0;
+            return {
+                drug_id: Number(row.dataset.drugId),
+                supplier_id: Number(row.querySelector('.purchase-planner-supplier')?.value),
+                quantity_ordered: Math.ceil(predictedPieces / pcsPerBox),
+            };
+        });
+        if (!items.length || items.some((item) => !item.supplier_id || item.quantity_ordered < 1)) {
+            alert('Select at least one medicine, a supplier, and a valid predicted quantity.');
+            return;
+        }
+        createButton.disabled = true;
+        try {
+            const response = await fetch('/api/admin/reorder-suggestions/create-pos', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || 'Could not create purchase orders.');
+            const created = result.created || [];
+            const skipped = result.skipped || [];
+            let message = created.length
+                ? `Created ${created.map((po) => `${po.po_number} (${po.supplier_name}, ${po.item_count} item(s))`).join(', ')}.`
+                : 'No purchase orders were created.';
+            if (skipped.length) message += `\nSkipped: ${skipped.map((item) => `${item.name}: ${item.reason}`).join('; ')}`;
+            alert(message);
+            if (typeof window.loadPurchaseOrders === 'function') window.loadPurchaseOrders();
+            await loadPurchasePlanner();
+        } catch (error) {
+            alert(error.message || 'Could not create purchase orders.');
+        } finally {
+            plannerSelectionChanged();
+        }
+    });
+    document.querySelector('.nav-item[data-target="purchase-orders"]')?.addEventListener('click', loadPurchasePlanner);
+    document.addEventListener('DOMContentLoaded', () => {
+        const section = document.getElementById('purchase-orders');
+        if (section && section.style.display !== 'none') loadPurchasePlanner();
+    });
+})();
+</script>
+
 </body>
 </html>

@@ -374,6 +374,9 @@
             const minVal = Number(drug.minimum_stock ?? 20);
             setVal('new_maximum_stock', String(drug.maximum_stock || Math.max(minVal * 3, minVal + 20)));
         }
+        if (overwrite || document.getElementById('new_units_per_box')?.value === '1' || !document.getElementById('new_units_per_box')?.value) {
+            setVal('new_units_per_box', String(drug.units_per_box || 1));
+        }
         const proc = String(drug.procurement_type || 'purchase').toLowerCase() === 'consignment' ? 'consignment' : 'purchase';
         const procEl = document.getElementById('new_procurement_type');
         if (procEl && (overwrite || !procEl.value)) procEl.value = proc;
@@ -435,6 +438,8 @@
         const max = Number(payload.maximum_stock);
         if (!Number.isInteger(max) || max < 2 || max > 5000) return 'Maximum stock must be a whole number from 2 to 5000.';
         if (max <= min) return 'Maximum stock must be higher than the minimum stock.';
+        const unitsPerBox = Number(payload.units_per_box);
+        if (!Number.isInteger(unitsPerBox) || unitsPerBox < 1 || unitsPerBox > 100000) return 'Pieces per box must be a whole number from 1 to 100,000.';
         if (payload.barcode && !/^[A-Za-z0-9\-._]{4,64}$/.test(payload.barcode)) return 'Barcode must be 4-64 letters, numbers, dash, dot, or underscore.';
         if (!payload.procurement_type || !['purchase', 'consignment'].includes(payload.procurement_type)) {
             return 'Choose Purchased or Consignment. It is not set automatically.';
@@ -603,6 +608,7 @@
                 <td><span class="inv-chip">${d.sale_class === 'otc' ? 'OTC' : 'Needs Rx'}</span></td>
                 <td>${d.minimum_stock}</td>
                 <td>${d.maximum_stock || '-'}</td>
+                <td>${d.units_per_box || 1}</td>
                 <td>${formatCatalogPrice(d.selling_price)}</td>
                 <td class="inv-mono">${escapeHtml(d.barcode) || '-'}</td>
                 ${statusCell}
@@ -854,6 +860,8 @@
         fillCategorySelect(document.getElementById('edit_category'), drug.category || '');
         toggleCustomField('edit_category', 'edit_category_custom', '__new__');
         document.getElementById('edit_minimum_stock').value = drug.minimum_stock;
+        document.getElementById('edit_maximum_stock').value = drug.maximum_stock || Math.max(Number(drug.minimum_stock) * 3, Number(drug.minimum_stock) + 20);
+        document.getElementById('edit_units_per_box').value = drug.units_per_box || 1;
         const procEl = document.getElementById('edit_procurement_type');
         if (procEl) procEl.value = drug.procurement_type === 'consignment' ? 'consignment' : 'purchase';
         const saleEl = document.getElementById('edit_sale_class');
@@ -872,6 +880,8 @@
             form: pickedForm('new'),
             category: pickedCategory('new'),
             minimum_stock: parseInt(document.getElementById('new_minimum_stock').value, 10),
+            maximum_stock: parseInt(document.getElementById('new_maximum_stock').value, 10),
+            units_per_box: parseInt(document.getElementById('new_units_per_box').value, 10),
             procurement_type: document.getElementById('new_procurement_type')?.value || '',
             sale_class: document.getElementById('new_sale_class')?.value || '',
             barcode: (document.getElementById('new_barcode')?.value || '').trim(),
@@ -908,6 +918,8 @@
             form: pickedForm('edit'),
             category: pickedCategory('edit'),
             minimum_stock: parseInt(document.getElementById('edit_minimum_stock').value, 10),
+            maximum_stock: parseInt(document.getElementById('edit_maximum_stock').value, 10),
+            units_per_box: parseInt(document.getElementById('edit_units_per_box').value, 10),
             procurement_type: document.getElementById('edit_procurement_type')?.value || '',
             sale_class: document.getElementById('edit_sale_class')?.value || '',
             barcode: (document.getElementById('edit_barcode')?.value || '').trim(),

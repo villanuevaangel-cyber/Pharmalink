@@ -391,6 +391,12 @@
             </div>
             <p id="pharmacistRxCustomer"></p>
             <a id="pharmacistRxFile" href="#" target="_blank" rel="noopener noreferrer">Open uploaded prescription</a>
+            <p style="margin-top:12px;"><a id="pharmacistRxIdFile" href="#" target="_blank" rel="noopener noreferrer" hidden>Open government-issued ID</a></p>
+            <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;">
+              <input type="checkbox" id="pharmacistRxIdVerified">
+              <span>I verified the customer ID and checked the prescription document.</span>
+            </label>
+            <p class="muted">ID verification is required before approving a prescription.</p>
             <h4>Matched prescription medicines</h4>
             <div id="pharmacistRxMatches"></div>
             <label for="pharmacistRxDrugSearch" style="display:block;margin-top:12px;">Add a medicine after checking the uploaded prescription</label>
@@ -746,7 +752,7 @@
 
 <script src="/assets/profile-validate.js?v=pv4"></script>
 <script src="/cashier/js/cashier-boot.js?v=role-lock1"></script>
-<script src="/cashier/js/prescriptions.js?v=review1"></script>
+<script src="/cashier/js/prescriptions.js?v=review-id1"></script>
 <script>window.SEGMENTATION_MANAGE = false;</script>
 <script src="/shared/js/segmentation.js?v=plain2"></script>
 <script>

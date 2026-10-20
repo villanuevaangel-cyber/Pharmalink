@@ -78,6 +78,8 @@ CREATE TABLE drugs_master (
   form varchar(50) NOT NULL,
   category varchar(100) DEFAULT NULL,
   minimum_stock INTEGER DEFAULT 0,
+  maximum_stock INTEGER,
+  units_per_box INTEGER NOT NULL DEFAULT 1,
   stock_status VARCHAR(50) NOT NULL DEFAULT 'ok',
   is_active SMALLINT NOT NULL DEFAULT 1
 );
@@ -167,6 +169,8 @@ CREATE TABLE prescriptions (
   id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   filename varchar(255) NOT NULL,
+  id_filename varchar(255) DEFAULT NULL,
+  identity_verified BOOLEAN NOT NULL DEFAULT FALSE,
   extracted_text text DEFAULT NULL,
   created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   availability_summary TEXT DEFAULT NULL,

@@ -68,6 +68,8 @@
         const title = document.getElementById('pharmacistRxTitle');
         const customer = document.getElementById('pharmacistRxCustomer');
         const file = document.getElementById('pharmacistRxFile');
+        const idFile = document.getElementById('pharmacistRxIdFile');
+        const idVerified = document.getElementById('pharmacistRxIdVerified');
         const text = document.getElementById('pharmacistRxText');
         const note = document.getElementById('pharmacistRxNote');
         const approve = document.getElementById('approvePharmacistRx');
@@ -79,6 +81,14 @@
         if (file) {
             file.href = rx.file_url || '#';
             file.hidden = !rx.file_url;
+        }
+        if (idFile) {
+            idFile.href = rx.id_file_url || '#';
+            idFile.hidden = !rx.id_file_url;
+        }
+        if (idVerified) {
+            idVerified.checked = false;
+            idVerified.disabled = !rx.id_file_url;
         }
         if (text) text.textContent = rx.extracted_text || 'No readable OCR text. The pharmacist must review the uploaded file manually.';
         if (note) note.value = rx.review_note || '';
@@ -167,6 +177,11 @@
             if (message) message.textContent = 'Add a reason before rejecting this prescription.';
             return;
         }
+        const idVerified = document.getElementById('pharmacistRxIdVerified')?.checked === true;
+        if (decision === 'approved' && !idVerified) {
+            if (message) message.textContent = 'Verify the customer ID and prescription document before approval.';
+            return;
+        }
         const buttons = [
             document.getElementById('approvePharmacistRx'),
             document.getElementById('rejectPharmacistRx')
@@ -178,7 +193,7 @@
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ decision, note, drug_ids: drugIds })
+                body: JSON.stringify({ decision, note, drug_ids: drugIds, id_verified: idVerified })
             });
             const data = await response.json();
             if (!response.ok || !data.success) throw new Error(data.message || 'Could not save review.');
