@@ -874,7 +874,10 @@ async def receive_delivery(request: Request):
     if not require_admin(request):
         return _unauthorized()
     data = await request.json()
-    po_id = int(data.get("po_id") or 0)
+    try:
+        po_id = int(data.get("po_id") or 0)
+    except (TypeError, ValueError):
+        return {"success": False, "message": "Purchase order ID must be a whole number."}
     if not po_id:
         return {"success": False, "message": "Missing po_id."}
     po_items = {int(r["po_item_id"]): r for r in fetch_all(
@@ -894,19 +897,22 @@ async def receive_delivery(request: Request):
         for pid, row in po_items.items()
     }
     to_receive = []
-    for it in data.get("items") or []:
-        po_item_id = int(it.get("po_item_id") or 0)
-        qty = int(it.get("quantity_received") or 0)
+    requested_items = data.get("items") or []
+    if not isinstance(requested_items, list):
+        return {"success": False, "message": "Received items must be provided as a list."}
+    for it in requested_items:
+        if not isinstance(it, dict):
+            return {"success": False, "message": "Each received item must be a valid object."}
+        try:
+            po_item_id = int(it.get("po_item_id") or 0)
+            qty = int(it.get("quantity_received") or 0)
+        except (TypeError, ValueError):
+            return {"success": False, "message": "Medicine and received quantity must be whole numbers."}
         if qty <= 0 or po_item_id not in po_items:
             continue
-        if qty < 1:
-            return {"success": False, "message": "Quantity must be at least 1."}
         if qty > remaining.get(po_item_id, 0):
             return {"success": False, "message": "Quantity cannot exceed the ordered amount still outstanding on this purchase order."}
         remaining[po_item_id] = remaining[po_item_id] - qty
-        pcs_per_box = max(1, int(po_items[po_item_id].get("units_per_box") or 1))
-        if pcs_per_box < 1:
-            return {"success": False, "message": "The catalog has an invalid pieces-per-box value for a received item."}
         lot_number = str(it.get("lot_number") or "").strip()
         expiration_date = it.get("expiration_date") or ""
         if not lot_number or not expiration_date:
@@ -916,19 +922,20 @@ async def receive_delivery(request: Request):
             return {"success": False, "message": "Each received item needs a valid expiration date."}
         if exp < _manila_today():
             return {"success": False, "message": "Expiration date cannot be in the past."}
-        cost_box = float(it["cost_price"]) if it.get("cost_price") not in (None, "") else None
-        if cost_box is None or cost_box <= 0:
+        try:
+            cost_box = float(it["cost_price"]) if it.get("cost_price") not in (None, "") else None
+        except (TypeError, ValueError):
+            return {"success": False, "message": "Cost per box must be a positive number."}
+        if cost_box is None or not math.isfinite(cost_box) or cost_box <= 0:
             return {"success": False, "message": "Each received item needs a cost per box. Selling price per piece is computed from markup."}
-        cost_piece = round(cost_box / pcs_per_box, 4)
         to_receive.append({
             "po_item_id": po_item_id,
             "drug_id": int(po_items[po_item_id]["drug_id"]),
             "lot_number": lot_number,
             "expiration_date": expiration_date,
             "quantity_received": qty,
-            "stock_qty": qty * pcs_per_box,
+            "cost_box": cost_box,
             "price": 0,
-            "cost_price": cost_piece,
         })
     if not to_receive:
         return {"success": False, "message": "Please enter at least one item with a quantity, lot number, and expiration date."}
@@ -942,6 +949,95 @@ async def receive_delivery(request: Request):
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT status FROM purchase_orders WHERE po_id = %s FOR UPDATE",
+                    (po_id,),
+                )
+                purchase_order = cur.fetchone()
+                if not purchase_order or purchase_order["status"] not in {"Pending", "Partially Received"}:
+                    return {"success": False, "message": "This purchase order is no longer available for receiving."}
+                receive_item_ids = sorted({item["po_item_id"] for item in to_receive})
+                cur.execute(
+                    """
+                    SELECT po_item_id, quantity_ordered, quantity_received
+                    FROM purchase_order_items
+                    WHERE po_id = %s AND po_item_id = ANY(%s)
+                    ORDER BY po_item_id
+                    FOR UPDATE
+                    """,
+                    (po_id, receive_item_ids),
+                )
+                locked_items = {
+                    int(row["po_item_id"]): row
+                    for row in cur.fetchall()
+                }
+                locked_remaining = {
+                    item_id: max(
+                        0,
+                        int(row["quantity_ordered"] or 0)
+                        - int(row["quantity_received"] or 0),
+                    )
+                    for item_id, row in locked_items.items()
+                }
+                for item in to_receive:
+                    item_id = item["po_item_id"]
+                    if item_id not in locked_remaining:
+                        return {"success": False, "message": "A selected item is no longer on this purchase order."}
+                    if item["quantity_received"] > locked_remaining[item_id]:
+                        return {
+                            "success": False,
+                            "message": "Quantity cannot exceed the ordered amount still outstanding on this purchase order.",
+                        }
+                    locked_remaining[item_id] -= item["quantity_received"]
+                for drug_id in sorted({item["drug_id"] for item in to_receive}):
+                    cur.execute(
+                        """
+                        SELECT minimum_stock, COALESCE(maximum_stock, 0) AS maximum_stock,
+                               COALESCE(units_per_box, 1) AS units_per_box
+                        FROM drugs_master
+                        WHERE drug_id = %s AND is_active = 1
+                        FOR UPDATE
+                        """,
+                        (drug_id,),
+                    )
+                    drug = cur.fetchone()
+                    if not drug:
+                        return {"success": False, "message": f"Medicine #{drug_id} is inactive or no longer exists."}
+                    cur.execute(
+                        """
+                        SELECT COALESCE(SUM(current_stock), 0) AS on_hand
+                        FROM inventory_lots
+                        WHERE drug_id = %s AND is_active = 1
+                          AND expiration_date >= CURRENT_DATE
+                        """,
+                        (drug_id,),
+                    )
+                    current_stock = int(cur.fetchone()["on_hand"] or 0)
+                    minimum_stock = int(drug["minimum_stock"] or 0)
+                    maximum_stock = int(drug["maximum_stock"] or 0)
+                    if maximum_stock <= minimum_stock:
+                        maximum_stock = max(minimum_stock * 3, minimum_stock + 20)
+                    units_per_box = max(1, int(drug["units_per_box"] or 1))
+                    received_boxes = sum(
+                        item["quantity_received"]
+                        for item in to_receive
+                        if item["drug_id"] == drug_id
+                    )
+                    projected_stock = current_stock + received_boxes * units_per_box
+                    if projected_stock > maximum_stock:
+                        return {
+                            "success": False,
+                            "message": (
+                                f"Receiving this delivery would raise medicine #{drug_id} stock to "
+                                f"{projected_stock}, above its maximum of {maximum_stock}. "
+                                "Update the PO or maximum-stock level before receiving."
+                            ),
+                        }
+                    for item in to_receive:
+                        if item["drug_id"] != drug_id:
+                            continue
+                        item["stock_qty"] = item["quantity_received"] * units_per_box
+                        item["cost_price"] = round(item["cost_box"] / units_per_box, 4)
                 delivery_id = next_id(cur, "deliveries", "delivery_id")
                 cur.execute(
                     "INSERT INTO deliveries (delivery_id, po_id, delivery_date, received_by, reference_number, notes) VALUES (%s, %s, %s, %s, %s, %s)",
@@ -1329,28 +1425,43 @@ async def create_pos_from_reorder(request: Request):
             try:
                 drug_id = int(selected.get("drug_id") or 0)
                 supplier_id = int(selected.get("supplier_id") or 0)
-                quantity_ordered = int(selected.get("quantity_ordered") or 0)
+                quantity_pieces = int(selected.get("quantity_pieces") or 0)
             except (AttributeError, TypeError, ValueError):
                 return JSONResponse({"success": False, "message": "Invalid medicine, supplier, or order quantity."}, status_code=400)
             row = suggestions.get(drug_id)
-            if not row or row.get("action") != "increase" or int(row.get("suggested_qty") or 0) <= 0:
+            if not row or row.get("action") != "increase" or int(row.get("max_order_qty") or 0) <= 0:
                 return JSONResponse({"success": False, "message": f"Medicine #{drug_id} no longer needs reorder. Refresh the list."}, status_code=409)
             if drug_id in seen_ids:
                 return JSONResponse({"success": False, "message": "A medicine can only be added once per purchase order."}, status_code=400)
             if supplier_id not in active_suppliers:
                 return JSONResponse({"success": False, "message": "Choose an active supplier for every medicine."}, status_code=400)
-            if quantity_ordered < 1 or quantity_ordered > 100000:
-                return JSONResponse({"success": False, "message": "Order quantity must be between 1 and 100,000 boxes."}, status_code=400)
+            units_per_box = max(1, int(row.get("units_per_box") or 1))
+            max_order_qty = int(row.get("max_order_qty") or 0)
+            if (
+                quantity_pieces < units_per_box
+                or quantity_pieces > max_order_qty
+                or quantity_pieces % units_per_box != 0
+            ):
+                return JSONResponse(
+                    {
+                        "success": False,
+                        "message": (
+                            f"Order quantity must be whole boxes, no more than {max_order_qty} pieces, "
+                            "and within the 200-piece and maximum-stock limits."
+                        ),
+                    },
+                    status_code=400,
+                )
             seen_ids.add(drug_id)
             needs.append({
                 **row,
                 "suggested_supplier_id": supplier_id,
-                "suggested_qty": quantity_ordered,
+                "suggested_qty": quantity_pieces,
             })
         result = create_purchase_orders_from_needs(
             needs,
             actor_display_name(request, fallback="Admin"),
-            "Created from low-stock Purchase Orders. Quantity is in boxes; review details before receiving.",
+            "Created from low-stock Purchase Orders. Order quantities are limited to 200 pieces and catalog maximum stock.",
             raise_alerts=False,
         )
         if result["skipped"] and not result["created"]:

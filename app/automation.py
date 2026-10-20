@@ -769,6 +769,13 @@ def _default_maximum(minimum: int) -> int:
     return max(minimum * 3, minimum + 20)
 
 
+def _max_order_boxes(maximum_stock: int, current_stock: int, units_per_box: int) -> int:
+    """Whole boxes allowed by the stock ceiling and the 200-piece order cap."""
+    room = max(0, int(maximum_stock) - int(current_stock))
+    pack_size = max(1, int(units_per_box or 1))
+    return min(room, MAX_EOQ_ORDER_UNITS) // pack_size
+
+
 def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
     lead, target, overstock, window = LEAD_DAYS, TARGET_DAYS, OVERSTOCK_DAYS, SALES_WINDOW_DAYS
     if use_forecast:
@@ -876,10 +883,13 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
         maximum = int(row["maximum_stock"] or 0)
         if maximum <= minimum:
             maximum = _default_maximum(minimum)
+        units_per_box = max(1, int(row.get("units_per_box") or 1))
         unit_cost = float(row.get("unit_cost") or 0)
         annual_demand = avg * 365.0 if has_demand else 0.0
         eoq = _eoq_units(annual_demand, unit_cost)
         room = max(0, maximum - stock_for_order)
+        max_order_boxes = _max_order_boxes(maximum, stock_for_order, units_per_box)
+        max_order_qty = max_order_boxes * units_per_box
         below_minimum = minimum > 0 and stock_for_order <= minimum
         at_or_above_max = maximum > 0 and stock_for_order >= maximum
         if at_or_above_max:
@@ -892,21 +902,24 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             )
         elif below_minimum:
             action = "increase"
-            qty = eoq if eoq > 0 else room
-            if room > 0:
-                qty = min(max(int(qty or 0), 1), room, MAX_EOQ_ORDER_UNITS)
-            else:
-                qty = min(max(int(qty or 0), 1), MAX_EOQ_ORDER_UNITS)
+            requested_qty = eoq if eoq > 0 else room
+            qty = min(max(0, int(requested_qty or 0)), max_order_qty)
+            qty = (qty // units_per_box) * units_per_box
             counted = f" Unexpired stock is {current} (min {minimum}, max {maximum})."
             eoq_text = (
                 f" Default order is EOQ {eoq} piece(s), capped at {MAX_EOQ_ORDER_UNITS} "
-                "and so stock does not pass the maximum."
+                "and adjusted to whole boxes so stock does not pass the maximum."
             )
             reasoning = (
                 f"{signal}.{counted}{eoq_text} Order {qty}."
                 if has_demand
                 else f"{counted} No forecasted demand; fill toward the maximum. Order {qty}."
             )
+            if qty == 0:
+                reasoning += (
+                    f" No full box fits under the {MAX_EOQ_ORDER_UNITS}-piece order cap "
+                    "and maximum-stock level; review the package size or maximum stock."
+                )
         elif has_demand and days_of_stock is not None and days_of_stock > overstock:
             action = "decrease"
             qty = 0
@@ -941,7 +954,9 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             "current_stock": current,
             "minimum_stock": minimum,
             "maximum_stock": maximum,
-            "units_per_box": max(1, int(row.get("units_per_box") or 1)),
+            "units_per_box": units_per_box,
+            "max_order_qty": max_order_qty,
+            "suggested_box_qty": qty // units_per_box,
             "eoq_qty": eoq,
             "avg_daily_sales": round(avg, 2),
             "forecast_units": int(round(predicted)) if predicted is not None else None,
@@ -996,17 +1011,67 @@ def create_purchase_orders_from_needs(needs, created_by: str, notes: str, raise_
                 """
             )
             open_drugs = {int(r["drug_id"]) for r in cur.fetchall()}
+            drug_ids = list({int(item["drug_id"]) for item in needs if item.get("drug_id")})
+            cur.execute(
+                """
+                SELECT d.drug_id, d.minimum_stock,
+                       COALESCE(d.maximum_stock, 0) AS maximum_stock,
+                       COALESCE(d.units_per_box, 1) AS units_per_box,
+                       COALESCE(stock.on_hand, 0) AS current_stock
+                FROM drugs_master d
+                LEFT JOIN (
+                    SELECT drug_id, SUM(current_stock) AS on_hand
+                    FROM inventory_lots
+                    WHERE is_active = 1 AND expiration_date >= CURRENT_DATE
+                    GROUP BY drug_id
+                ) stock ON stock.drug_id = d.drug_id
+                WHERE d.drug_id = ANY(%s) AND d.is_active = 1
+                """,
+                (drug_ids,),
+            )
+            stock_by_drug = {int(row["drug_id"]): row for row in cur.fetchall()}
             by_supplier = {}
             for item in needs:
                 label = item.get("generic_name") or f"Drug #{item.get('drug_id')}"
                 if item["drug_id"] in open_drugs:
                     skipped.append({"name": label, "reason": "already on an open PO"})
                     continue
+                stock = stock_by_drug.get(int(item["drug_id"]))
+                if not stock:
+                    skipped.append({"name": label, "reason": "medicine is inactive or no longer exists"})
+                    continue
                 sid = item.get("suggested_supplier_id")
                 if not sid:
                     skipped.append({"name": label, "reason": "no suggested supplier"})
                     continue
-                by_supplier.setdefault(int(sid), []).append(item)
+                minimum = int(stock["minimum_stock"] or 0)
+                maximum = int(stock["maximum_stock"] or 0)
+                if maximum <= minimum:
+                    maximum = _default_maximum(minimum)
+                units_per_box = max(1, int(stock["units_per_box"] or 1))
+                max_boxes = _max_order_boxes(
+                    maximum,
+                    int(stock["current_stock"] or 0),
+                    units_per_box,
+                )
+                requested_pieces = int(item.get("suggested_qty") or 0)
+                if (
+                    requested_pieces < units_per_box
+                    or requested_pieces % units_per_box != 0
+                    or requested_pieces // units_per_box > max_boxes
+                ):
+                    skipped.append({
+                        "name": label,
+                        "reason": (
+                            "quantity exceeds the 200-piece or maximum-stock limit, "
+                            "or is not a whole number of boxes; refresh and review the quantity"
+                        ),
+                    })
+                    continue
+                by_supplier.setdefault(int(sid), []).append({
+                    **item,
+                    "quantity_ordered_boxes": requested_pieces // units_per_box,
+                })
             order_date = datetime.now(MANILA).date()
             expected = (order_date + timedelta(days=LEAD_DAYS)).isoformat()
             for supplier_id, items in by_supplier.items():
@@ -1038,7 +1103,7 @@ def create_purchase_orders_from_needs(needs, created_by: str, notes: str, raise_
                         INSERT INTO purchase_order_items (po_item_id, po_id, drug_id, quantity_ordered, unit_cost)
                         VALUES (%s, %s, %s, %s, %s)
                         """,
-                        (item_id, po_id, item["drug_id"], item["suggested_qty"], None),
+                        (item_id, po_id, item["drug_id"], item["quantity_ordered_boxes"], None),
                     )
                 po_number = f"PO-{po_id:05d}"
                 action = "Auto Purchase Order" if raise_alerts else "Create Purchase Order"
