@@ -1072,6 +1072,13 @@ button.drug-pick-item.is-active{
   margin:0;
   overflow-x:auto;
 }
+#purchasePlannerTable{
+  min-width:900px;
+}
+#purchasePlannerTable .purchase-planner-supplier{
+  min-width:190px;
+  max-width:260px;
+}
 .purchase-planner-cart{
   position:sticky;
   top:16px;
@@ -1096,6 +1103,11 @@ button.drug-pick-item.is-active{
   margin:4px 0 0;
   color:var(--ph-text-soft);
   font-size:13px;
+}
+.purchase-planner-cart-hint{
+  margin:0;
+  color:var(--ph-text-soft);
+  font-size:12px;
 }
 .purchase-planner-cart-body{
   display:flex;
@@ -1137,6 +1149,16 @@ button.drug-pick-item.is-active{
 .purchase-planner-cart-item small{
   color:var(--ph-text-soft);
   font-size:12px;
+}
+.purchase-planner-cart-supplier{
+  margin:0;
+  color:var(--ph-text);
+  font-size:12px;
+  overflow-wrap:anywhere;
+}
+.purchase-planner-cart-supplier.is-missing{
+  color:var(--ph-danger, #b91c1c);
+  font-weight:600;
 }
 .purchase-planner-cart-item label{
   display:flex;
