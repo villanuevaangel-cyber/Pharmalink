@@ -1360,14 +1360,14 @@ async def create_sale(request: Request):
         discount_id_type = str(payload.get("discount_id_type") or "").strip()
         discount_id_number = str(payload.get("discount_id_number") or "").strip()
         discount_id_holder = str(payload.get("discount_id_holder_name") or "").strip()
-        if discount_id_type not in {"Senior", "PWD"}:
+        if discount_id_type != "PWD":
             return JSONResponse(
-                {"status": "error", "message": "Choose Senior Citizen or PWD for the SC/PWD discount."},
+                {"status": "error", "message": "Choose PWD as the discount ID type."},
                 status_code=400,
             )
         if not re.fullmatch(r"[A-Za-z0-9-]{4,30}", discount_id_number):
             return JSONResponse(
-                {"status": "error", "message": "Enter a valid SC/PWD ID number (4-30 letters, digits, or dashes)."},
+                {"status": "error", "message": "Enter a valid PWD ID number (4-30 letters, digits, or dashes)."},
                 status_code=400,
             )
         if (
@@ -1381,7 +1381,7 @@ async def create_sale(request: Request):
             )
         if payload.get("id_verified") is not True:
             return JSONResponse(
-                {"status": "error", "message": "Confirm that you verified the original SC/PWD ID in person."},
+                {"status": "error", "message": "Confirm that you verified the original PWD ID in person."},
                 status_code=400,
             )
 
@@ -1578,7 +1578,7 @@ async def create_sale(request: Request):
                     )
                     if cur.fetchone():
                         warning = (
-                            "Warning: This SC/PWD ID number was already used on another sale today. "
+                            "Warning: This PWD ID number was already used on another sale today. "
                             "Please verify the original ID and eligibility."
                         )
                 sale_params = (
@@ -1673,7 +1673,7 @@ async def create_sale(request: Request):
                 details = f"Sale #{sale_id} - total ₱{total_amount:.2f}, {len(items)} item(s)."
                 if sc_pwd_applied:
                     details += (
-                        f" {discount_id_type} discount ID verified in person; "
+                        f"PWD discount ID verified in person; "
                         f"ID {_mask_discount_id(discount_id_number)}."
                     )
                 if points_redeemed > 0:

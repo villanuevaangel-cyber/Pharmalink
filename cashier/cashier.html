@@ -280,23 +280,22 @@
                 <div class="pos-scpwd">
                     <label for="scPwdToggle">
                         <input type="checkbox" id="scPwdToggle">
-                        <span id="scPwdLabel">SC/PWD Discount (20%)</span>
+                        <span id="scPwdLabel">PWD Discount (20%)</span>
                     </label>
                 </div>
-                <div id="scPwdDetails" hidden style="border:1px solid var(--ph-border-soft);border-radius:8px;padding:10px;margin:8px 0;">
-                    <label for="discountIdType">Discount type:</label>
+                <div id="scPwdDetails" class="pwd-discount-details" hidden>
+                    <label for="discountIdType">Discount ID type</label>
                     <select id="discountIdType" required>
-                        <option value="">Choose type</option>
-                        <option value="Senior">Senior Citizen</option>
+                        <option value="">Choose ID type</option>
                         <option value="PWD">PWD</option>
                     </select>
-                    <label for="discountIdNumber">ID number:</label>
+                    <label for="discountIdNumber">PWD ID number</label>
                     <input type="text" id="discountIdNumber" minlength="4" maxlength="30" pattern="[A-Za-z0-9-]{4,30}" autocomplete="off" required>
-                    <label for="discountIdHolderName">ID holder's full name:</label>
+                    <label for="discountIdHolderName">PWD ID holder's full name</label>
                     <input type="text" id="discountIdHolderName" maxlength="120" autocomplete="name" required>
                     <label class="pos-check-line" for="discountIdVerified">
                         <input type="checkbox" id="discountIdVerified" required>
-                        <span class="pos-check-text">I verified the original ID in person</span>
+                        <span class="pos-check-text">I verified the original PWD ID in person</span>
                     </label>
                 </div>
 
@@ -399,33 +398,49 @@
           </div>
         </div>
 
-        <div id="pharmacistPrescriptionReviewModal" class="modal" style="display:none;">
-          <div class="pos-modal-card" role="dialog" aria-modal="true" aria-labelledby="pharmacistRxTitle" style="width:min(760px,95vw);max-height:90vh;overflow:auto;">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-              <h3 id="pharmacistRxTitle">Review prescription</h3>
-              <button type="button" id="closePharmacistRxReview" aria-label="Close">&times;</button>
+        <div id="pharmacistPrescriptionReviewModal" class="modal pharmacist-rx-modal" style="display:none;">
+          <div class="pos-modal-card pharmacist-rx-card" role="dialog" aria-modal="true" aria-labelledby="pharmacistRxTitle">
+            <div class="pharmacist-rx-header">
+              <div>
+                <h3 id="pharmacistRxTitle">Review prescription</h3>
+                <p id="pharmacistRxCustomer" class="pharmacist-rx-customer"></p>
+              </div>
+              <button type="button" id="closePharmacistRxReview" class="pharmacist-rx-close" aria-label="Close">&times;</button>
             </div>
-            <p id="pharmacistRxCustomer"></p>
-            <a id="pharmacistRxFile" href="#" target="_blank" rel="noopener noreferrer">Open uploaded prescription</a>
-            <p style="margin-top:12px;"><a id="pharmacistRxIdFile" href="#" target="_blank" rel="noopener noreferrer" hidden>Open government-issued ID</a></p>
-            <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;">
-              <input type="checkbox" id="pharmacistRxIdVerified">
-              <span>I verified the customer ID and checked the prescription document.</span>
-            </label>
-            <p class="muted">ID verification is required before approving a prescription.</p>
-            <h4>Matched prescription medicines</h4>
-            <div id="pharmacistRxMatches"></div>
-            <label for="pharmacistRxDrugSearch" style="display:block;margin-top:12px;">Add a medicine after checking the uploaded prescription</label>
-            <input type="search" id="pharmacistRxDrugSearch" autocomplete="off" placeholder="Search prescription medicines" style="width:100%;">
-            <div id="pharmacistRxSearchResults" role="listbox"></div>
-            <details style="margin-top:12px;">
+            <section class="pharmacist-rx-section pharmacist-rx-documents" aria-label="Uploaded documents">
+              <a id="pharmacistRxFile" href="#" target="_blank" rel="noopener noreferrer">Open uploaded prescription</a>
+              <a id="pharmacistRxIdFile" href="#" target="_blank" rel="noopener noreferrer" hidden>Open government-issued ID</a>
+            </section>
+            <section class="pharmacist-rx-verification">
+              <label for="pharmacistRxIdVerified">
+                <input type="checkbox" id="pharmacistRxIdVerified">
+                <span>I verified the customer's ID and checked the prescription document in person.</span>
+              </label>
+              <p>ID verification is required before approving a prescription.</p>
+            </section>
+            <section class="pharmacist-rx-section">
+              <div class="pharmacist-rx-section-heading">
+                <div>
+                  <h4>Matched prescription medicines</h4>
+                  <p>OCR results are suggestions only. Check the uploaded prescription before approving.</p>
+                </div>
+              </div>
+              <p id="pharmacistRxOcrStatus" class="pharmacist-rx-ocr-status" role="status"></p>
+              <div id="pharmacistRxMatches" class="pharmacist-rx-matches"></div>
+              <label for="pharmacistRxDrugSearch">Add a medicine after checking the uploaded prescription</label>
+              <input type="search" id="pharmacistRxDrugSearch" autocomplete="off" placeholder="Search prescription medicines">
+              <div id="pharmacistRxSearchResults" class="pharmacist-rx-search-results" role="listbox"></div>
+            </section>
+            <details class="pharmacist-rx-ocr">
               <summary>OCR text</summary>
-              <pre id="pharmacistRxText" style="white-space:pre-wrap;max-height:220px;overflow:auto;"></pre>
+              <pre id="pharmacistRxText"></pre>
             </details>
-            <label for="pharmacistRxNote" style="display:block;margin-top:12px;">Review note / rejection reason</label>
-            <textarea id="pharmacistRxNote" rows="3" maxlength="1000" style="width:100%;"></textarea>
-            <p id="pharmacistRxMessage" role="status" aria-live="polite"></p>
-            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;">
+            <div class="pharmacist-rx-note">
+              <label for="pharmacistRxNote">Review note / rejection reason</label>
+              <textarea id="pharmacistRxNote" rows="3" maxlength="1000"></textarea>
+            </div>
+            <p id="pharmacistRxMessage" class="pharmacist-rx-message" role="status" aria-live="polite"></p>
+            <div class="pharmacist-rx-actions">
               <button type="button" id="rejectPharmacistRx" class="btn btn-danger">Reject</button>
               <button type="button" id="approvePharmacistRx" class="btn btn-success">Approve selected medicines</button>
             </div>
@@ -900,14 +915,14 @@ function getScPwdSaleData() {
     const holder = document.getElementById('discountIdHolderName')?.value.trim() || '';
     const verified = !!document.getElementById('discountIdVerified')?.checked;
     const missing = [];
-    if (!type) missing.push(['discountIdType', 'choose Senior Citizen or PWD']);
+    if (type !== 'PWD') missing.push(['discountIdType', 'choose PWD']);
     if (!/^[A-Za-z0-9-]{4,30}$/.test(number)) missing.push(['discountIdNumber', 'enter a valid ID number (4-30 letters, digits, or dashes)']);
     if (!holder || holder.length > 120 || holder.split(/\s+/).filter(Boolean).length < 2) {
         missing.push(['discountIdHolderName', "enter the ID holder's full name"]);
     }
     if (!verified) missing.push(['discountIdVerified', 'confirm that the original ID was verified in person']);
     if (missing.length) {
-        alert('SC/PWD discount requires that you ' + missing.map(([, message]) => message).join(', ') + '.');
+        alert('PWD discount requires that you ' + missing.map(([, message]) => message).join(', ') + '.');
         document.getElementById(missing[0][0])?.focus();
         return null;
     }
@@ -924,7 +939,7 @@ function applyCheckoutRates(data) {
     if (data && Number.isFinite(Number(data.vat_percent))) TAX_RATE = Number(data.vat_percent) / 100;
     if (data && Number.isFinite(Number(data.sc_pwd_percent))) SC_PWD_RATE = Number(data.sc_pwd_percent) / 100;
     const scLabel = document.getElementById('scPwdLabel');
-    if (scLabel) scLabel.textContent = `SC/PWD Discount (${formatCheckoutPercent(SC_PWD_RATE)}%)`;
+    if (scLabel) scLabel.textContent = `PWD Discount (${formatCheckoutPercent(SC_PWD_RATE)}%)`;
     const label = document.getElementById('taxLabel');
     if (label) label.textContent = `Tax (${formatCheckoutPercent(TAX_RATE)}%):`;
     if (typeof updateCart === 'function') updateCart();
@@ -1377,7 +1392,7 @@ function printReceipt(responseData, saleData, printWindow) {
             <tr><td class="right">PAYMENT METHOD:</td><td class="right">${paymentMethodDisplay}</td></tr>
             ${saleData.payment_reference ? `<tr><td class="right">REF NO.:</td><td class="right">${saleData.payment_reference}</td></tr>` : ''}`;
     const discountIdLineHtml = saleData.sc_pwd_applied
-        ? `<tr><td class="right">SC/PWD Discount:</td><td class="right">${saleData.discount_id_type === 'Senior' ? 'Senior Citizen' : 'PWD'}, ID No.: ${maskDiscountId(saleData.discount_id_number)}</td></tr>`
+        ? `<tr><td class="right">PWD Discount:</td><td class="right">PWD, ID No.: ${maskDiscountId(saleData.discount_id_number)}</td></tr>`
         : '';
 
     // 2. Construct Full Receipt HTML (MAY DAGDAG NA PRINT BUTTON)

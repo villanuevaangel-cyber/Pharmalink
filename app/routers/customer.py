@@ -1148,6 +1148,7 @@ def _run_rapidocr(image_path: Path) -> str | None:
         work = _ocr_image_for_engine(image_path)
         result, _elapse = _rapid_engine(str(work))
     except Exception:
+        logger.warning("Prescription OCR engine failed.", exc_info=True)
         return None
     if not result:
         return ""
@@ -1163,9 +1164,14 @@ def _run_rapidocr(image_path: Path) -> str | None:
 def _extract_prescription_text(image_path: Path) -> str | None:
     """Return OCR text, empty string if nothing readable, or None if no OCR engine."""
     text = _run_tesseract(image_path)
-    if text is not None:
+    if text and text.strip():
         return text
-    return _run_rapidocr(image_path)
+    rapid_text = _run_rapidocr(image_path)
+    if rapid_text and rapid_text.strip():
+        return rapid_text
+    if text is not None or rapid_text is not None:
+        return ""
+    return None
 
 
 def _pdf_page_images(pdf_path: Path, max_pages: int = 4) -> list[Path] | None:

@@ -374,16 +374,13 @@
             const minVal = Number(drug.minimum_stock ?? 20);
             setVal('new_maximum_stock', String(drug.maximum_stock || Math.max(minVal * 3, minVal + 20)));
         }
-        if (overwrite || document.getElementById('new_units_per_box')?.value === '1' || !document.getElementById('new_units_per_box')?.value) {
-            setVal('new_units_per_box', String(drug.units_per_box || 1));
-        }
         const proc = String(drug.procurement_type || 'purchase').toLowerCase() === 'consignment' ? 'consignment' : 'purchase';
         const procEl = document.getElementById('new_procurement_type');
         if (procEl && (overwrite || !procEl.value)) procEl.value = proc;
         const saleEl = document.getElementById('new_sale_class');
         if (saleEl && drug.sale_class) saleEl.value = drug.sale_class === 'otc' ? 'otc' : 'rx';
         const hint = document.getElementById('new_autofill_hint');
-        if (hint) hint.textContent = 'Filled from catalog. Edit dosage if this is a new strength.';
+        if (hint) hint.textContent = 'Catalog details filled. Verify and enter pieces per box from the actual package.';
         refreshBrandDatalist(drug.generic_name);
     }
 
@@ -608,7 +605,7 @@
                 <td><span class="inv-chip">${d.sale_class === 'otc' ? 'OTC' : 'Needs Rx'}</span></td>
                 <td>${d.minimum_stock}</td>
                 <td>${d.maximum_stock || '-'}</td>
-                <td>${d.units_per_box || 1}</td>
+                <td>${Number(d.units_per_box || 1).toLocaleString()} pcs</td>
                 <td>${formatCatalogPrice(d.selling_price)}</td>
                 <td class="inv-mono">${escapeHtml(d.barcode) || '-'}</td>
                 ${statusCell}

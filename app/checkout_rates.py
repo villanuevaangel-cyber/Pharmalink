@@ -53,14 +53,14 @@ def _read_percent(key: str, default: float, label: str) -> float:
 
 def get_checkout_rates() -> dict:
     return {
-        "sc_pwd_percent": _read_percent(SC_PWD_KEY, DEFAULT_SC_PWD_PERCENT, "Senior / PWD discount"),
+        "sc_pwd_percent": _read_percent(SC_PWD_KEY, DEFAULT_SC_PWD_PERCENT, "PWD discount"),
         "vat_percent": _read_percent(VAT_KEY, DEFAULT_VAT_PERCENT, "VAT"),
     }
 
 
 def save_checkout_rate(kind: str, raw) -> dict:
     if kind == "sc_pwd":
-        key, label = SC_PWD_KEY, "Senior / PWD discount"
+        key, label = SC_PWD_KEY, "PWD discount"
     elif kind == "vat":
         key, label = VAT_KEY, "VAT"
     else:
