@@ -974,7 +974,7 @@
                         <th>Current qty (pcs)</th>
                         <th>Needed stock (pcs)</th>
                         <th>Suggested qty (pcs)</th>
-                        <th>Pcs / box</th>
+                        <th>Pieces per Box</th>
                         <th>Supplier</th>
                     </tr>
                 </thead>
@@ -982,6 +982,11 @@
                     <tr><td colspan="7" style="text-align:center;padding:16px;">Open this module to load low-stock medicines.</td></tr>
                 </tbody>
             </table>
+            <div class="purchase-planner-pagination" aria-label="Low-stock medicine pages">
+                <button type="button" id="purchasePlannerPrev" class="um-page-btn" disabled><i class="fas fa-chevron-left"></i> Prev</button>
+                <span id="purchasePlannerPageInfo" aria-live="polite">Page 1 of 1</span>
+                <button type="button" id="purchasePlannerNext" class="um-page-btn" disabled>Next <i class="fas fa-chevron-right"></i></button>
+            </div>
         </div>
         <aside class="purchase-planner-cart" aria-label="Selected purchase order items">
             <div class="purchase-planner-cart-heading">
@@ -1472,7 +1477,7 @@
             <div class="um-card-head">
                 <div>
                     <h3>Checkout rates</h3>
-                    <p>Senior / PWD removes VAT, then applies this discount.</p>
+                    <p>PWD discount removes VAT, then applies this rate.</p>
                 </div>
             </div>
             <div class="table-wrap">
@@ -1480,7 +1485,7 @@
                     <thead><tr><th>Rate</th><th>Percent</th><th></th></tr></thead>
                     <tbody>
                         <tr>
-                            <td>Senior / PWD discount</td>
+                            <td>PWD discount</td>
                             <td><span class="maint-pct"><input type="number" id="scPwdPercent" step="0.1" min="0" max="100" value="20"> <span>%</span></span></td>
                             <td><button type="button" class="save-checkout-rate" data-rate="sc_pwd" style="background:#4BAA8B;color:#fff;border:none;border-radius:4px;padding:5px 12px;cursor:pointer;">Save</button></td>
                         </tr>
@@ -1530,6 +1535,7 @@
                     <option value="all">All</option>
                 </select>
             </div>
+            <p class="barcode-hint">Pieces per Box is the number of individual saleable units in one supplier box, not the number of boxes in stock. Legacy/sample records may show 1 from the old database default; verify each medicine's package and edit its value before ordering.</p>
             <div class="table-wrap">
             <table id="drugMasterTable">
                 <thead>
@@ -1542,7 +1548,7 @@
                         <th>Type</th>
                         <th>Min Stock</th>
                         <th>Max Stock</th>
-                        <th>Pcs / Box</th>
+                        <th>Pieces per Box</th>
                         <th>Price</th>
                         <th>Barcode</th>
                         <th>Status</th>
@@ -3652,7 +3658,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </div>
                                 <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(110px, 1fr));gap:8px;">
                                     <div><label style="${labelStyle}">Quantity</label><input type="number" class="recv-qty" min="1" max="${it.quantity_outstanding}" step="1" value="${Math.max(it.quantity_outstanding, 0)}" ${done ? 'disabled' : ''}></div>
-                                    <div><label style="${labelStyle}">Pcs / box</label><input type="number" class="recv-pcs" min="1" step="1" value="${Math.max(1, Number(it.units_per_box) || 1)}" readonly tabindex="-1" ${done ? 'disabled' : ''}></div>
+                                    <div><label style="${labelStyle}">Pieces per box</label><input type="number" class="recv-pcs" min="1" step="1" value="${Math.max(1, Number(it.units_per_box) || 1)}" readonly tabindex="-1" ${done ? 'disabled' : ''}></div>
                                     <div><label style="${labelStyle}">Lot #</label><input type="text" class="recv-lot" placeholder="Lot #" ${done ? 'disabled' : ''}></div>
                                     <div><label style="${labelStyle}">Lot expiration date</label><input type="date" class="recv-exp" min="${manilaTodayYmd()}" ${done ? 'disabled' : ''}></div>
                                     <div><label style="${labelStyle}">Cost / box</label><input type="number" class="recv-cost" min="0" step="0.01" placeholder="Cost per box" value="" ${done ? 'disabled' : ''}></div>
@@ -3835,8 +3841,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <label for="new_maximum_stock">Maximum Stock Level:</label>
                 <input type="number" id="new_maximum_stock" min="2" max="5000" step="1" value="60" required>
                 <p class="barcode-hint">Reorder at minimum. EOQ fills toward this maximum.</p>
-                <label for="new_units_per_box">Pieces per Box:</label>
-                <input type="number" id="new_units_per_box" min="1" max="100000" step="1" value="1" required>
+                <label for="new_units_per_box">Saleable pieces in one full box:</label>
+                <input type="number" id="new_units_per_box" min="1" max="100000" step="1" placeholder="Enter actual count (e.g. 100)" required>
+                <p class="barcode-hint">Enter the number of individual saleable units in one supplier box. For example, a box containing 100 tablets is 100; a medicine supplied as one bottle per box is 1. Verify the package—this value is not inferred.</p>
                 <label for="new_sale_class">Type:</label>
                 <select id="new_sale_class" required>
                     <option value="otc">OTC</option>
@@ -3888,8 +3895,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <label for="edit_maximum_stock">Maximum Stock Level:</label>
                 <input type="number" id="edit_maximum_stock" min="2" max="5000" step="1" required>
                 <p class="barcode-hint">Reorder at minimum. EOQ fills toward this maximum.</p>
-                <label for="edit_units_per_box">Pieces per Box:</label>
+                <label for="edit_units_per_box">Saleable pieces in one full box:</label>
                 <input type="number" id="edit_units_per_box" min="1" max="100000" step="1" required>
+                <p class="barcode-hint">Editable package conversion used for purchase orders and receiving. Enter the actual number of individual saleable units in one supplier box; verify it on the medicine package.</p>
                 <label for="edit_sale_class">Type:</label>
                 <select id="edit_sale_class" required>
                     <option value="otc">OTC</option>
@@ -5672,6 +5680,11 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     const scheduleDate = document.getElementById('purchaseOrderScheduleDate');
     const confirmButton = document.getElementById('confirmCreatePurchaseOrders');
     const selectionLabel = document.getElementById('purchasePlannerSelection');
+    const previousPageButton = document.getElementById('purchasePlannerPrev');
+    const nextPageButton = document.getElementById('purchasePlannerNext');
+    const pageInfo = document.getElementById('purchasePlannerPageInfo');
+    const pageSize = 10;
+    let plannerPage = 1;
     let activeSuppliers = [];
     const cartOverrides = new Map();
 
@@ -5684,6 +5697,18 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     function selectedPlannerRows() {
         return Array.from(body?.querySelectorAll('.purchase-planner-row') || [])
             .filter((row) => row.querySelector('.purchase-planner-select')?.checked);
+    }
+
+    function updatePlannerPagination() {
+        const rows = Array.from(body?.querySelectorAll('.purchase-planner-row') || []);
+        const pages = Math.max(1, Math.ceil(rows.length / pageSize));
+        plannerPage = Math.min(Math.max(plannerPage, 1), pages);
+        rows.forEach((row, index) => {
+            row.hidden = index < (plannerPage - 1) * pageSize || index >= plannerPage * pageSize;
+        });
+        if (pageInfo) pageInfo.textContent = `Page ${plannerPage} of ${pages}`;
+        if (previousPageButton) previousPageButton.disabled = plannerPage <= 1;
+        if (nextPageButton) nextPageButton.disabled = plannerPage >= pages;
     }
 
     function suppliersForDrug(drugId) {
@@ -5729,6 +5754,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         if (createButton) createButton.disabled = selected.length === 0;
         if (selectionLabel) selectionLabel.textContent = `${selected.length} item${selected.length === 1 ? '' : 's'} selected`;
         if (selectAll) selectAll.checked = rows.length > 0 && selected.length === rows.length;
+        updatePlannerPagination();
     }
 
     function renderPurchaseCart() {
@@ -5848,10 +5874,12 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             const suggestions = (suggestionData.suggestions || [])
                 .filter((item) => item.action === 'increase' && item.auto_po !== false);
             if (!suggestions.length) {
+                plannerPage = 1;
                 body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:16px;">No medicines currently need reordering.</td></tr>';
                 renderPurchaseCart();
                 return;
             }
+            plannerPage = 1;
             body.innerHTML = suggestions.map((item) => {
                 const pcsPerBox = Math.max(1, Number(item.units_per_box) || 1);
                 const maxOrderQty = Math.max(0, Number(item.max_order_qty) || 0);
@@ -5873,7 +5901,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                     <td>${current.toLocaleString()}</td>
                     <td>${needed.toLocaleString()}</td>
                     <td>${quantity.toLocaleString()}</td>
-                    <td>${pcsPerBox}</td>
+                    <td>${pcsPerBox.toLocaleString()} pcs</td>
                     <td><select class="purchase-planner-supplier" aria-label="Supplier for ${label}">${supplierOptions(item.drug_id, suggestedSupplierId)}</select></td>
                 </tr>`;
             }).join('');
@@ -5910,6 +5938,14 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     selectAll?.addEventListener('change', () => {
         body?.querySelectorAll('.purchase-planner-select').forEach((checkbox) => { checkbox.checked = selectAll.checked; });
         renderPurchaseCart();
+    });
+    previousPageButton?.addEventListener('click', () => {
+        plannerPage -= 1;
+        updatePlannerPagination();
+    });
+    nextPageButton?.addEventListener('click', () => {
+        plannerPage += 1;
+        updatePlannerPagination();
     });
     createButton?.addEventListener('click', showPurchaseOrderReview);
     document.getElementById('closePurchaseOrderReview')?.addEventListener('click', () => {

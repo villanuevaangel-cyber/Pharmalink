@@ -71,6 +71,7 @@
         const idFile = document.getElementById('pharmacistRxIdFile');
         const idVerified = document.getElementById('pharmacistRxIdVerified');
         const text = document.getElementById('pharmacistRxText');
+        const ocrStatus = document.getElementById('pharmacistRxOcrStatus');
         const note = document.getElementById('pharmacistRxNote');
         const approve = document.getElementById('approvePharmacistRx');
         const reject = document.getElementById('rejectPharmacistRx');
@@ -93,6 +94,19 @@
         if (text) text.textContent = rx.extracted_text || 'No readable OCR text. The pharmacist must review the uploaded file manually.';
         if (note) note.value = rx.review_note || '';
         if (message) message.textContent = '';
+        if (ocrStatus) {
+            if (rxMatches.length) {
+                ocrStatus.textContent = 'OCR suggestions found. Confirm the medicine name, strength, and directions against the uploaded prescription.';
+            } else if (rx.ocr_status === 'completed') {
+                ocrStatus.textContent = 'OCR text was read, but no medicine name exactly matched the active catalog. Check the document and search for the prescribed medicine manually.';
+            } else if (rx.ocr_status === 'unavailable') {
+                ocrStatus.textContent = 'OCR is unavailable for this file on the server. Review the uploaded document and add medicines manually.';
+            } else if (rx.ocr_status === 'skipped_pdf') {
+                ocrStatus.textContent = 'This PDF could not be converted for OCR on the server. Review the uploaded document and add medicines manually.';
+            } else {
+                ocrStatus.textContent = 'OCR could not read this document clearly. Review the uploaded file and add medicines manually.';
+            }
+        }
         if (matchesBox) {
             matchesBox.innerHTML = rxMatches.length
                 ? rxMatches.map((item) => {

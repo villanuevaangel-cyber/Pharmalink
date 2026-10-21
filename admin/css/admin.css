@@ -1079,6 +1079,15 @@ button.drug-pick-item.is-active{
   min-width:190px;
   max-width:260px;
 }
+.purchase-planner-pagination{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:12px;
+  padding:12px 4px 0;
+  color:var(--ph-text-soft);
+  font-size:13px;
+}
 .purchase-planner-cart{
   position:sticky;
   top:16px;

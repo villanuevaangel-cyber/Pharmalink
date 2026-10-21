@@ -479,11 +479,11 @@
                 const canCancel = String(p.review_status || 'pending').toLowerCase() === 'pending';
                 const fileLabel = 'Rx #' + p.id + (p.file_type ? ' · ' + p.file_type : '');
                 return `<tr>
-                    <td>${escapeHtml(rxDateLabel(p))}</td>
-                    <td>${escapeHtml(fileLabel)}</td>
-                    <td>${renderAvailability(p)}</td>
-                    <td>${reviewStatusHtml(p)}${p.review_status === 'rejected' && p.review_note ? `<div class="rx-result-note">${escapeHtml(p.review_note)}</div>` : ''}</td>
-                    <td class="rx-actions-cell">
+                    <td data-label="Date">${escapeHtml(rxDateLabel(p))}</td>
+                    <td data-label="File">${escapeHtml(fileLabel)}</td>
+                    <td data-label="Availability">${renderAvailability(p)}</td>
+                    <td data-label="Pharmacist review">${reviewStatusHtml(p)}${p.review_status === 'rejected' && p.review_note ? `<div class="rx-result-note">${escapeHtml(p.review_note)}</div>` : ''}</td>
+                    <td data-label="Actions" class="rx-actions-cell">
                         <button type="button" class="rx-view-btn" data-rx-id="${attr(p.id)}" ${canView ? '' : 'disabled'} title="View prescription" aria-label="View prescription"><i class="fas fa-eye"></i></button>
                         <button type="button" class="rx-cart-btn" data-rx-id="${attr(p.id)}" ${canAdd ? '' : 'disabled'} title="${canAdd ? 'Add to cart' : 'No approved in-stock medicine to add'}" aria-label="Add to cart"><i class="fas fa-cart-plus"></i></button>
                         ${canCancel ? `<button type="button" class="rx-cancel-btn" data-rx-id="${attr(p.id)}">Cancel</button>` : ''}
