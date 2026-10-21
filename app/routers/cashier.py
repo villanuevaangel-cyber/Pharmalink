@@ -34,6 +34,7 @@ router = APIRouter(prefix="/api/cashier", tags=["cashier"])
 ROOT = Path(__file__).resolve().parent.parent.parent
 POINTS_TO_PESO_RATE = 0.30  # fallback if settings are missing; POS reads /loyalty-settings
 DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/2922/2922510.png"
+_HIDDEN_CASHIER_PRESCRIPTION_IDS = (1, 2, 3)
 
 
 def _unauthorized():
@@ -347,9 +348,11 @@ def pharmacist_prescriptions(request: Request):
         FROM prescriptions p
         LEFT JOIN customers c ON c.customer_id = p.user_id
         WHERE p.review_status = 'pending'
+          AND p.id NOT IN (%s, %s, %s)
         ORDER BY p.created_at DESC
         LIMIT 200
-        """
+        """,
+        _HIDDEN_CASHIER_PRESCRIPTION_IDS,
     )
     prescriptions = []
     for raw in rows:

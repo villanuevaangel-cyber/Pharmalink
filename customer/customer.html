@@ -191,33 +191,55 @@
 <section id="prescription">
 <div class="prescription-header">
     <h2>Upload Prescription</h2>
+    <p>Send your prescription for pharmacist review and check medicine availability.</p>
 </div>
 <div class="rx-layout">
     <div class="upload-box rx-drop" id="rxDropzone">
         <div class="rx-drop-icon"><i class="fas fa-cloud-arrow-up"></i></div>
-        <h3>Drop your prescription here</h3>
-        <p>Upload your prescription and a government-issued ID. JPG, PNG, WEBP, or PDF, up to 5MB each.</p>
+        <h3>Upload your documents</h3>
+        <p>Choose a clear photo or PDF of your prescription and a government-issued ID.</p>
         <form id="prescriptionUploadForm" enctype="multipart/form-data">
             <input type="file" id="prescriptionFile" name="prescription_file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" required>
-            <label for="prescriptionIdFile">Government-issued ID for pharmacist verification</label>
             <input type="file" id="prescriptionIdFile" name="id_file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" required>
-            <p class="rx-filename" id="rxIdFileName">No ID selected</p>
-            <p class="rx-result-note">Only pharmacy staff can view your ID. The uploaded ID file is removed after review or cancellation.</p>
             <input type="file" id="prescriptionCameraCapture" accept="image/*" capture="environment">
-            <div class="rx-actions">
-                <label for="prescriptionFile" class="rx-choose"><i class="fas fa-folder-open"></i> Choose File</label>
-                <button type="button" id="rxCameraBtn" class="rx-choose"><i class="fas fa-camera"></i> Use Camera</button>
-                <button type="submit" class="rx-upload"><i class="fas fa-upload"></i> Upload</button>
+            <div class="rx-file-fields">
+                <div class="rx-file-field">
+                    <span class="rx-field-label">Prescription</span>
+                    <div class="rx-file-actions">
+                        <label for="prescriptionFile" class="rx-choose"><i class="fas fa-folder-open"></i> Choose file</label>
+                        <button type="button" id="rxCameraBtn" class="rx-choose"><i class="fas fa-camera"></i> Take photo</button>
+                    </div>
+                    <p class="rx-filename" id="rxFileName">No prescription selected</p>
+                </div>
+                <div class="rx-file-field">
+                    <label for="prescriptionIdFile" class="rx-field-label">Government-issued ID</label>
+                    <label for="prescriptionIdFile" class="rx-choose"><i class="fas fa-id-card"></i> Choose ID file</label>
+                    <p class="rx-filename" id="rxIdFileName">No ID selected</p>
+                </div>
             </div>
-            <p class="rx-filename" id="rxFileName">No file selected</p>
+            <div class="rx-upload-footer">
+                <p class="rx-privacy-note"><i class="fas fa-lock"></i> Only pharmacy staff can view your ID. It is removed after review or cancellation.</p>
+                <button type="submit" class="rx-upload"><i class="fas fa-upload"></i> Submit for review</button>
+            </div>
         </form>
-        <p id="prescriptionUploadMsg" class="rx-msg"></p>
+        <p id="prescriptionUploadMsg" class="rx-msg" role="status" aria-live="polite"></p>
+    </div>
+    <aside class="rx-tips">
+        <h3><i class="fas fa-circle-info"></i> Before you submit</h3>
+        <ul>
+            <li>Upload a readable, complete prescription with the medicine details visible.</li>
+            <li>Make sure the ID image is clear and belongs to the customer.</li>
+            <li>Accepted formats: JPG, PNG, WEBP, or PDF. Maximum 5 MB per file.</li>
+            <li>A pharmacist must review prescription-only medicines before they can be ordered.</li>
+        </ul>
     </div>
 </div>
 <div class="rx-history">
     <div class="rx-history-head">
-        <h3>Scan History</h3>
-        <p>Filter by date, view the uploaded Rx, and add in-stock matches to your cart.</p>
+        <div>
+            <h3>My Prescriptions</h3>
+            <p>Track pharmacist reviews and check which matched medicines are available.</p>
+        </div>
     </div>
     <div class="rx-filters">
         <label>From
