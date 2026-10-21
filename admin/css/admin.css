@@ -1072,7 +1072,8 @@ button.drug-pick-item.is-active{
   grid-template-columns:minmax(0, 1.3fr) minmax(0, 1fr);
   gap:10px;
   align-items:end;
-  width:min(100%, 460px);
+  width:100%;
+  max-width:460px;
   margin:0 0 10px;
 }
 .purchase-planner-filters label{
