@@ -962,7 +962,7 @@
 <section id="purchase-orders" style="display:none;">
     <div class="dashboard-header">
         <h2>Purchase Orders</h2>
-        <p>Select the medicines to order, set the final quantities and suppliers in the PO cart, then review the order date before creating Pending POs.</p>
+        <p>Select medicines and choose a supplier in each table row. Use the PO cart to review the selected suppliers and set final quantities before creating Pending POs.</p>
     </div>
     <div class="purchase-planner-layout">
         <div class="table-wrap purchase-planner-table-wrap">
@@ -975,10 +975,11 @@
                         <th>Needed stock (pcs)</th>
                         <th>Suggested qty (pcs)</th>
                         <th>Pcs / box</th>
+                        <th>Supplier</th>
                     </tr>
                 </thead>
                 <tbody id="purchasePlannerBody">
-                    <tr><td colspan="6" style="text-align:center;padding:16px;">Open this module to load low-stock medicines.</td></tr>
+                    <tr><td colspan="7" style="text-align:center;padding:16px;">Open this module to load low-stock medicines.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -989,6 +990,7 @@
                     <p id="purchasePlannerSelection">0 items selected</p>
                 </div>
             </div>
+            <p class="purchase-planner-cart-hint">Review the supplier and final quantity for each selected medicine.</p>
             <div id="purchasePlannerCartBody" class="purchase-planner-cart-body">
                 <p class="purchase-planner-cart-empty">Select low-stock medicines to add them here.</p>
             </div>
@@ -1005,7 +1007,7 @@
             <h2><i class="fas fa-clipboard-check"></i> Confirm purchase orders</h2>
             <button type="button" class="close" id="closePurchaseOrderReview" aria-label="Close">&times;</button>
         </div>
-        <p class="purchase-order-review-note">Review the supplier and final quantity for each item. This creates Pending purchase orders; it does not send an email.</p>
+        <p class="purchase-order-review-note">Confirm the supplier and final quantity for each item. This creates Pending purchase orders; it does not send an email.</p>
         <label for="purchaseOrderScheduleDate">Planned PO date</label>
         <input type="date" id="purchaseOrderScheduleDate">
         <small class="purchase-order-review-note">This records the planned order date. The PO is created as Pending now; no email is sent automatically.</small>
@@ -1161,9 +1163,9 @@
     <p class="report-section-hint">Operational reports for completed sales, online orders, purchasing, customer activity, supplier activity, and slow-moving stock.</p>
     <div class="report-hub">
         <div class="report-hub-card">
-            <h3><i class="fas fa-cash-register"></i> Sales</h3>
+            <h3><i class="fas fa-cash-register"></i> Sales report</h3>
             <span class="hub-value" style="color:#24544C;">Completed sales</span>
-            <p class="hub-hint">Filter transactions by date and export the results</p>
+            <p class="hub-hint">Sales report | filter by date and export the results</p>
             <div class="hub-actions">
                 <button type="button" class="rpt-btn navy" data-operations-report="sales"><i class="fas fa-list"></i> Open</button>
                 <button type="button" class="rpt-btn pdf" data-rpt-kind="sales" data-rpt-format="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
@@ -2605,7 +2607,7 @@
         });
     });
     const operationsReportTitles = {
-        sales: 'Sales',
+        sales: 'Sales report',
         orders: 'Online orders',
         purchases: 'Purchasing',
         customers: 'Customer activity',
@@ -2666,6 +2668,17 @@
     document.querySelectorAll('[data-operations-report]').forEach((btn) => {
         btn.addEventListener('click', () => {
             activeOperationsReport = btn.getAttribute('data-operations-report') || '';
+            if (activeOperationsReport === 'sales') {
+                const startInput = document.getElementById('operationsReportStart');
+                const endInput = document.getElementById('operationsReportEnd');
+                if (startInput && endInput && !startInput.value && !endInput.value) {
+                    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+                    const start = new Date(`${today}T00:00:00Z`);
+                    start.setUTCDate(start.getUTCDate() - 29);
+                    startInput.value = start.toISOString().slice(0, 10);
+                    endInput.value = today;
+                }
+            }
             const title = document.getElementById('operationsReportTitle');
             if (title) title.textContent = operationsReportTitles[activeOperationsReport] || 'Operations report';
             const modal = document.getElementById('operationsReportModal');
@@ -5681,51 +5694,33 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
 
     function supplierOptions(drugId, preferredId) {
         const linked = suppliersForDrug(drugId);
-        const linkedOptions = linked.map((supplier) =>
-            `<option value="${Number(supplier.supplier_id)}"${Number(supplier.supplier_id) === Number(preferredId) ? ' selected' : ''}>${escapePlanner(supplier.supplier_name)}</option>`
-        ).join('');
         const other = activeSuppliers.filter((supplier) =>
             !linked.some((candidate) => Number(candidate.supplier_id) === Number(supplier.supplier_id))
         );
-        const otherOptions = other.map((supplier) =>
-            `<option value="${Number(supplier.supplier_id)}">${escapePlanner(supplier.supplier_name)}</option>`
-        ).join('');
-        return {
-            linked: `<option value="">Choose linked supplier</option>${linkedOptions}`,
-            other: `<option value="">Choose another active supplier</option>${otherOptions}`,
-            hasOther: other.length > 0,
-        };
+        const option = (supplier) =>
+            `<option value="${Number(supplier.supplier_id)}"${Number(supplier.supplier_id) === Number(preferredId) ? ' selected' : ''}>${escapePlanner(supplier.supplier_name)}</option>`;
+        const linkedOptions = linked.map(option).join('');
+        const otherOptions = other.map(option).join('');
+        return `<option value="">Choose supplier</option>
+            ${linkedOptions ? `<optgroup label="Usual suppliers">${linkedOptions}</optgroup>` : ''}
+            ${otherOptions ? `<optgroup label="Other active suppliers">${otherOptions}</optgroup>` : ''}`;
     }
 
     function rememberCartOverrides() {
         cartBody?.querySelectorAll('.purchase-planner-cart-item').forEach((item) => {
             const drugId = Number(item.dataset.drugId);
             const quantity = item.querySelector('.purchase-planner-cart-qty')?.value;
-            const linkedSupplier = item.querySelector('.purchase-planner-cart-supplier')?.value || '';
-            const otherSupplier = item.querySelector('.purchase-planner-cart-other-supplier')?.value || '';
-            cartOverrides.set(drugId, {
-                quantity,
-                linkedSupplier,
-                otherSupplier,
-                usingOtherSupplier: linkedSupplier === '__other__',
-            });
+            cartOverrides.set(drugId, { quantity });
         });
     }
 
-    function selectedSupplierId(cartItem) {
-        const primary = cartItem?.querySelector('.purchase-planner-cart-supplier')?.value || '';
-        if (primary === '__other__') {
-            return Number(cartItem.querySelector('.purchase-planner-cart-other-supplier')?.value) || 0;
-        }
-        return Number(primary) || 0;
+    function selectedSupplierId(row) {
+        return Number(row?.querySelector('.purchase-planner-supplier')?.value) || 0;
     }
 
-    function selectedSupplierName(cartItem) {
-        const primary = cartItem?.querySelector('.purchase-planner-cart-supplier');
-        const select = primary?.value === '__other__'
-            ? cartItem.querySelector('.purchase-planner-cart-other-supplier')
-            : primary;
-        return select?.selectedOptions?.[0]?.textContent || '';
+    function selectedSupplierName(row) {
+        const select = row?.querySelector('.purchase-planner-supplier');
+        return select?.value ? (select.selectedOptions?.[0]?.textContent || '') : '';
     }
 
     function updatePlannerSelectionState() {
@@ -5753,40 +5748,22 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             const label = row.querySelector('.purchase-planner-medicine')?.textContent || `Medicine #${drugId}`;
             const current = Number(row.dataset.currentQty) || 0;
             const needed = Number(row.dataset.neededQty) || 0;
-            const preferredId = Number(row.dataset.suggestedSupplierId) || 0;
             const saved = cartOverrides.get(drugId) || {};
             const suggestedBoxes = Math.floor(suggestedQty / packSize);
-            const supplierChoice = supplierOptions(drugId, preferredId);
-            const usingOther = Boolean(saved.usingOtherSupplier);
+            const supplier = selectedSupplierName(row);
             return `<article class="purchase-planner-cart-item" data-drug-id="${drugId}">
                 <div class="purchase-planner-cart-item-heading">
                     <strong>${escapePlanner(label)}</strong>
                     <button type="button" class="purchase-planner-remove" aria-label="Remove ${escapePlanner(label)} from PO cart">&times;</button>
                 </div>
                 <p class="purchase-planner-cart-stock">Current ${current} pcs · Needed ${needed} pcs · Suggested ${suggestedQty} pcs</p>
+                <p class="purchase-planner-cart-supplier${supplier ? '' : ' is-missing'}"><strong>Supplier:</strong> ${escapePlanner(supplier || 'Choose a supplier in the table')}</p>
                 ${maxQty > 0
                     ? `<label>Final quantity (pcs) <input type="number" class="purchase-planner-cart-qty" min="${packSize}" max="${maxQty}" step="${packSize}" value="${escapePlanner(saved.quantity || suggestedQty)}" aria-label="Final quantity for ${escapePlanner(label)}"></label>
                        <small>${suggestedBoxes} suggested box${suggestedBoxes === 1 ? '' : 'es'} · ${packSize} pcs per box</small>`
                     : '<p class="purchase-planner-cart-warning">No full box fits under this medicine’s maximum stock/order limit. Adjust its package size or maximum stock in Maintenance.</p>'}
-                ${maxQty > 0 ? `<label>Supplier
-                    <select class="purchase-planner-cart-supplier" aria-label="Supplier for ${escapePlanner(label)}">
-                        ${supplierChoice.linked}
-                        ${supplierChoice.hasOther ? '<option value="__other__">Choose another supplier…</option>' : ''}
-                    </select>
-                    <select class="purchase-planner-cart-other-supplier" aria-label="Other supplier for ${escapePlanner(label)}" ${usingOther ? '' : 'hidden'}>
-                        ${supplierChoice.other}
-                    </select>
-                </label>` : ''}
             </article>`;
         }).join('');
-        cartBody.querySelectorAll('.purchase-planner-cart-item').forEach((item) => {
-            const drugId = Number(item.dataset.drugId);
-            const saved = cartOverrides.get(drugId) || {};
-            const primary = item.querySelector('.purchase-planner-cart-supplier');
-            const other = item.querySelector('.purchase-planner-cart-other-supplier');
-            if (primary) primary.value = saved.usingOtherSupplier ? '__other__' : (saved.linkedSupplier || primary.value);
-            if (other) other.value = saved.otherSupplier || '';
-        });
         updatePlannerSelectionState();
     }
 
@@ -5797,7 +5774,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 cartItem,
                 row,
                 drug_id: Number(cartItem.dataset.drugId),
-                supplier_id: selectedSupplierId(cartItem),
+                supplier_id: selectedSupplierId(row),
                 quantity_pieces: Number(cartItem.querySelector('.purchase-planner-cart-qty')?.value) || 0,
             };
         });
@@ -5813,8 +5790,8 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             const input = item.cartItem.querySelector('.purchase-planner-cart-qty');
             const packSize = Number(item.row?.dataset.pcsPerBox) || 1;
             const maxQty = Number(input?.max) || 0;
-            return !input
-                || !item.supplier_id
+            return !item.supplier_id
+                || !input
                 || !Number.isInteger(item.quantity_pieces)
                 || item.quantity_pieces < packSize
                 || item.quantity_pieces > maxQty
@@ -5822,11 +5799,11 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         });
         if (invalid) {
             const input = invalid.cartItem.querySelector('.purchase-planner-cart-qty');
-            const supplier = invalid.cartItem.querySelector('.purchase-planner-cart-supplier');
+            const supplier = invalid.row?.querySelector('.purchase-planner-supplier');
             if (!input) {
                 alert('This medicine cannot be ordered as a full box within its maximum stock limit. Update its package size or maximum stock in Maintenance first.');
             } else if (!invalid.supplier_id) {
-                alert('Choose a supplier for every selected medicine.');
+                alert('Choose a supplier for every selected medicine in the table.');
                 supplier?.focus();
             } else {
                 alert('Enter a valid final quantity in whole boxes for every selected medicine.');
@@ -5842,7 +5819,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         reviewBody.innerHTML = `<div class="purchase-order-review-table-wrap"><table>
             <thead><tr><th>Medicine</th><th>Supplier</th><th>Final qty</th></tr></thead>
             <tbody>${items.map((item) => {
-                const supplier = selectedSupplierName(item.cartItem);
+                const supplier = selectedSupplierName(item.row);
                 const medicine = item.row?.querySelector('.purchase-planner-medicine')?.textContent || '';
                 const packSize = Number(item.row?.dataset.pcsPerBox) || 1;
                 const boxes = item.quantity_pieces / packSize;
@@ -5854,7 +5831,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
 
     async function loadPurchasePlanner() {
         if (!body) return;
-        body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px;">Loading low-stock medicines...</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:16px;">Loading low-stock medicines...</td></tr>';
         try {
             const [suggestionResponse, supplierResponse] = await Promise.all([
                 fetch('/api/admin/reorder-suggestions', { credentials: 'same-origin' }),
@@ -5871,7 +5848,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             const suggestions = (suggestionData.suggestions || [])
                 .filter((item) => item.action === 'increase' && item.auto_po !== false);
             if (!suggestions.length) {
-                body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px;">No medicines currently need reordering.</td></tr>';
+                body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:16px;">No medicines currently need reordering.</td></tr>';
                 renderPurchaseCart();
                 return;
             }
@@ -5881,6 +5858,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 const quantity = Math.min(maxOrderQty, Math.max(0, Number(item.suggested_qty) || 0));
                 const current = Number(item.current_stock || 0);
                 const needed = Math.max(0, Number(item.minimum_stock || 0) - current);
+                const suggestedSupplierId = Number(item.suggested_supplier_id) || 0;
                 const label = `${escapePlanner(item.generic_name)}${item.brand_name ? ` (${escapePlanner(item.brand_name)})` : ''} - ${escapePlanner(item.dosage)} ${escapePlanner(item.form)}`;
                 return `<tr class="purchase-planner-row"
                     data-drug-id="${Number(item.drug_id)}"
@@ -5889,26 +5867,27 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                     data-suggested-qty="${quantity}"
                     data-current-qty="${current}"
                     data-needed-qty="${needed}"
-                    data-suggested-supplier-id="${Number(item.suggested_supplier_id) || ''}">
+                    data-suggested-supplier-id="${suggestedSupplierId}">
                     <td><input type="checkbox" class="purchase-planner-select" aria-label="Select ${label}"></td>
                     <td class="purchase-planner-medicine">${label}</td>
                     <td>${current.toLocaleString()}</td>
                     <td>${needed.toLocaleString()}</td>
                     <td>${quantity.toLocaleString()}</td>
                     <td>${pcsPerBox}</td>
+                    <td><select class="purchase-planner-supplier" aria-label="Supplier for ${label}">${supplierOptions(item.drug_id, suggestedSupplierId)}</select></td>
                 </tr>`;
             }).join('');
             renderPurchaseCart();
         } catch (error) {
             console.error('Purchase planner load failed:', error);
-            body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--ph-danger);padding:16px;">${escapePlanner(error.message || 'Failed to load purchase suggestions.')}</td></tr>`;
+            body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--ph-danger);padding:16px;">${escapePlanner(error.message || 'Failed to load purchase suggestions.')}</td></tr>`;
             renderPurchaseCart();
         }
     }
 
     if (body) {
         body.addEventListener('change', (event) => {
-            if (event.target.closest('.purchase-planner-select')) renderPurchaseCart();
+            if (event.target.closest('.purchase-planner-select, .purchase-planner-supplier')) renderPurchaseCart();
         });
     }
     cartBody?.addEventListener('click', (event) => {
@@ -5924,16 +5903,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         rememberCartOverrides();
         updatePlannerSelectionState();
     });
-    cartBody?.addEventListener('change', (event) => {
-        const primarySupplier = event.target.closest('.purchase-planner-cart-supplier');
-        if (primarySupplier) {
-            const cartItem = primarySupplier.closest('.purchase-planner-cart-item');
-            const otherSupplier = cartItem?.querySelector('.purchase-planner-cart-other-supplier');
-            if (otherSupplier) {
-                otherSupplier.hidden = primarySupplier.value !== '__other__';
-                if (primarySupplier.value === '__other__') otherSupplier.focus();
-            }
-        }
+    cartBody?.addEventListener('change', () => {
         rememberCartOverrides();
         updatePlannerSelectionState();
     });

@@ -1647,6 +1647,17 @@ async def create_sale(request: Request):
                         )
                     affected.add(drug_id)
 
+                if online_order_id:
+                    cur.execute(
+                        """
+                        UPDATE customer_orders
+                        SET payment_status = 'paid',
+                            payment_reference = COALESCE(NULLIF(%s, ''), payment_reference)
+                        WHERE order_id = %s
+                        """,
+                        (payment_reference or "", online_order_id),
+                    )
+
                 if points_redeemed > 0:
                     cur.execute(
                         "UPDATE customers SET loyalty_points = loyalty_points - %s WHERE customer_id = %s",

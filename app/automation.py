@@ -225,6 +225,20 @@ def ensure_automation_schema(conn) -> None:
         )
         cur.execute(
             """
+            UPDATE customer_orders co
+            SET payment_status = 'paid'
+            WHERE LOWER(TRIM(COALESCE(co.order_status, ''))) IN ('completed', 'delivered')
+              AND LOWER(TRIM(COALESCE(co.payment_status, 'unpaid'))) <> 'paid'
+              AND EXISTS (
+                    SELECT 1
+                    FROM sales s
+                    WHERE s.online_order_id = co.order_id
+                      AND LOWER(TRIM(COALESCE(s.status, ''))) = 'completed'
+              )
+            """
+        )
+        cur.execute(
+            """
             ALTER TABLE promos
             ADD COLUMN IF NOT EXISTS segment_label VARCHAR(80)
             """
