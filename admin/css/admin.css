@@ -1103,6 +1103,13 @@ button.drug-pick-item.is-active{
   margin:0;
   overflow-x:auto;
 }
+.purchase-planner-open-po{
+  display:block;
+  margin-top:4px;
+  color:#9a5b00;
+  font-size:11px;
+  line-height:1.35;
+}
 .purchase-planner-qty strong,
 .purchase-planner-qty small{
   display:block;

@@ -5827,7 +5827,9 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     function updatePlannerSelectionState() {
         const rows = Array.from(body?.querySelectorAll('.purchase-planner-row') || []);
         const selected = selectedPlannerRows();
-        const visibleRows = rows.filter((row) => row.dataset.filterHidden !== 'true');
+        const visibleRows = rows.filter((row) =>
+            row.dataset.filterHidden !== 'true' && !row.querySelector('.purchase-planner-select')?.disabled
+        );
         if (createButton) createButton.disabled = selected.length === 0;
         if (selectionLabel) selectionLabel.textContent = `${selected.length} item${selected.length === 1 ? '' : 's'} selected`;
         if (selectAll) selectAll.checked = visibleRows.length > 0
@@ -5985,6 +5987,11 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 const forecastText = forecastUnits == null ? 'Unavailable' : `~${forecastUnits.toLocaleString()} pcs`;
                 const suggestedSupplierId = Number(item.suggested_supplier_id) || 0;
                 const label = `${escapePlanner(item.generic_name)}${item.brand_name ? ` (${escapePlanner(item.brand_name)})` : ''} - ${escapePlanner(item.dosage)} ${escapePlanner(item.form)}`;
+                const openPoNumbers = String(item.open_po_numbers || '').trim();
+                const alreadyOrdered = Boolean(openPoNumbers);
+                const openPoNote = alreadyOrdered
+                    ? `<small class="purchase-planner-open-po">Already on open PO: ${escapePlanner(openPoNumbers)}</small>`
+                    : '';
                 return `<tr class="purchase-planner-row"
                     data-drug-id="${Number(item.drug_id)}"
                     data-pcs-per-box="${pcsPerBox}"
@@ -5993,8 +6000,8 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                     data-current-qty="${current}"
                     data-needed-qty="${needed}"
                     data-suggested-supplier-id="${suggestedSupplierId}">
-                    <td><input type="checkbox" class="purchase-planner-select" aria-label="Select ${label}"></td>
-                    <td class="purchase-planner-medicine">${label}</td>
+                    <td><input type="checkbox" class="purchase-planner-select" aria-label="Select ${label}" ${alreadyOrdered ? `disabled title="Already ordered on ${escapePlanner(openPoNumbers)}"` : ''}></td>
+                    <td class="purchase-planner-medicine"><span>${label}</span>${openPoNote}</td>
                     <td>${current.toLocaleString()}</td>
                     <td>${needed.toLocaleString()}</td>
                     <td class="purchase-planner-qty">
@@ -6049,7 +6056,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         body?.querySelectorAll('.purchase-planner-row').forEach((row) => {
             if (row.dataset.filterHidden === 'true') return;
             const checkbox = row.querySelector('.purchase-planner-select');
-            if (checkbox) checkbox.checked = selectAll.checked;
+            if (checkbox && !checkbox.disabled) checkbox.checked = selectAll.checked;
         });
         renderPurchaseCart();
     });
@@ -6088,7 +6095,14 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 body: JSON.stringify({ items, order_date: scheduleDate.value }),
             });
             const result = await response.json();
-            if (!response.ok || !result.success) throw new Error(result.message || 'Could not create purchase orders.');
+            if (!response.ok || !result.success) {
+                const skipped = (result.skipped || [])
+                    .map((item) => `${item.name}: ${item.reason}`)
+                    .join('\n');
+                throw new Error([result.message || 'Could not create purchase orders.', skipped]
+                    .filter(Boolean)
+                    .join('\n'));
+            }
             const created = result.created || [];
             const skipped = result.skipped || [];
             let message = created.length

@@ -828,6 +828,7 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
                        recent_supplier.supplier_name AS suggested_supplier_name,
                        recent_supplier.email AS suggested_supplier_email,
                        recent_supplier.consignment_policy AS supplier_consignment_policy,
+                       open_pos.po_numbers AS open_po_numbers,
                        COALESCE((
                            SELECT SUM(il.current_stock)
                            FROM inventory_lots il
@@ -853,6 +854,17 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
                       AND s.status = 'completed'
                     GROUP BY si.drug_id
                 ) recent ON recent.drug_id = d.drug_id
+                LEFT JOIN LATERAL (
+                    SELECT STRING_AGG(
+                        DISTINCT 'PO-' || LPAD(po.po_id::text, 5, '0'),
+                        ', '
+                    ) AS po_numbers
+                    FROM purchase_order_items poi
+                    JOIN purchase_orders po ON po.po_id = poi.po_id
+                    WHERE poi.drug_id = d.drug_id
+                      AND po.status IN ('Pending', 'Partially Received')
+                      AND poi.quantity_ordered > COALESCE(poi.quantity_received, 0)
+                ) open_pos ON true
                 LEFT JOIN LATERAL (
                     SELECT s.supplier_id, s.supplier_name, s.email, s.consignment_policy
                     FROM suppliers s
@@ -1006,6 +1018,7 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             "suggested_supplier_id": int(row["suggested_supplier_id"]) if row["suggested_supplier_id"] is not None else None,
             "suggested_supplier_name": row["suggested_supplier_name"],
             "suggested_supplier_email": (row.get("suggested_supplier_email") or "").strip(),
+            "open_po_numbers": row.get("open_po_numbers") or "",
         })
     order = {"increase": 0, "decrease": 1, "ok": 2}
     suggestions.sort(
