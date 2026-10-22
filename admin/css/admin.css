@@ -1069,7 +1069,7 @@ button.drug-pick-item.is-active{
 }
 .purchase-planner-filters{
   display:grid;
-  grid-template-columns:minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-columns:minmax(0, 1.3fr) repeat(2, minmax(0, 1fr));
   gap:10px;
   align-items:end;
   width:100%;
@@ -1102,6 +1102,19 @@ button.drug-pick-item.is-active{
   min-width:0;
   margin:0;
   overflow-x:auto;
+}
+.purchase-planner-open-po{
+  display:block;
+  margin-top:4px;
+  color:#9a5b00;
+  font-size:11px;
+  line-height:1.35;
+}
+.purchase-planner-no-results{
+  margin:12px 4px 0;
+  color:var(--ph-text-soft);
+  font-size:13px;
+  text-align:center;
 }
 .purchase-planner-qty strong,
 .purchase-planner-qty small{
