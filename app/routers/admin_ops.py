@@ -21,9 +21,11 @@ from app.automation import (
     apply_received_lot,
     compute_reorder_suggestions,
     create_purchase_orders_from_needs,
+    get_po_schedule,
     last_run_status,
     run_daily_jobs,
     run_hourly_jobs,
+    save_po_schedule,
 )
 from app.db import fetch_all, fetch_one, get_conn, next_id
 from app.deps import require_admin
@@ -522,7 +524,7 @@ async def email_po_to_supplier(po_id: int, request: Request):
     result = await run_in_threadpool(send_po_to_supplier, po_id, actor, bool((data or {}).get("resend")))
     if result.get("success"):
         return result
-    status_code = 409 if result.get("already_sent") else 400
+    status_code = 409 if result.get("already_sent") or result.get("send_in_progress") else 400
     return JSONResponse(result, status_code=status_code)
 
 
@@ -1149,7 +1151,6 @@ async def create_pos_from_reorder(request: Request):
                 {"success": False, "message": "Expected delivery date cannot be earlier than the PO date."},
                 status_code=400,
             )
-        send_email = data.get("send_email") is True
         suggestions = {
             int(row["drug_id"]): row
             for row in compute_reorder_suggestions().get("suggestions") or []
@@ -1204,34 +1205,20 @@ async def create_pos_from_reorder(request: Request):
             raise_alerts=False,
             order_date=order_date,
             expected_date=expected_date,
-            send_on_schedule=send_email,
+            send_on_schedule=True,
         )
         if result["skipped"] and not result["created"]:
             return JSONResponse(
                 {"success": False, "message": "No purchase orders were created.", "skipped": result["skipped"]},
                 status_code=409,
             )
-        email_results = []
-        email_scheduled = False
-        if send_email and result["created"]:
-            if order_date > _manila_today():
-                email_scheduled = True
-            else:
-                actor = actor_display_name(request, fallback="Admin")
-                for po in result["created"]:
-                    outcome = await run_in_threadpool(send_po_to_supplier, int(po["po_id"]), actor)
-                    email_results.append({
-                        "po_number": po["po_number"],
-                        "supplier_name": po["supplier_name"],
-                        "success": bool(outcome.get("success")),
-                        "message": outcome.get("message"),
-                    })
+        schedule = get_po_schedule()
         return {
             "success": True,
             "created": result["created"],
             "skipped": result["skipped"],
-            "email_results": email_results,
-            "email_scheduled": email_scheduled,
+            "email_scheduled": bool(result["created"]),
+            "email_schedule": schedule,
         }
 
     try:
@@ -1274,6 +1261,39 @@ def automation_status(request: Request):
     if not require_admin(request):
         return _unauthorized()
     return {"success": True, **last_run_status()}
+
+
+@router.get("/purchase-order-schedule")
+def purchase_order_schedule(request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    return {"success": True, "schedule": get_po_schedule()}
+
+
+@router.post("/purchase-order-schedule")
+async def update_purchase_order_schedule(request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    try:
+        data = await request.json()
+        if not isinstance(data, dict) or not {"frequency", "hour", "minute"}.issubset(data):
+            return JSONResponse(
+                {"success": False, "message": "Provide a schedule frequency and valid time."},
+                status_code=400,
+            )
+        schedule = save_po_schedule(data)
+    except ValueError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=400)
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            _log(
+                cur,
+                request,
+                "Update Purchase Order Schedule",
+                f"Set recurring PO emails to {schedule['frequency']} at "
+                f"{schedule['hour']:02d}:{schedule['minute']:02d} Manila time.",
+            )
+    return {"success": True, "schedule": schedule}
 
 
 @router.post("/automation/run")

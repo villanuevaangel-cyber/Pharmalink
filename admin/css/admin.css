@@ -1074,6 +1074,73 @@ button.drug-pick-item.is-active{
   border-radius:14px;
   background:#fff;
 }
+.purchase-po-schedule{
+  margin:0 0 16px;
+  padding:16px;
+  border:1px solid var(--ph-border-soft, #FFE3B3);
+  border-radius:14px;
+  background:#fff;
+}
+.purchase-po-schedule .purchase-planner-orders-heading{
+  margin-bottom:14px;
+}
+.purchase-po-schedule .purchase-planner-orders-heading p{
+  max-width:760px;
+}
+.purchase-po-next-run{
+  flex:0 0 auto;
+  padding:8px 12px;
+  border-radius:999px;
+  background:#eef8f4;
+  color:#27785e;
+  font-size:12px;
+  font-weight:700;
+}
+.purchase-po-schedule-controls{
+  display:flex;
+  align-items:end;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.purchase-po-schedule-controls label{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:140px;
+  color:var(--ph-text);
+  font-size:12px;
+  font-weight:600;
+}
+.purchase-po-schedule-controls label[hidden]{
+  display:none;
+}
+.purchase-po-schedule-controls select,
+.purchase-po-schedule-controls input{
+  min-height:38px;
+  padding:7px 10px;
+  border:1px solid var(--ph-border-soft, #FFE3B3);
+  border-radius:8px;
+  background:#fff;
+  color:var(--ph-text);
+}
+.purchase-po-schedule-controls .action-btn{
+  width:auto;
+  min-height:38px;
+  white-space:nowrap;
+}
+#purchasePoScheduleStatus{
+  color:var(--ph-text-soft);
+  font-size:12px;
+}
+#purchasePoScheduleStatus.is-error{
+  color:var(--ph-danger);
+}
+.purchase-po-schedule-note{
+  display:block;
+  margin-top:10px;
+  color:var(--ph-text-soft);
+  font-size:11px;
+}
 .purchase-planner-orders-heading{
   display:flex;
   align-items:center;
@@ -1326,6 +1393,12 @@ button.drug-pick-item.is-active{
   }
 }
 @media (max-width: 620px){
+  .purchase-po-schedule{ padding:12px; }
+  .purchase-po-schedule .purchase-planner-orders-heading{ align-items:flex-start; flex-direction:column; }
+  .purchase-po-next-run{ white-space:normal; }
+  .purchase-po-schedule-controls{ align-items:stretch; flex-direction:column; }
+  .purchase-po-schedule-controls label{ width:100%; }
+  .purchase-po-schedule-controls .action-btn{ width:100%; }
   .purchase-planner-orders{ padding:12px; }
   .purchase-planner-orders-heading{ align-items:flex-start; flex-direction:column; }
   .purchase-planner-orders-heading .action-btn{ width:100%; }
