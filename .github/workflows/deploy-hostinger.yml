@@ -30,8 +30,12 @@ jobs:
         env:
           HOSTINGER_SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
           HOSTINGER_KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+          HOSTINGER_HOST: ${{ secrets.HOSTINGER_HOST }}
+          HOSTINGER_USER: ${{ secrets.HOSTINGER_USER }}
         run: |
           set -euo pipefail
+          test -n "$HOSTINGER_HOST"
+          test -n "$HOSTINGER_USER"
           test -n "$HOSTINGER_SSH_KEY"
           test -n "$HOSTINGER_KNOWN_HOSTS"
           mkdir -p "$HOME/.ssh"
