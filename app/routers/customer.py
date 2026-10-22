@@ -1120,15 +1120,60 @@ def _run_rapidocr(image_path: Path) -> str | None:
     except Exception:
         logger.warning("Prescription OCR engine failed.", exc_info=True)
         return None
+
+    def recognized_lines(ocr_result) -> list[str]:
+        return [
+            str(item[1]).strip()
+            for item in ocr_result or []
+            if isinstance(item, (list, tuple)) and len(item) >= 2 and item[1]
+        ]
+
+    lines = recognized_lines(result)
     if not result:
         return ""
-    lines = []
-    for item in result:
-        if isinstance(item, (list, tuple)) and len(item) >= 2:
-            text = item[1]
-            if text:
-                lines.append(str(text).strip())
-    return "\n".join(lines).strip()
+
+    try:
+        from PIL import Image
+
+        with Image.open(work) as source:
+            image = source.convert("RGB")
+        width, height = image.size
+        crop_candidates = []
+        for item in result:
+            if not isinstance(item, (list, tuple)) or len(item) < 3:
+                continue
+            try:
+                points = [(float(point[0]), float(point[1])) for point in item[0]]
+                confidence = float(item[2])
+            except (TypeError, ValueError, IndexError):
+                continue
+            if len(points) < 4 or confidence >= 0.9:
+                continue
+            left = min(point[0] for point in points)
+            right = max(point[0] for point in points)
+            top = min(point[1] for point in points)
+            bottom = max(point[1] for point in points)
+            line_width = right - left
+            center_y = (top + bottom) / 2
+            if line_width < width * 0.25 or not height * 0.2 <= center_y <= height * 0.76:
+                continue
+            crop_candidates.append((center_y, left, top, right, bottom, line_width))
+
+        for center_y, left, top, right, bottom, line_width in sorted(crop_candidates)[:2]:
+            horizontal_padding = max(8, line_width * 0.15)
+            vertical_padding = max(8, (bottom - top) * 0.6)
+            crop = image.crop((
+                max(0, int(left - horizontal_padding)),
+                max(0, int(top - vertical_padding)),
+                min(width, int(right + horizontal_padding)),
+                min(height, int(bottom + vertical_padding)),
+            ))
+            retry_result, _elapse = _rapid_engine(crop)
+            lines.extend(recognized_lines(retry_result))
+    except Exception:
+        logger.warning("Prescription OCR line retry failed.", exc_info=True)
+
+    return "\n".join(dict.fromkeys(line for line in lines if line)).strip()
 
 
 def _extract_prescription_text(image_path: Path) -> str | None:
