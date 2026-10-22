@@ -12,7 +12,9 @@ def _key_pairs(path: Path) -> set[tuple[str, str]]:
     for line in path.read_text(encoding="utf-8").splitlines():
         fields = line.split()
         offset = 1 if fields and fields[0].startswith("@") else 0
-        if len(fields) >= offset + 3:
+        if len(fields) == 2 and fields[0].startswith(("ssh-", "ecdsa-")):
+            pairs.add((fields[0], fields[1]))
+        elif len(fields) >= offset + 3:
             pairs.add((fields[offset + 1], fields[offset + 2]))
     return pairs
 
@@ -23,7 +25,12 @@ def main() -> int:
     known_hosts = Path.home() / ".ssh" / "known_hosts"
     pinned_keys = _key_pairs(known_hosts)
     if not pinned_keys:
-        print("HOSTINGER_KNOWN_HOSTS does not contain any usable pinned SSH keys.", file=sys.stderr)
+        print(
+            "HOSTINGER_KNOWN_HOSTS must contain a server host key, either as a "
+            "known_hosts line (HOST KEY_TYPE BASE64) or a public-key line "
+            "(KEY_TYPE BASE64).",
+            file=sys.stderr,
+        )
         return 1
 
     result = subprocess.run(
