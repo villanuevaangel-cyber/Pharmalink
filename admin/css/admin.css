@@ -1067,6 +1067,49 @@ button.drug-pick-item.is-active{
   width:100%;
   min-width:0;
 }
+.purchase-planner-orders{
+  margin-top:20px;
+  padding:16px;
+  border:1px solid var(--ph-border-soft, #FFE3B3);
+  border-radius:14px;
+  background:#fff;
+}
+.purchase-planner-orders-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.purchase-planner-orders-heading h3{
+  margin:0;
+  color:var(--ph-text);
+}
+.purchase-planner-orders-heading p{
+  margin:4px 0 0;
+  color:var(--ph-text-soft);
+  font-size:12px;
+}
+.purchase-planner-orders-heading .action-btn{
+  width:auto;
+  white-space:nowrap;
+}
+.purchase-planner-supplier-email{
+  display:block;
+  margin-top:3px;
+  color:var(--ph-text-soft);
+  font-size:11px;
+}
+.purchase-planner-email-error{
+  color:var(--ph-danger);
+}
+#purchasePlannerOrdersTable{
+  min-width:760px;
+}
+.purchase-planner-send-po{
+  width:auto;
+  white-space:nowrap;
+}
 .purchase-planner-filters{
   display:grid;
   grid-template-columns:minmax(0, 1.3fr) repeat(2, minmax(0, 1fr));
@@ -1283,6 +1326,9 @@ button.drug-pick-item.is-active{
   }
 }
 @media (max-width: 620px){
+  .purchase-planner-orders{ padding:12px; }
+  .purchase-planner-orders-heading{ align-items:flex-start; flex-direction:column; }
+  .purchase-planner-orders-heading .action-btn{ width:100%; }
   .purchase-planner-filters{
     grid-template-columns:minmax(0,1fr);
   }

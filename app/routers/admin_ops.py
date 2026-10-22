@@ -12,10 +12,12 @@ from zoneinfo import ZoneInfo
 import psycopg2
 from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 from psycopg2.extras import RealDictCursor
 
 from app.activity import actor_display_name, log_event, write_activity_log
 from app.automation import (
+    send_po_to_supplier,
     apply_received_lot,
     compute_reorder_suggestions,
     create_purchase_orders_from_needs,
@@ -363,7 +365,9 @@ def list_pos(request: Request, status: str = ""):
         return _unauthorized()
     sql = """
         SELECT po.po_id, po.status, po.order_date, po.expected_date, po.notes, po.created_by, po.created_at,
-               s.supplier_id, s.supplier_name
+               po.sent_to_supplier_at, po.sent_to_supplier_by, po.send_error,
+               po.send_on_schedule, po.send_started_at,
+               s.supplier_id, s.supplier_name, s.email AS supplier_email
         FROM purchase_orders po
         JOIN suppliers s ON po.supplier_id = s.supplier_id
     """
@@ -411,6 +415,8 @@ def po_details(po_id: int, request: Request):
     po = fetch_one(
         """
         SELECT po.po_id, po.status, po.order_date, po.expected_date, po.notes, po.created_by, po.created_at,
+               po.sent_to_supplier_at, po.sent_to_supplier_by, po.send_error,
+               po.send_on_schedule, po.send_started_at,
                s.supplier_id, s.supplier_name, s.contact_number, s.email
         FROM purchase_orders po JOIN suppliers s ON po.supplier_id = s.supplier_id
         WHERE po.po_id = %s
@@ -504,6 +510,22 @@ def po_details(po_id: int, request: Request):
     return {"success": True, "po": po}
 
 
+@router.post("/purchase-orders/{po_id}/send")
+async def email_po_to_supplier(po_id: int, request: Request):
+    if not require_admin(request):
+        return _unauthorized()
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    actor = actor_display_name(request, fallback="Admin")
+    result = await run_in_threadpool(send_po_to_supplier, po_id, actor, bool((data or {}).get("resend")))
+    if result.get("success"):
+        return result
+    status_code = 409 if result.get("already_sent") else 400
+    return JSONResponse(result, status_code=status_code)
+
+
 @router.post("/purchase-orders")
 async def create_po(request: Request):
     if not require_admin(request):
@@ -530,13 +552,19 @@ async def create_po(request: Request):
     if not supplier:
         return {"success": False, "message": "Please select an active supplier."}
     admin_name = request.session.get("user_first_name") or "Admin"
-    order_date = _parse_iso_date(data.get("order_date")) or _manila_today()
-    expected_date = _parse_iso_date(data.get("expected_date"))
+    raw_order_date = data.get("order_date")
+    order_date = _parse_iso_date(raw_order_date) if raw_order_date else _manila_today()
+    if not order_date:
+        return {"success": False, "message": "Choose a valid PO date."}
+    raw_expected_date = data.get("expected_date")
+    expected_date = _parse_iso_date(raw_expected_date) if raw_expected_date else None
+    if raw_expected_date and not expected_date:
+        return {"success": False, "message": "Choose a valid expected delivery date."}
     today = _manila_today()
     if order_date < today:
         return {"success": False, "message": "Order date cannot be in the past."}
-    if expected_date and expected_date < today:
-        return {"success": False, "message": "Expected date cannot be in the past."}
+    if expected_date and expected_date < order_date:
+        return {"success": False, "message": "Expected delivery date cannot be earlier than the PO date."}
     notes = str(data.get("notes") or "").strip() or None
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -1112,6 +1140,16 @@ async def create_pos_from_reorder(request: Request):
             return JSONResponse({"success": False, "message": "Choose a valid PO date."}, status_code=400)
         if order_date < _manila_today():
             return JSONResponse({"success": False, "message": "PO date cannot be in the past."}, status_code=400)
+        raw_expected = data.get("expected_date")
+        expected_date = _parse_iso_date(raw_expected) if raw_expected else None
+        if raw_expected and not expected_date:
+            return JSONResponse({"success": False, "message": "Choose a valid expected delivery date."}, status_code=400)
+        if expected_date and expected_date < order_date:
+            return JSONResponse(
+                {"success": False, "message": "Expected delivery date cannot be earlier than the PO date."},
+                status_code=400,
+            )
+        send_email = data.get("send_email") is True
         suggestions = {
             int(row["drug_id"]): row
             for row in compute_reorder_suggestions().get("suggestions") or []
@@ -1165,13 +1203,36 @@ async def create_pos_from_reorder(request: Request):
             "Created from low-stock Purchase Orders. Order quantities are limited to 200 pieces and catalog maximum stock.",
             raise_alerts=False,
             order_date=order_date,
+            expected_date=expected_date,
+            send_on_schedule=send_email,
         )
         if result["skipped"] and not result["created"]:
             return JSONResponse(
                 {"success": False, "message": "No purchase orders were created.", "skipped": result["skipped"]},
                 status_code=409,
             )
-        return {"success": True, "created": result["created"], "skipped": result["skipped"]}
+        email_results = []
+        email_scheduled = False
+        if send_email and result["created"]:
+            if order_date > _manila_today():
+                email_scheduled = True
+            else:
+                actor = actor_display_name(request, fallback="Admin")
+                for po in result["created"]:
+                    outcome = await run_in_threadpool(send_po_to_supplier, int(po["po_id"]), actor)
+                    email_results.append({
+                        "po_number": po["po_number"],
+                        "supplier_name": po["supplier_name"],
+                        "success": bool(outcome.get("success")),
+                        "message": outcome.get("message"),
+                    })
+        return {
+            "success": True,
+            "created": result["created"],
+            "skipped": result["skipped"],
+            "email_results": email_results,
+            "email_scheduled": email_scheduled,
+        }
 
     try:
         drug_ids = [int(x) for x in (data.get("drug_ids") or [])]
