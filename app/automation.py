@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import calendar
 import hashlib
 import json
 import logging
@@ -26,17 +27,13 @@ logger = logging.getLogger("pharmalink.automation")
 MANILA = ZoneInfo("Asia/Manila")
 
 LEAD_DAYS = 7
-# How automatic purchase orders are raised:
-#   weekly    - one batched PO run on a fixed day/time (default); no PO per low-stock event
-#   immediate - old behaviour, a PO is drafted as soon as a medicine goes low
-AUTO_PO_MODE = (os.getenv("AUTO_PO_MODE", "weekly") or "weekly").strip().lower()
+# These environment values seed the initial schedule; admins can change it in Purchase Orders.
 AUTO_PO_DAY = (os.getenv("AUTO_PO_DAY", "mon") or "mon").strip().lower()
 try:
     AUTO_PO_HOUR = max(0, min(23, int(os.getenv("AUTO_PO_HOUR", "8"))))
 except ValueError:
     AUTO_PO_HOUR = 8
-# Email each automatic PO to the supplier address on file.
-AUTO_PO_EMAIL_SUPPLIER = (os.getenv("AUTO_PO_EMAIL_SUPPLIER", "true") or "true").strip().lower() in {"1", "true", "yes", "on"}
+PO_SCHEDULE_KEY = "purchase_order_schedule"
 PHARMACY_NAME = (os.getenv("PHARMACY_NAME", "PharmaLink") or "PharmaLink").strip()
 PHARMACY_CONTACT = (os.getenv("PHARMACY_CONTACT", "") or "").strip()
 TARGET_DAYS = 30
@@ -51,6 +48,176 @@ _restock_timer_lock = threading.Lock()
 _pending_drug_ids: set[int] = set()
 _pending_all_drugs = False
 _restock_task_scheduled = False
+
+
+def _default_po_schedule() -> dict:
+    weekdays = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+    return {
+        "frequency": "weekly",
+        "weekday": weekdays.get(AUTO_PO_DAY, 0),
+        "day_of_month": 1,
+        "hour": AUTO_PO_HOUR,
+        "minute": 0,
+    }
+
+
+def _schedule_signature(schedule: dict) -> tuple:
+    return (
+        schedule["frequency"],
+        schedule["weekday"],
+        schedule["day_of_month"],
+        schedule["hour"],
+        schedule["minute"],
+    )
+
+
+def _schedule_time(schedule: dict, scheduled_date: date) -> datetime:
+    return datetime(
+        scheduled_date.year,
+        scheduled_date.month,
+        scheduled_date.day,
+        schedule["hour"],
+        schedule["minute"],
+        tzinfo=MANILA,
+    )
+
+
+def _monthly_schedule_date(year: int, month: int, day_of_month: int) -> date:
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(day_of_month, last_day))
+
+
+def _latest_due_schedule_date(schedule: dict, now: datetime | None = None) -> date:
+    now = now or datetime.now(MANILA)
+    today = now.date()
+    frequency = schedule["frequency"]
+    if frequency == "daily":
+        candidate = today
+        if _schedule_time(schedule, candidate) > now:
+            candidate -= timedelta(days=1)
+        return candidate
+    if frequency == "weekly":
+        days_back = (today.weekday() - schedule["weekday"]) % 7
+        candidate = today - timedelta(days=days_back)
+        if _schedule_time(schedule, candidate) > now:
+            candidate -= timedelta(days=7)
+        return candidate
+
+    candidate = _monthly_schedule_date(today.year, today.month, schedule["day_of_month"])
+    if _schedule_time(schedule, candidate) > now:
+        previous_month = today.month - 1 or 12
+        previous_year = today.year - (1 if today.month == 1 else 0)
+        candidate = _monthly_schedule_date(previous_year, previous_month, schedule["day_of_month"])
+    return candidate
+
+
+def _next_schedule_datetime(schedule: dict, now: datetime | None = None) -> datetime:
+    now = now or datetime.now(MANILA)
+    today = now.date()
+    frequency = schedule["frequency"]
+    if frequency == "daily":
+        candidate = _schedule_time(schedule, today)
+        return candidate if candidate > now else candidate + timedelta(days=1)
+    if frequency == "weekly":
+        days_forward = (schedule["weekday"] - today.weekday()) % 7
+        candidate = _schedule_time(schedule, today + timedelta(days=days_forward))
+        return candidate if candidate > now else candidate + timedelta(days=7)
+
+    candidate_date = _monthly_schedule_date(today.year, today.month, schedule["day_of_month"])
+    candidate = _schedule_time(schedule, candidate_date)
+    if candidate > now:
+        return candidate
+    next_month = today.month % 12 + 1
+    next_year = today.year + (1 if today.month == 12 else 0)
+    return _schedule_time(schedule, _monthly_schedule_date(next_year, next_month, schedule["day_of_month"]))
+
+
+def _parse_po_schedule(raw: str | None) -> dict:
+    try:
+        value = json.loads(raw or "{}")
+        if not isinstance(value, dict):
+            raise ValueError("Choose a daily, weekly, or monthly PO schedule.")
+        frequency = value.get("frequency", "weekly")
+        if not isinstance(frequency, str) or frequency not in {"daily", "weekly", "monthly"}:
+            raise ValueError("Choose a daily, weekly, or monthly PO schedule.")
+        if frequency == "weekly" and "weekday" not in value:
+            raise ValueError("Choose a weekday for the weekly PO schedule.")
+        if frequency == "monthly" and "day_of_month" not in value:
+            raise ValueError("Choose a day of the month for the monthly PO schedule.")
+        weekday = int(value.get("weekday", 0))
+        day_of_month = int(value.get("day_of_month", 1))
+        hour = int(value.get("hour", 8))
+        minute = int(value.get("minute", 0))
+        if not 0 <= weekday <= 6:
+            raise ValueError("Choose a valid weekday.")
+        if not 1 <= day_of_month <= 31:
+            raise ValueError("Choose a day of the month from 1 to 31.")
+        if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+            raise ValueError("Choose a valid Manila schedule time.")
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        if isinstance(exc, ValueError) and str(exc).startswith("Choose "):
+            raise
+        raise ValueError("The saved PO schedule is invalid. Set a new schedule in Purchase Orders.") from exc
+    return {
+        "frequency": frequency,
+        "weekday": weekday,
+        "day_of_month": day_of_month,
+        "hour": hour,
+        "minute": minute,
+    }
+
+
+def _read_po_schedule(cur) -> tuple[dict, str]:
+    cur.execute("SELECT setting_value FROM app_settings WHERE setting_key = %s", (PO_SCHEDULE_KEY,))
+    row = cur.fetchone()
+    if row:
+        raw = row["setting_value"] if isinstance(row, dict) else row[0]
+        schedule = _parse_po_schedule(raw)
+        try:
+            last_run = json.loads(raw or "{}").get("last_run_occurrence") or ""
+        except (TypeError, ValueError):
+            last_run = ""
+        return schedule, str(last_run)
+
+    schedule = _default_po_schedule()
+    initial = {**schedule, "last_run_occurrence": _latest_due_schedule_date(schedule).isoformat()}
+    cur.execute(
+        """
+        INSERT INTO app_settings (setting_key, setting_value, updated_at)
+        VALUES (%s, %s, NOW())
+        ON CONFLICT (setting_key) DO NOTHING
+        """,
+        (PO_SCHEDULE_KEY, json.dumps(initial)),
+    )
+    return schedule, initial["last_run_occurrence"]
+
+
+def get_po_schedule() -> dict:
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            schedule, _ = _read_po_schedule(cur)
+    now = datetime.now(MANILA)
+    result = {**schedule, "next_run_at": _next_schedule_datetime(schedule, now).isoformat()}
+    result["weekday_name"] = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")[schedule["weekday"]]
+    return result
+
+
+def save_po_schedule(schedule_data: dict) -> dict:
+    schedule = _parse_po_schedule(json.dumps(schedule_data or {}))
+    now = datetime.now(MANILA)
+    saved = {**schedule, "last_run_occurrence": _latest_due_schedule_date(schedule, now).isoformat()}
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO app_settings (setting_key, setting_value, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (setting_key) DO UPDATE
+                SET setting_value = EXCLUDED.setting_value, updated_at = NOW()
+                """,
+                (PO_SCHEDULE_KEY, json.dumps(saved)),
+            )
+    return get_po_schedule()
 def ensure_automation_schema(conn) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -962,7 +1129,9 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
         room = max(0, maximum - stock_for_order)
         max_order_boxes = _max_order_boxes(maximum, stock_for_order, units_per_box)
         max_order_qty = max_order_boxes * units_per_box
+        below_reorder_point = has_demand and stock_for_order <= reorder_point
         below_minimum = minimum > 0 and stock_for_order <= minimum
+        needs_reorder = below_reorder_point or below_minimum
         at_or_above_max = maximum > 0 and stock_for_order >= maximum
         suggested_po_qty = 0
         if at_or_above_max:
@@ -973,7 +1142,7 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
                 f"{signal}. Stock ({current}) is at or above the maximum ({maximum})"
                 + (f" - {reduce_qty} units can wait." if reduce_qty else ".")
             )
-        elif below_minimum:
+        elif needs_reorder:
             action = "increase"
             requested_qty = eoq if eoq > 0 else room
             qty = min(max(0, int(requested_qty or 0)), max_order_qty)
@@ -1458,13 +1627,12 @@ def create_auto_purchase_orders(
         and s["suggested_po_qty"] > 0
         and s.get("auto_po", True)
         and (not require_prophet or str(s.get("demand_source") or "") == "prophet")
-        and _is_low_stock(int(s.get("current_stock") or 0), int(s.get("minimum_stock") or 0))
     ]
     needs = [{**item, "suggested_qty": item["suggested_po_qty"]} for item in needs]
     if drug_ids is not None:
         needs = [s for s in needs if int(s["drug_id"]) in drug_ids]
     notes = notes or (
-        "This is an automatic order. PharmaLink prepared it from historical sales modeled by Prophet for the target coverage period, capped at maximum stock."
+        "This is an automatic order based on available demand forecasts (Prophet when available, otherwise recent sales), capped at maximum stock."
     )
     result = create_purchase_orders_from_needs(needs, "System", notes, raise_alerts=True)
     emailed = not_sent = 0
@@ -1485,18 +1653,22 @@ def create_auto_purchase_orders(
 
 
 def run_weekly_po_job() -> dict:
-    """Scheduled batch: one PO per supplier for everything that is low, then email suppliers."""
+    """Run the scheduled forecast-based PO batch, then email open unsent POs."""
     with _restock_lock:
         try:
             result = create_auto_purchase_orders(
                 use_forecast=True,
                 require_prophet=False,
-                email_suppliers=AUTO_PO_EMAIL_SUPPLIER,
+                email_suppliers=False,
                 notes=(
-                    "Weekly automatic order. PharmaLink batched every medicine that was at or below minimum stock "
-                    "on the scheduled order day, capped at maximum stock."
+                    "Scheduled automatic order. PharmaLink batched medicines at or below the forecast-based reorder "
+                    "point on the scheduled order day, capped at maximum stock."
                 ),
             )
+            email_result = send_scheduled_purchase_order_emails()
+            result["emailed"] = email_result["sent"]
+            result["not_sent"] = email_result["failed"]
+            result["email_results"] = email_result["results"]
             with get_conn() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     scan_stock_alerts(cur)
@@ -1510,19 +1682,74 @@ def run_weekly_po_job() -> dict:
         return result
 
 
+def run_po_schedule_if_due() -> dict:
+    """Run the configured recurring PO batch once when its scheduled time arrives."""
+    with get_conn() as lock_conn:
+        locked = False
+        try:
+            with lock_conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT pg_try_advisory_lock(728119021) AS locked")
+                locked = bool(cur.fetchone()["locked"])
+                if not locked:
+                    return {"success": True, "skipped": "another scheduler is processing POs"}
+                lock_conn.commit()
+
+                schedule, last_run = _read_po_schedule(cur)
+                now = datetime.now(MANILA)
+                due_date = _latest_due_schedule_date(schedule, now)
+                if due_date.isoformat() <= last_run:
+                    return {"success": True, "skipped": "no new scheduled PO run is due"}
+                occurrence = due_date.isoformat()
+
+            result = run_weekly_po_job()
+            with lock_conn.cursor(cursor_factory=RealDictCursor) as cur:
+                current_schedule, _ = _read_po_schedule(cur)
+                if _schedule_signature(current_schedule) == _schedule_signature(schedule):
+                    cur.execute(
+                        "SELECT setting_value FROM app_settings WHERE setting_key = %s",
+                        (PO_SCHEDULE_KEY,),
+                    )
+                    current_row = cur.fetchone()
+                    current_value = json.loads(current_row["setting_value"])
+                    current_value["last_run_occurrence"] = occurrence
+                    cur.execute(
+                        "UPDATE app_settings SET setting_value = %s, updated_at = NOW() WHERE setting_key = %s",
+                        (json.dumps(current_value), PO_SCHEDULE_KEY),
+                    )
+            _last_run["po_schedule"] = {
+                "at": datetime.now(MANILA).isoformat(),
+                "occurrence": occurrence,
+                **result,
+            }
+            return {"success": True, "occurrence": occurrence, "result": result}
+        except Exception:
+            logger.exception("scheduled PO run failed")
+            return {"success": False, "message": "Scheduled PO run failed; see server logs."}
+        finally:
+            if locked and not lock_conn.closed:
+                try:
+                    with lock_conn.cursor() as cur:
+                        cur.execute("SELECT pg_advisory_unlock(728119021)")
+                    lock_conn.commit()
+                except Exception:
+                    logger.exception("could not release scheduled PO lock")
+
+
 def send_scheduled_purchase_order_emails() -> dict:
-    """Send opted-in POs once their planned order date arrives."""
+    """Send unsent open POs during the configured recurring PO run."""
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
                 SELECT po.po_id
                 FROM purchase_orders po
-                WHERE po.send_on_schedule = TRUE
-                  AND po.sent_to_supplier_at IS NULL
+                WHERE po.sent_to_supplier_at IS NULL
                   AND po.send_error IS NULL
                   AND po.status IN ('Pending', 'Partially Received')
-                  AND po.order_date <= (NOW() AT TIME ZONE 'Asia/Manila')::date
+                  AND (
+                      po.send_on_schedule IS NOT TRUE
+                      OR po.order_date <= (NOW() AT TIME ZONE 'Asia/Manila')::date
+                  )
                   AND (
                       po.send_started_at IS NULL
                       OR po.send_started_at < NOW() - INTERVAL '15 minutes'
@@ -1549,7 +1776,7 @@ def send_scheduled_purchase_order_emails() -> dict:
 
 
 def run_restock_if_needed() -> dict:
-    """Create Pending POs from the Prophet forecast as soon as stock is short."""
+    """Refresh stock alerts; PO creation and email wait for the configured schedule."""
     global _pending_all_drugs
     if not _restock_lock.acquire(blocking=False):
         schedule_auto_restock_check()
@@ -1560,14 +1787,17 @@ def run_restock_if_needed() -> dict:
             _pending_drug_ids.clear()
             all_drugs = _pending_all_drugs
             _pending_all_drugs = False
-        if AUTO_PO_MODE == "immediate":
-            result = create_auto_purchase_orders(
-                drug_ids=None if all_drugs else drug_ids,
-                use_forecast=True,
-            )
-        else:
-            # Weekly mode: only refresh low-stock alerts now; POs wait for the scheduled run.
-            result = {"created": [], "skipped": 0, "needed": 0, "emailed": 0, "not_sent": 0, "deferred": "weekly"}
+        # Stock changes can refresh alerts and forecasts, but PO creation and
+        # supplier email only happen on the configured recurring schedule.
+        result = {
+            "created": [],
+            "skipped": 0,
+            "needed": 0,
+            "emailed": 0,
+            "not_sent": 0,
+            "deferred": "scheduled",
+            "checked_drugs": len(drug_ids) if not all_drugs else "all",
+        }
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 scan_stock_alerts(cur)
@@ -1600,7 +1830,7 @@ async def _restock_in_request_threadpool() -> None:
 
 
 def schedule_auto_restock_check(drug_id: int | None = None) -> None:
-    """Email restock only after low stock, using Prophet, from the request threadpool."""
+    """Queue a low-stock refresh without creating or emailing a PO immediately."""
     global _pending_all_drugs, _restock_task_scheduled
     if drug_id is not None and not _drug_is_low_stock(int(drug_id)):
         return
@@ -1863,15 +2093,13 @@ def alert_email_status() -> dict:
 
 
 def last_run_status() -> dict:
+    po_schedule = get_po_schedule()
     return {
         "scheduler": "running" if _scheduler and _scheduler.running else "stopped",
         "timezone": "Asia/Manila",
-        "auto_po_mode": "on_restock" if AUTO_PO_MODE == "immediate" else "weekly",
-        "auto_po_schedule": (
-            None if AUTO_PO_MODE == "immediate"
-            else f"Every {AUTO_PO_DAY.upper()} at {AUTO_PO_HOUR:02d}:00 (Asia/Manila)"
-        ),
-        "auto_po_email_supplier": AUTO_PO_EMAIL_SUPPLIER,
+        "auto_po_mode": "scheduled",
+        "auto_po_schedule": po_schedule,
+        "auto_po_email_supplier": True,
         "last_run": _last_run,
         "alert_email": alert_email_status(),
     }
@@ -1882,7 +2110,6 @@ def start_scheduler() -> None:
     if _scheduler is not None:
         return
     from apscheduler.schedulers.background import BackgroundScheduler
-    from apscheduler.triggers.cron import CronTrigger
     from apscheduler.triggers.interval import IntervalTrigger
 
     scheduler = BackgroundScheduler(timezone=MANILA)
@@ -1903,31 +2130,22 @@ def start_scheduler() -> None:
         coalesce=True,
     )
     scheduler.add_job(
-        send_scheduled_purchase_order_emails,
-        IntervalTrigger(minutes=5),
-        id="pharmalink-scheduled-po-email",
+        run_po_schedule_if_due,
+        IntervalTrigger(minutes=1),
+        id="pharmalink-configured-po-schedule",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
     )
-    if AUTO_PO_MODE != "immediate":
-        scheduler.add_job(
-            run_weekly_po_job,
-            CronTrigger(day_of_week=AUTO_PO_DAY, hour=AUTO_PO_HOUR, minute=0, timezone=MANILA),
-            id="pharmalink-weekly-po",
-            replace_existing=True,
-            max_instances=1,
-            coalesce=True,
-            misfire_grace_time=3600,
-        )
+    get_po_schedule()
     scheduler.start()
     _scheduler = scheduler
     scheduler.add_job(run_startup_jobs, "date", run_date=datetime.now(MANILA) + timedelta(seconds=12), id="pharmalink-startup")
     scheduler.add_job(
-        send_scheduled_purchase_order_emails,
+        run_po_schedule_if_due,
         "date",
         run_date=datetime.now(MANILA) + timedelta(seconds=15),
-        id="pharmalink-scheduled-po-email-startup",
+        id="pharmalink-configured-po-schedule-startup",
         max_instances=1,
     )
     scheduler.add_job(

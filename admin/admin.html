@@ -962,7 +962,45 @@
 <section id="purchase-orders" style="display:none;">
     <div class="dashboard-header">
         <h2>Purchase Orders</h2>
-        <p>Prophet estimates demand for the next 30 days. Suggested order quantities cover forecast demand and are adjusted to whole boxes and stock limits; recent-average estimates are labeled when Prophet data is unavailable.</p>
+        <p>At the recurring PO run, forecast demand and the reorder point determine which medicines need replenishment. Suggested quantities remain reviewable and are capped to whole boxes and stock limits.</p>
+    </div>
+    <div class="purchase-po-schedule">
+        <div class="purchase-planner-orders-heading">
+            <div>
+                <h3>Automatic PO and supplier email schedule</h3>
+                <p>At each scheduled run, the forecast checks replenishment needs, creates one PO per supplier, then emails open unsent POs with supplier email addresses.</p>
+            </div>
+            <span id="purchasePoNextRun" class="purchase-po-next-run">Loading schedule...</span>
+        </div>
+        <div class="purchase-po-schedule-controls">
+            <label for="purchasePoFrequency">Repeat
+                <select id="purchasePoFrequency">
+                    <option value="daily">Every day</option>
+                    <option value="weekly" selected>Every week</option>
+                    <option value="monthly">Every month</option>
+                </select>
+            </label>
+            <label id="purchasePoWeekdayGroup" for="purchasePoWeekday">Weekday
+                <select id="purchasePoWeekday">
+                    <option value="0" selected>Monday</option>
+                    <option value="1">Tuesday</option>
+                    <option value="2">Wednesday</option>
+                    <option value="3">Thursday</option>
+                    <option value="4">Friday</option>
+                    <option value="5">Saturday</option>
+                    <option value="6">Sunday</option>
+                </select>
+            </label>
+            <label id="purchasePoMonthdayGroup" for="purchasePoMonthday" hidden>Day of month
+                <select id="purchasePoMonthday"></select>
+            </label>
+            <label for="purchasePoTime">Time (Manila)
+                <input type="time" id="purchasePoTime" value="08:00">
+            </label>
+            <button type="button" id="savePurchasePoSchedule" class="action-btn">Save schedule</button>
+            <span id="purchasePoScheduleStatus" role="status" aria-live="polite"></span>
+        </div>
+        <small class="purchase-po-schedule-note">A monthly date that does not exist in a given month runs on that month’s last day. Email failures remain visible in the PO list for retry.</small>
     </div>
     <div class="purchase-planner-filters" aria-label="Filter low-stock medicines">
         <label for="purchasePlannerSearch">Search medicine
@@ -1027,7 +1065,7 @@
         <div class="purchase-planner-orders-heading">
             <div>
                 <h3>Confirmed purchase orders</h3>
-                <p>View planned supplier email dates and delivery estimates. Receiving stays in Deliveries.</p>
+                <p>Track PO dates, expected delivery estimates, and supplier email status. Receiving stays in Deliveries.</p>
             </div>
             <button type="button" id="refreshPurchasePlannerOrders" class="action-btn">
                 <i class="fas fa-rotate"></i> Refresh
@@ -1039,7 +1077,7 @@
                     <tr>
                         <th>PO</th>
                         <th>Supplier</th>
-                        <th>Planned send</th>
+                        <th>PO date</th>
                         <th>Expected delivery</th>
                         <th>Email status</th>
                         <th>Action</th>
@@ -1059,17 +1097,10 @@
             <h2><i class="fas fa-clipboard-check"></i> Confirm purchase orders</h2>
             <button type="button" class="close" id="closePurchaseOrderReview" aria-label="Close">&times;</button>
         </div>
-        <p class="purchase-order-review-note">Confirm the supplier and final quantity. Opt in to send the PO automatically on the planned date.</p>
-        <label for="purchaseOrderScheduleDate">Planned PO date</label>
-        <input type="date" id="purchaseOrderScheduleDate">
-        <small class="purchase-order-review-note">The PO is created as Pending now. If email is enabled, it is sent on this date (or immediately if today).</small>
+        <p class="purchase-order-review-note">Confirm the supplier and final quantity. Open unsent POs are emailed on the recurring schedule configured in this module.</p>
         <label for="purchaseOrderExpectedDate" style="margin-top:10px;display:block;">Expected delivery date</label>
         <input type="date" id="purchaseOrderExpectedDate">
         <small class="purchase-order-review-note">Optional estimate; enter the supplier-confirmed date when known. It is not treated as a confirmed delivery date.</small>
-        <label style="display:flex;align-items:center;gap:8px;margin:12px 0;font-weight:600;">
-            <input type="checkbox" id="purchaseOrderSendEmail" checked style="width:auto;margin:0;">
-            Send the PO to the supplier automatically on the planned date
-        </label>
         <div id="purchaseOrderReviewBody"></div>
         <button type="button" id="confirmCreatePurchaseOrders" class="action-btn">
             <i class="fas fa-file-circle-plus"></i> Confirm and create PO(s)
@@ -5776,9 +5807,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     const createButton = document.getElementById('createSelectedPurchaseOrders');
     const reviewModal = document.getElementById('purchaseOrderReviewModal');
     const reviewBody = document.getElementById('purchaseOrderReviewBody');
-    const scheduleDate = document.getElementById('purchaseOrderScheduleDate');
     const expectedDate = document.getElementById('purchaseOrderExpectedDate');
-    const sendEmailBox = document.getElementById('purchaseOrderSendEmail');
     const confirmButton = document.getElementById('confirmCreatePurchaseOrders');
     const selectionLabel = document.getElementById('purchasePlannerSelection');
     const previousPageButton = document.getElementById('purchasePlannerPrev');
@@ -5790,10 +5819,25 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     const noResults = document.getElementById('purchasePlannerNoResults');
     const confirmedOrdersBody = document.getElementById('purchasePlannerOrdersBody');
     const refreshOrdersButton = document.getElementById('refreshPurchasePlannerOrders');
+    const poFrequency = document.getElementById('purchasePoFrequency');
+    const poWeekday = document.getElementById('purchasePoWeekday');
+    const poMonthday = document.getElementById('purchasePoMonthday');
+    const poWeekdayGroup = document.getElementById('purchasePoWeekdayGroup');
+    const poMonthdayGroup = document.getElementById('purchasePoMonthdayGroup');
+    const poTime = document.getElementById('purchasePoTime');
+    const poNextRun = document.getElementById('purchasePoNextRun');
+    const poScheduleStatus = document.getElementById('purchasePoScheduleStatus');
+    const savePoScheduleButton = document.getElementById('savePurchasePoSchedule');
     const pageSize = 10;
     let plannerPage = 1;
     let activeSuppliers = [];
+    let currentPoSchedule = null;
     const cartOverrides = new Map();
+    if (poMonthday && !poMonthday.options.length) {
+        poMonthday.innerHTML = Array.from({ length: 31 }, (_, index) =>
+            `<option value="${index + 1}">${index + 1}</option>`
+        ).join('');
+    }
 
     function escapePlanner(value) {
         return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({
@@ -5804,6 +5848,93 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     function manilaTodayYmd() {
         return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     }
+
+    function formatPoSchedule(schedule) {
+        if (!schedule) return 'Schedule unavailable';
+        const time = `${String(schedule.hour).padStart(2, '0')}:${String(schedule.minute).padStart(2, '0')} Manila`;
+        if (schedule.frequency === 'daily') return `Every day at ${time}`;
+        if (schedule.frequency === 'monthly') return `Every month on day ${schedule.day_of_month} at ${time}`;
+        return `Every ${schedule.weekday_name || 'week'} at ${time}`;
+    }
+
+    function updatePoScheduleFields() {
+        if (poWeekdayGroup) poWeekdayGroup.hidden = poFrequency?.value !== 'weekly';
+        if (poMonthdayGroup) poMonthdayGroup.hidden = poFrequency?.value !== 'monthly';
+    }
+
+    async function loadPoSchedule() {
+        if (!poFrequency) return;
+        try {
+            const response = await fetch('/api/admin/purchase-order-schedule', { credentials: 'same-origin' });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || 'Could not load PO schedule.');
+            const schedule = result.schedule;
+            currentPoSchedule = schedule;
+            poFrequency.value = schedule.frequency;
+            poWeekday.value = String(schedule.weekday);
+            poMonthday.value = String(schedule.day_of_month);
+            poTime.value = `${String(schedule.hour).padStart(2, '0')}:${String(schedule.minute).padStart(2, '0')}`;
+            updatePoScheduleFields();
+            if (poNextRun) {
+                const nextRun = new Date(schedule.next_run_at);
+                poNextRun.textContent = `Next run: ${nextRun.toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' })}`;
+            }
+        } catch (error) {
+            console.error('PO schedule load failed:', error);
+            if (poNextRun) poNextRun.textContent = 'Schedule unavailable';
+            if (poScheduleStatus) {
+                poScheduleStatus.textContent = error.message || 'Could not load PO schedule.';
+                poScheduleStatus.classList.add('is-error');
+            }
+        }
+    }
+
+    poFrequency?.addEventListener('change', updatePoScheduleFields);
+    savePoScheduleButton?.addEventListener('click', async () => {
+        const [hour, minute] = String(poTime?.value || '').split(':').map(Number);
+        if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
+            if (poScheduleStatus) {
+                poScheduleStatus.textContent = 'Choose a valid schedule time.';
+                poScheduleStatus.classList.add('is-error');
+            }
+            return;
+        }
+        savePoScheduleButton.disabled = true;
+        if (poScheduleStatus) {
+            poScheduleStatus.textContent = 'Saving schedule...';
+            poScheduleStatus.classList.remove('is-error');
+        }
+        try {
+            const response = await fetch('/api/admin/purchase-order-schedule', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    frequency: poFrequency.value,
+                    weekday: Number(poWeekday?.value || 0),
+                    day_of_month: Number(poMonthday?.value || 1),
+                    hour,
+                    minute,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || 'Could not save PO schedule.');
+            currentPoSchedule = result.schedule;
+            await loadPoSchedule();
+            await loadConfirmedPurchaseOrders();
+            if (poScheduleStatus) {
+                poScheduleStatus.textContent = 'Schedule saved. New schedule starts at its next occurrence.';
+                poScheduleStatus.classList.remove('is-error');
+            }
+        } catch (error) {
+            if (poScheduleStatus) {
+                poScheduleStatus.textContent = error.message || 'Could not save PO schedule.';
+                poScheduleStatus.classList.add('is-error');
+            }
+        } finally {
+            savePoScheduleButton.disabled = false;
+        }
+    });
 
     function selectedPlannerRows() {
         return Array.from(body?.querySelectorAll('.purchase-planner-row') || [])
@@ -5978,13 +6109,9 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             return;
         }
         const today = manilaTodayYmd();
-        if (scheduleDate) {
-            scheduleDate.min = today;
-            if (!scheduleDate.value) scheduleDate.value = today;
-        }
         if (expectedDate) {
             expectedDate.value = '';
-            expectedDate.min = scheduleDate?.value || today;
+            expectedDate.min = today;
         }
         reviewBody.innerHTML = `<div class="purchase-order-review-table-wrap"><table>
             <thead><tr><th>Medicine</th><th>Supplier</th><th>Supplier email</th><th>Final qty</th></tr></thead>
@@ -6004,13 +6131,6 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         if (reviewModal) reviewModal.style.display = 'flex';
     }
 
-    function syncExpectedDate() {
-        if (!scheduleDate || !expectedDate || !scheduleDate.value) return;
-        expectedDate.min = scheduleDate.value;
-        if (expectedDate.value && expectedDate.value < scheduleDate.value) expectedDate.value = '';
-    }
-    scheduleDate?.addEventListener('change', syncExpectedDate);
-
     function loadConfirmedPurchaseOrders() {
         if (!confirmedOrdersBody) return Promise.resolve();
         confirmedOrdersBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:14px;">Loading purchase orders...</td></tr>';
@@ -6025,12 +6145,10 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                     confirmedOrdersBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:14px;">No open purchase orders.</td></tr>';
                     return;
                 }
-                const today = manilaTodayYmd();
                 confirmedOrdersBody.innerHTML = orders.map((po) => {
                     const sent = !!po.sent_to_supplier_at;
                     const sending = !!po.send_started_at && !sent && !po.send_error;
-                    const sendDate = String(po.order_date || '').slice(0, 10);
-                    const future = sendDate > today;
+                    const poDate = String(po.order_date || '').slice(0, 10);
                     let emailStatus;
                     let action;
                     if (sent) {
@@ -6042,20 +6160,14 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                     } else if (po.send_error) {
                         emailStatus = `<span class="purchase-planner-email-error">Email failed: ${escapePlanner(po.send_error)}</span>`;
                         action = `<button type="button" class="purchase-planner-send-po action-btn" data-po-id="${Number(po.po_id)}">Retry email</button>`;
-                    } else if (po.send_on_schedule && future) {
-                        emailStatus = `Scheduled for ${escapePlanner(sendDate)}`;
-                        action = '<button type="button" class="action-btn" disabled>Scheduled</button>';
-                    } else if (po.send_on_schedule) {
-                        emailStatus = `Due to send ${escapePlanner(sendDate)}`;
-                        action = `<button type="button" class="purchase-planner-send-po action-btn" data-po-id="${Number(po.po_id)}">Send now</button>`;
                     } else {
-                        emailStatus = 'Not scheduled';
-                        action = `<button type="button" class="purchase-planner-send-po action-btn" data-po-id="${Number(po.po_id)}">Email supplier</button>`;
+                        emailStatus = `Queued for ${escapePlanner(formatPoSchedule(currentPoSchedule))}`;
+                        action = `<button type="button" class="purchase-planner-send-po action-btn" data-po-id="${Number(po.po_id)}">Send now</button>`;
                     }
                     return `<tr>
                         <td>${escapePlanner(po.po_number)}</td>
                         <td>${escapePlanner(po.supplier_name)}<small class="purchase-planner-supplier-email">${escapePlanner(po.supplier_email || 'No supplier email on file')}</small></td>
-                        <td>${escapePlanner(sendDate)}</td>
+                        <td>${escapePlanner(poDate)}</td>
                         <td>${escapePlanner(po.expected_date || 'To be confirmed')}</td>
                         <td>${emailStatus}</td>
                         <td>${action}</td>
@@ -6135,12 +6247,19 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                         ? Math.round(Number(item.avg_daily_sales || 0) * forecastDays)
                         : null)
                     : Number(item.forecast_units);
-                const forecastLabel = item.demand_source === 'prophet'
-                    ? `Prophet · next ${forecastDays} days`
-                    : forecastUnits == null
-                        ? 'No sales forecast'
-                        : `Recent average · ${forecastDays} days`;
-                const forecastText = forecastUnits == null ? 'Unavailable' : `~${forecastUnits.toLocaleString()} pcs`;
+                const noDemandForecast = forecastUnits === 0;
+                const forecastLabel = forecastUnits == null
+                    ? 'No sales forecast available'
+                    : item.demand_source === 'prophet'
+                        ? `Prophet · next ${forecastDays} days`
+                        : noDemandForecast
+                            ? `No completed sales in the last ${forecastDays} days`
+                            : `Recent average · ${forecastDays} days`;
+                const forecastText = forecastUnits == null
+                    ? 'Unavailable'
+                    : noDemandForecast
+                        ? 'No demand projected'
+                        : `~${forecastUnits.toLocaleString()} pcs`;
                 const suggestedSupplierId = Number(item.suggested_supplier_id) || 0;
                 const label = `${escapePlanner(item.generic_name)}${item.brand_name ? ` (${escapePlanner(item.brand_name)})` : ''} - ${escapePlanner(item.dosage)} ${escapePlanner(item.form)}`;
                 const openPoNumbers = String(item.open_po_numbers || '').trim();
@@ -6244,13 +6363,8 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             supplier_id: item.supplier_id,
             quantity_pieces: item.quantity_pieces,
         }));
-        if (!scheduleDate?.value || scheduleDate.value < manilaTodayYmd()) {
-            alert('Choose a valid PO date that is not in the past.');
-            scheduleDate?.focus();
-            return;
-        }
-        if (expectedDate?.value && expectedDate.value < scheduleDate.value) {
-            alert('Expected delivery date cannot be earlier than the planned PO date.');
+        if (expectedDate?.value && expectedDate.value < manilaTodayYmd()) {
+            alert('Expected delivery date cannot be in the past.');
             expectedDate?.focus();
             return;
         }
@@ -6262,9 +6376,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     items,
-                    order_date: scheduleDate.value,
                     expected_date: expectedDate?.value || null,
-                    send_email: !!sendEmailBox?.checked,
                 }),
             });
             const result = await response.json();
