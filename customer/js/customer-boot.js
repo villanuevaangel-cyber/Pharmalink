@@ -384,6 +384,9 @@
             const quantity = m.prescribed_quantity == null
                 ? 'Quantity not detected'
                 : `Quantity (OCR): ${m.prescribed_quantity} · review before adding`;
+            const matchNote = m.match_method === 'approximate'
+                ? '<small class="rx-match-warning">Possible OCR match — verify against the original prescription.</small>'
+                : '';
             const action = ok
                 ? `<button type="button" class="rx-add-cart" data-lot-id="${attr(m.lot_id)}" data-name="${attr(label)}" data-price="${attr(m.price)}" data-drug-id="${attr(m.drug_id)}" data-stock="${attr(m.stock)}"><i class="fas fa-cart-plus"></i> Add to cart</button>`
                 : `<span class="rx-pill rx-pill-bad">Out of stock</span>`;
@@ -391,6 +394,7 @@
                 <div class="rx-match-info">
                     <strong>${escapeHtml(label)}</strong>
                     <small>${escapeHtml(dosage)} · ${escapeHtml(quantity)}</small>
+                    ${matchNote}
                 </div>
                 <span class="rx-price">${ok ? escapeHtml(peso(m.price)) : '-'}</span>
                 ${action}
@@ -474,7 +478,10 @@
                         const quantity = match.prescribed_quantity == null
                             ? ''
                             : ` · Qty ${match.prescribed_quantity} (OCR)`;
-                        return `${matchLabel(match)}${dosage ? ` · ${dosage}` : ''}${quantity}`;
+                        const confidenceNote = match.match_method === 'approximate'
+                            ? ' (possible OCR match; verify original)'
+                            : '';
+                        return `${matchLabel(match)}${confidenceNote}${dosage ? ` · ${dosage}` : ''}${quantity}`;
                     }).filter(Boolean).join(', ')
                     : 'No medicines matched';
                 return `<tr>
@@ -697,7 +704,6 @@
         fileInput.addEventListener('change', showSelectedFile);
 
         const cameraBtn = document.getElementById('rxCameraBtn');
-        const cameraCapture = document.getElementById('prescriptionCameraCapture');
         const camOverlay = document.getElementById('rxCameraOverlay');
         const camVideo = document.getElementById('rxCameraVideo');
         const camCanvas = document.getElementById('rxCameraCanvas');
@@ -733,7 +739,9 @@
         }
         async function openLiveCamera() {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                cameraCapture?.click();
+                showRxError(window.isSecureContext
+                    ? 'Camera access is not supported by this browser. Use Choose file to upload a prescription photo.'
+                    : 'Camera access requires a secure HTTPS connection. Open PharmaLink using its HTTPS address.');
                 return;
             }
             try {
@@ -747,17 +755,21 @@
                 }
                 if (camOverlay) camOverlay.style.display = 'flex';
             } catch (err) {
-                cameraCapture?.click();
+                stopRxCamera();
+                const errorName = err && typeof err === 'object' ? err.name : '';
+                const message = errorName === 'NotAllowedError' || errorName === 'SecurityError'
+                    ? 'Camera access was blocked. Allow camera permission for this site in your browser settings, then try again.'
+                    : errorName === 'NotFoundError'
+                        ? 'No camera was found on this device.'
+                        : errorName === 'NotReadableError'
+                            ? 'The camera is already in use by another app. Close it and try again.'
+                            : 'Could not open the camera. Check camera permission and try again.';
+                showRxError(message);
             }
         }
         cameraBtn?.addEventListener('click', (e) => {
             e.preventDefault();
             openLiveCamera();
-        });
-        cameraCapture?.addEventListener('change', () => {
-            const file = cameraCapture.files && cameraCapture.files[0];
-            if (file) useCapturedFile(file);
-            cameraCapture.value = '';
         });
         document.getElementById('rxCameraSnap')?.addEventListener('click', captureFromVideo);
         document.getElementById('rxCameraClose')?.addEventListener('click', stopRxCamera);

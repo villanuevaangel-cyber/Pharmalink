@@ -292,8 +292,7 @@ html, body {
 #prescription .rx-layout--single{
     grid-template-columns:minmax(0, 1fr);
 }
-#prescription #prescriptionFile,
-#prescription #prescriptionCameraCapture{ display:none; }
+#prescription #prescriptionFile{ display:none; }
 #prescription .rx-drop{
     background:#fff;
     border:1px solid var(--ph-border-soft, #FFE3B3);
@@ -536,6 +535,7 @@ html, body {
 .rx-stock-row strong{ color:#1e2333; font-size:.92rem; text-align:left; }
 .rx-match-info{ display:grid; gap:3px; min-width:0; }
 .rx-match-info small{ color:#64748b; font-size:.78rem; line-height:1.35; }
+.rx-match-info .rx-match-warning{ color:#9a5b00; font-weight:700; }
 .rx-price{ color:#1E3A34; font-size:.9rem; font-weight:700; white-space:nowrap; }
 .rx-add-cart{
     width:auto !important; margin:0 !important; flex-shrink:0;
