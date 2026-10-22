@@ -968,6 +968,14 @@
         <label for="purchasePlannerSearch">Search medicine
             <input type="search" id="purchasePlannerSearch" placeholder="Search medicine name or brand..." autocomplete="off">
         </label>
+        <label for="purchasePlannerStatusFilter">PO status
+            <select id="purchasePlannerStatusFilter">
+                <option value="needs_po">Needs PO</option>
+                <option value="already_ordered">Already on open PO</option>
+                <option value="not_orderable">Cannot order within stock limits</option>
+                <option value="all">All reorder suggestions</option>
+            </select>
+        </label>
         <label for="purchasePlannerSupplierFilter">Supplier
             <select id="purchasePlannerSupplierFilter">
                 <option value="">All suppliers</option>
@@ -997,6 +1005,7 @@
                 <span id="purchasePlannerPageInfo" aria-live="polite">Page 1 of 1</span>
                 <button type="button" id="purchasePlannerNext" class="um-page-btn" disabled>Next <i class="fas fa-chevron-right"></i></button>
             </div>
+            <p id="purchasePlannerNoResults" class="purchase-planner-no-results" hidden></p>
         </div>
         <aside class="purchase-planner-cart" aria-label="Selected purchase order items">
             <div class="purchase-planner-cart-heading">
@@ -5737,7 +5746,9 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     const nextPageButton = document.getElementById('purchasePlannerNext');
     const pageInfo = document.getElementById('purchasePlannerPageInfo');
     const plannerSearch = document.getElementById('purchasePlannerSearch');
+    const plannerStatusFilter = document.getElementById('purchasePlannerStatusFilter');
     const plannerSupplierFilter = document.getElementById('purchasePlannerSupplierFilter');
+    const noResults = document.getElementById('purchasePlannerNoResults');
     const pageSize = 10;
     let plannerPage = 1;
     let activeSuppliers = [];
@@ -5770,18 +5781,26 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         if (pageInfo) pageInfo.textContent = `Page ${plannerPage} of ${pages}`;
         if (previousPageButton) previousPageButton.disabled = plannerPage <= 1;
         if (nextPageButton) nextPageButton.disabled = plannerPage >= pages;
+        if (noResults) {
+            noResults.hidden = rows.length === 0 || filteredRows.length > 0;
+            noResults.textContent = plannerStatusFilter?.value === 'needs_po'
+                ? 'No medicines currently need a new PO.'
+                : 'No medicines match the selected filters.';
+        }
     }
 
     function applyPlannerFilters() {
         const search = (plannerSearch?.value || '').trim().toLowerCase();
+        const status = plannerStatusFilter?.value || 'needs_po';
         const supplierId = plannerSupplierFilter?.value || '';
         const rows = Array.from(body?.querySelectorAll('.purchase-planner-row') || []);
         rows.forEach((row) => {
             const medicine = row.querySelector('.purchase-planner-medicine')?.textContent || '';
             const selectedSupplier = row.querySelector('.purchase-planner-supplier')?.value || '';
             const matchesSearch = !search || medicine.toLowerCase().includes(search);
+            const matchesStatus = status === 'all' || row.dataset.poStatus === status;
             const matchesSupplier = !supplierId || selectedSupplier === supplierId;
-            row.dataset.filterHidden = matchesSearch && matchesSupplier ? 'false' : 'true';
+            row.dataset.filterHidden = matchesSearch && matchesStatus && matchesSupplier ? 'false' : 'true';
         });
         plannerPage = 1;
         updatePlannerPagination();
@@ -5992,8 +6011,14 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 const openPoNote = alreadyOrdered
                     ? `<small class="purchase-planner-open-po">Already on open PO: ${escapePlanner(openPoNumbers)}</small>`
                     : '';
+                const poStatus = alreadyOrdered
+                    ? 'already_ordered'
+                    : maxOrderQty < pcsPerBox
+                        ? 'not_orderable'
+                        : 'needs_po';
                 return `<tr class="purchase-planner-row"
                     data-drug-id="${Number(item.drug_id)}"
+                    data-po-status="${poStatus}"
                     data-pcs-per-box="${pcsPerBox}"
                     data-max-order-qty="${maxOrderQty}"
                     data-suggested-qty="${quantity}"
@@ -6034,6 +6059,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         });
     }
     plannerSearch?.addEventListener('input', applyPlannerFilters);
+    plannerStatusFilter?.addEventListener('change', applyPlannerFilters);
     plannerSupplierFilter?.addEventListener('change', applyPlannerFilters);
     cartBody?.addEventListener('click', (event) => {
         const removeButton = event.target.closest('.purchase-planner-remove');
