@@ -14,6 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.db import init_pool
 from app.deps import session_user_id
+from app.pwd_verification import create_pwd_verification_provider
 from app.routers.auth import router as auth_router
 from app.routers.customer import router as customer_router
 from app.routers.cashier import router as cashier_router
@@ -56,12 +57,15 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="PharmaLink", lifespan=lifespan)
+app.state.pwd_verification_provider = create_pwd_verification_provider()
+session_secret = os.getenv("SESSION_SECRET", secrets.token_hex(32))
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("SESSION_SECRET", secrets.token_hex(32)),
+    secret_key=session_secret,
     same_site="lax",
     https_only=False,
 )
+app.state.pwd_verification_signing_key = session_secret
 
 app.include_router(auth_router)
 app.include_router(customer_router)

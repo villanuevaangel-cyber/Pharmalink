@@ -16,7 +16,7 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y python3 python3-venv python3-pip git nginx
+apt-get install -y python3 python3-venv python3-pip git nginx tesseract-ocr
 
 mkdir -p "$(dirname "$APP_DIR")"
 if [ ! -d "$APP_DIR/.git" ]; then

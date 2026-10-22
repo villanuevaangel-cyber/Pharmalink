@@ -192,7 +192,7 @@ def validate_drug_fields(
         if max_stock < 2 or max_stock > 5000:
             return "Maximum stock must be between 2 and 5000."
         if max_stock <= min_stock:
-            return "Maximum stock must be higher than the minimum stock. This is the EOQ fill-up cap."
+            return "Maximum stock must be higher than the minimum stock. This is the reorder fill-up cap."
     if barcode and not BARCODE_RE.match(barcode):
         return "Barcode must be 4-64 characters (letters, numbers, dash, dot, underscore)."
     return None

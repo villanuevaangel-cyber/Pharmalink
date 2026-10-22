@@ -30,9 +30,6 @@
     <div class="nav-item" data-page="pos-page">
       <i class="fas fa-cash-register"></i><span>Point of Sale</span>
     </div>
-    <div class="nav-item" data-page="prescriptions-page">
-      <i class="fas fa-file-prescription"></i><span>Prescription Review</span><span id="pendingRxBadge" class="nav-badge">0</span>
-    </div>
     <div class="nav-item" data-page="sales-report-page">
       <i class="fas fa-file-invoice-dollar"></i><span>Sales Report</span>
     </div>
@@ -284,19 +281,16 @@
                     </label>
                 </div>
                 <div id="scPwdDetails" class="pwd-discount-details" hidden>
-                    <label for="discountIdType">Discount ID type</label>
-                    <select id="discountIdType" required>
-                        <option value="">Choose ID type</option>
-                        <option value="PWD">PWD</option>
-                    </select>
-                    <label for="discountIdNumber">PWD ID number</label>
-                    <input type="text" id="discountIdNumber" minlength="4" maxlength="30" pattern="[A-Za-z0-9-]{4,30}" autocomplete="off" required>
-                    <label for="discountIdHolderName">PWD ID holder's full name</label>
-                    <input type="text" id="discountIdHolderName" maxlength="120" autocomplete="name" required>
-                    <label class="pos-check-line" for="discountIdVerified">
-                        <input type="checkbox" id="discountIdVerified" required>
-                        <span class="pos-check-text">I verified the original PWD ID in person</span>
-                    </label>
+                    <label for="pwdQrPayload">UPWDIS PWD ID QR code</label>
+                    <textarea id="pwdQrPayload" rows="3" maxlength="8192" autocomplete="off"
+                        placeholder="Scan the QR code or paste its contents here"></textarea>
+                    <div class="pwd-qr-actions">
+                        <button type="button" id="scanPwdQrBtn">Scan PWD ID QR</button>
+                        <button type="button" id="verifyPwdQrBtn">Verify PWD ID</button>
+                    </div>
+                    <p id="pwdVerificationStatus" class="pwd-verification-status" role="status" aria-live="polite">
+                        PWD discount is applied only after successful authentication.
+                    </p>
                 </div>
 
                 <p class="pos-sum-line">Subtotal: <span id="subtotalDisplay">₱0.00</span></p>
@@ -373,80 +367,6 @@
         </div>
         
         
-        <div id="prescriptions-page" class="page">
-          <div class="dashboard-header">
-            <h2>Prescription Review</h2>
-            <p class="subtitle">Review uploaded prescriptions before prescription-only medicines can be ordered.</p>
-          </div>
-          <div class="table-wrapper">
-            <table class="pos-inventory-table" id="pharmacistPrescriptionsTable">
-              <thead>
-                <tr>
-                  <th>Prescription</th>
-                  <th>Customer</th>
-                  <th>Uploaded</th>
-                  <th>OCR</th>
-                  <th>Review status</th>
-                  <th>Medicines</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="pharmacistPrescriptionsBody">
-                <tr><td colspan="7" style="text-align:center;padding:18px;">Open this section to load prescriptions.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div id="pharmacistPrescriptionReviewModal" class="modal pharmacist-rx-modal" style="display:none;">
-          <div class="pos-modal-card pharmacist-rx-card" role="dialog" aria-modal="true" aria-labelledby="pharmacistRxTitle">
-            <div class="pharmacist-rx-header">
-              <div>
-                <h3 id="pharmacistRxTitle">Review prescription</h3>
-                <p id="pharmacistRxCustomer" class="pharmacist-rx-customer"></p>
-              </div>
-              <button type="button" id="closePharmacistRxReview" class="pharmacist-rx-close" aria-label="Close">&times;</button>
-            </div>
-            <section class="pharmacist-rx-section pharmacist-rx-documents" aria-label="Uploaded documents">
-              <a id="pharmacistRxFile" href="#" target="_blank" rel="noopener noreferrer">Open uploaded prescription</a>
-              <a id="pharmacistRxIdFile" href="#" target="_blank" rel="noopener noreferrer" hidden>Open government-issued ID</a>
-            </section>
-            <section class="pharmacist-rx-verification">
-              <label for="pharmacistRxIdVerified">
-                <input type="checkbox" id="pharmacistRxIdVerified">
-                <span>I verified the customer's ID and checked the prescription document in person.</span>
-              </label>
-              <p>ID verification is required before approving a prescription.</p>
-            </section>
-            <section class="pharmacist-rx-section">
-              <div class="pharmacist-rx-section-heading">
-                <div>
-                  <h4>Matched prescription medicines</h4>
-                  <p>OCR results are suggestions only. Check the uploaded prescription before approving.</p>
-                </div>
-              </div>
-              <p id="pharmacistRxOcrStatus" class="pharmacist-rx-ocr-status" role="status"></p>
-              <div id="pharmacistRxMatches" class="pharmacist-rx-matches"></div>
-              <label for="pharmacistRxDrugSearch">Add a medicine after checking the uploaded prescription</label>
-              <input type="search" id="pharmacistRxDrugSearch" autocomplete="off" placeholder="Search prescription medicines">
-              <div id="pharmacistRxSearchResults" class="pharmacist-rx-search-results" role="listbox"></div>
-            </section>
-            <details class="pharmacist-rx-ocr">
-              <summary>OCR text</summary>
-              <pre id="pharmacistRxText"></pre>
-            </details>
-            <div class="pharmacist-rx-note">
-              <label for="pharmacistRxNote">Review note / rejection reason</label>
-              <textarea id="pharmacistRxNote" rows="3" maxlength="1000"></textarea>
-            </div>
-            <p id="pharmacistRxMessage" class="pharmacist-rx-message" role="status" aria-live="polite"></p>
-            <div class="pharmacist-rx-actions">
-              <button type="button" id="rejectPharmacistRx" class="btn btn-danger">Reject</button>
-              <button type="button" id="approvePharmacistRx" class="btn btn-success">Approve selected medicines</button>
-            </div>
-          </div>
-        </div>
-
         <!-- CUSTOMER SEGMENTATION PAGE -->
 
 <div id="customer-segmentation-page" class="page">
@@ -762,7 +682,7 @@
                     <th style="border-bottom: 1px solid #ccc;">Product</th>
                     <th style="border-bottom: 1px solid #ccc; width: 60px;">Qty</th>
                     <th style="border-bottom: 1px solid #ccc; width: 100px;">Reserved</th>
-                    <th style="border-bottom: 1px solid #ccc; width: 80px;">Status</th>
+                    <th style="border-bottom: 1px solid #ccc;">Pharmacist check</th>
                 </tr>
             </thead>
             <tbody id="reviewItemsBody">
@@ -783,7 +703,6 @@
 
 <script src="/assets/profile-validate.js?v=pv4"></script>
 <script src="/cashier/js/cashier-boot.js?v=role-lock1"></script>
-<script src="/cashier/js/prescriptions.js?v=review-id1"></script>
 <script>window.SEGMENTATION_MANAGE = false;</script>
 <script src="/shared/js/segmentation.js?v=plain2"></script>
 <script>
@@ -885,53 +804,120 @@ function formatCheckoutPercent(rate) {
     return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+let pwdVerificationSucceeded = false;
+let pwdVerificationSequence = 0;
+let pwdVerifiedIdNumber = null;
+let pwdVerifiedHolderName = null;
+
 function updateScPwdDetailsVisibility() {
     const enabled = !!document.getElementById('scPwdToggle')?.checked;
     const panel = document.getElementById('scPwdDetails');
     if (panel) panel.hidden = !enabled;
-    if (!enabled) {
-        ['discountIdType', 'discountIdNumber', 'discountIdHolderName'].forEach((id) => {
-            const field = document.getElementById(id);
-            if (field) field.value = '';
+}
+
+function setPwdVerificationStatus(message, state = 'info') {
+    const status = document.getElementById('pwdVerificationStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.dataset.state = state;
+}
+
+function resetPwdVerification(message = 'QR changed. Verify the PWD ID before applying the discount.') {
+    pwdVerificationSequence += 1;
+    pwdVerificationSucceeded = false;
+    pwdVerifiedIdNumber = null;
+    pwdVerifiedHolderName = null;
+    const verifyButton = document.getElementById('verifyPwdQrBtn');
+    if (verifyButton) verifyButton.disabled = false;
+    setPwdVerificationStatus(message);
+    if (typeof updateCart === 'function') updateCart();
+}
+
+function clearPwdVerification(message = 'Scan or enter the PWD ID QR code to authenticate it.') {
+    const input = document.getElementById('pwdQrPayload');
+    if (input) input.value = '';
+    resetPwdVerification(message);
+    const toggle = document.getElementById('scPwdToggle');
+    if (toggle) toggle.checked = false;
+    updateScPwdDetailsVisibility();
+}
+
+function handleScannedPwdQr(qrPayload) {
+    const input = document.getElementById('pwdQrPayload');
+    if (!input) return;
+    input.value = qrPayload;
+    resetPwdVerification('QR scanned. Checking with the authorized verification provider...');
+    verifyPwdQr();
+    closeBarcodeScanner();
+}
+
+async function verifyPwdQr() {
+    const input = document.getElementById('pwdQrPayload');
+    const verifyButton = document.getElementById('verifyPwdQrBtn');
+    const qrPayload = input?.value.trim() || '';
+    if (!qrPayload) {
+        setPwdVerificationStatus('Scan or enter the PWD ID QR code first.');
+        input?.focus();
+        return;
+    }
+
+    const sequence = ++pwdVerificationSequence;
+    if (verifyButton) verifyButton.disabled = true;
+    pwdVerificationSucceeded = false;
+    pwdVerifiedIdNumber = null;
+    pwdVerifiedHolderName = null;
+    setPwdVerificationStatus('Checking the PWD ID with the authorized verification provider...');
+    if (typeof updateCart === 'function') updateCart();
+
+    try {
+        const response = await fetch('/api/cashier/pwd/verify', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ qr_payload: qrPayload })
         });
-        const verified = document.getElementById('discountIdVerified');
-        if (verified) verified.checked = false;
+        const data = await response.json();
+        if (sequence !== pwdVerificationSequence || input.value.trim() !== qrPayload) return;
+        if (!response.ok) {
+            throw new Error(data.message || 'PWD ID verification is unavailable.');
+        }
+        pwdVerificationSucceeded = data.verified === true;
+        if (pwdVerificationSucceeded) {
+            pwdVerifiedIdNumber = typeof data.id_number === 'string' ? data.id_number : null;
+            pwdVerifiedHolderName = typeof data.holder_name === 'string' ? data.holder_name : null;
+            const toggle = document.getElementById('scPwdToggle');
+            if (toggle) toggle.checked = true;
+            setPwdVerificationStatus('PWD ID authenticated. The PWD discount is ready.', 'verified');
+        } else {
+            setPwdVerificationStatus(data.message || 'PWD ID was not authenticated.', 'rejected');
+        }
+        if (typeof updateCart === 'function') updateCart();
+    } catch (err) {
+        if (sequence === pwdVerificationSequence) {
+            pwdVerificationSucceeded = false;
+            setPwdVerificationStatus(err.message || 'PWD ID verification failed.', 'error');
+            if (typeof updateCart === 'function') updateCart();
+        }
+    } finally {
+        if (verifyButton && sequence === pwdVerificationSequence) verifyButton.disabled = false;
     }
 }
 
 function getScPwdSaleData() {
     const enabled = !!document.getElementById('scPwdToggle')?.checked;
     if (!enabled) {
-        return {
-            sc_pwd_applied: false,
-            discount_id_type: null,
-            discount_id_number: null,
-            discount_id_holder_name: null,
-            id_verified: false
-        };
+        return { sc_pwd_applied: false, pwd_qr_payload: null };
     }
-    const type = document.getElementById('discountIdType')?.value || '';
-    const number = document.getElementById('discountIdNumber')?.value.trim() || '';
-    const holder = document.getElementById('discountIdHolderName')?.value.trim() || '';
-    const verified = !!document.getElementById('discountIdVerified')?.checked;
-    const missing = [];
-    if (type !== 'PWD') missing.push(['discountIdType', 'choose PWD']);
-    if (!/^[A-Za-z0-9-]{4,30}$/.test(number)) missing.push(['discountIdNumber', 'enter a valid ID number (4-30 letters, digits, or dashes)']);
-    if (!holder || holder.length > 120 || holder.split(/\s+/).filter(Boolean).length < 2) {
-        missing.push(['discountIdHolderName', "enter the ID holder's full name"]);
-    }
-    if (!verified) missing.push(['discountIdVerified', 'confirm that the original ID was verified in person']);
-    if (missing.length) {
-        alert('PWD discount requires that you ' + missing.map(([, message]) => message).join(', ') + '.');
-        document.getElementById(missing[0][0])?.focus();
+    const qrPayload = document.getElementById('pwdQrPayload')?.value.trim() || '';
+    if (!pwdVerificationSucceeded || !qrPayload) {
+        alert('Authenticate the PWD ID QR code before applying the discount.');
         return null;
     }
     return {
         sc_pwd_applied: true,
-        discount_id_type: type,
-        discount_id_number: number,
-        discount_id_holder_name: holder,
-        id_verified: true
+        pwd_qr_payload: qrPayload,
+        pwd_id_number: pwdVerifiedIdNumber,
+        pwd_holder_name: pwdVerifiedHolderName
     };
 }
 
@@ -1232,8 +1218,7 @@ function switchPOSMode(mode) {
 
 window.clearCart = function() {
     if (cart.length === 0) {
-        const scPwdToggle = document.getElementById('scPwdToggle');
-        if (scPwdToggle) scPwdToggle.checked = false;
+        clearPwdVerification();
         updateScPwdDetailsVisibility();
         savePosDraft();
         return;
@@ -1296,8 +1281,7 @@ window.clearCart = function() {
     const applyPointsToggle = document.getElementById('applyPointsToggle');
     if (applyPointsToggle) applyPointsToggle.checked = false;
 
-    const scPwdToggle = document.getElementById('scPwdToggle');
-    if (scPwdToggle) scPwdToggle.checked = false;
+    clearPwdVerification();
     updateScPwdDetailsVisibility();
     savePosDraft();
 
@@ -1392,7 +1376,7 @@ function printReceipt(responseData, saleData, printWindow) {
             <tr><td class="right">PAYMENT METHOD:</td><td class="right">${paymentMethodDisplay}</td></tr>
             ${saleData.payment_reference ? `<tr><td class="right">REF NO.:</td><td class="right">${saleData.payment_reference}</td></tr>` : ''}`;
     const discountIdLineHtml = saleData.sc_pwd_applied
-        ? `<tr><td class="right">PWD Discount:</td><td class="right">PWD, ID No.: ${maskDiscountId(saleData.discount_id_number)}</td></tr>`
+        ? `<tr><td class="right">PWD Discount:</td><td class="right">${saleData.discount_id_number ? `PWD, ID No.: ${maskDiscountId(saleData.discount_id_number)}` : 'PWD ID authenticated'}</td></tr>`
         : '';
 
     // 2. Construct Full Receipt HTML (MAY DAGDAG NA PRINT BUTTON)
@@ -1758,7 +1742,7 @@ const row = `
 cartTable.innerHTML += row;
     });
     
-    const scPwdChecked = document.getElementById("scPwdToggle").checked;
+    const scPwdChecked = document.getElementById("scPwdToggle").checked && pwdVerificationSucceeded;
     let scDiscount = 0;
     let vatExemptSale = 0;
     let taxAmount = 0;
@@ -1869,11 +1853,6 @@ function savePosDraft() {
                 loyalty_points: selectedCustomer.loyalty_points
             } : null,
             discountPercent: discountInput ? discountInput.value : '0',
-            scPwd: !!document.getElementById('scPwdToggle')?.checked,
-            discountIdType: document.getElementById('discountIdType')?.value || '',
-            discountIdNumber: document.getElementById('discountIdNumber')?.value || '',
-            discountIdHolderName: document.getElementById('discountIdHolderName')?.value || '',
-            discountIdVerified: !!document.getElementById('discountIdVerified')?.checked,
             applyPoints: !!document.getElementById('applyPointsToggle')?.checked,
             paymentMethod: document.getElementById('paymentMethodSelect')?.value || 'cash',
             cash: cashInput ? cashInput.value : '',
@@ -1895,6 +1874,15 @@ function restorePosDraft() {
         draft = null;
     }
     posDraftReady = true;
+    if (draft && typeof draft === 'object') {
+        ['scPwd', 'discountIdType', 'discountIdNumber', 'discountIdHolderName', 'discountIdVerified', 'pwdQrPayload']
+            .forEach((key) => delete draft[key]);
+        try {
+            localStorage.setItem(POS_DRAFT_KEY, JSON.stringify(draft));
+        } catch (err) {
+            console.warn('Could not clear saved PWD verification data.', err);
+        }
+    }
     if (!draft || !Array.isArray(draft.items) || !draft.items.length) return;
 
     cart = draft.items.filter((item) => item && item.lot_id != null && Number(item.qty) > 0).map((item) => ({
@@ -1924,11 +1912,10 @@ function restorePosDraft() {
     currentOnlineOrderPay = draft.onlineOrderPay || null;
 
     const scPwdToggle = document.getElementById('scPwdToggle');
-    if (scPwdToggle) scPwdToggle.checked = !!draft.scPwd;
-    document.getElementById('discountIdType').value = draft.discountIdType || '';
-    document.getElementById('discountIdNumber').value = draft.discountIdNumber || '';
-    document.getElementById('discountIdHolderName').value = draft.discountIdHolderName || '';
-    document.getElementById('discountIdVerified').checked = !!draft.discountIdVerified;
+    if (scPwdToggle) scPwdToggle.checked = false;
+    const pwdQrPayload = document.getElementById('pwdQrPayload');
+    if (pwdQrPayload) pwdQrPayload.value = '';
+    pwdVerificationSucceeded = false;
     updateScPwdDetailsVisibility();
     if (discountInput && draft.discountPercent != null) discountInput.value = draft.discountPercent;
     const applyPointsToggle = document.getElementById('applyPointsToggle');
@@ -2147,11 +2134,10 @@ window.reviewOrder = function(orderId) {
             data.items.forEach(item => {
                 const orderedQty = parseInt(item.ordered_qty);
                 const isRx = String(item.sale_class || 'rx').toLowerCase() === 'rx';
-                const prescriptionId = Number(item.prescription_id || 0);
-                const rxStatus = isRx
-                    ? (prescriptionId > 0 ? `Approved · Rx #${prescriptionId}` : 'Approval required')
+                const pharmacistCheck = isRx
+                    ? 'Inspect original prescription at the store before dispensing'
                     : 'Not required';
-                if (orderedQty < 1 || (isRx && prescriptionId < 1)) canAdvance = false;
+                if (orderedQty < 1) canAdvance = false;
                 const productName = `${item.brand_name || ''} / ${item.generic_name || ''}`.replace(/[&<>"']/g, (char) => ({
                     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
                 })[char]);
@@ -2161,7 +2147,7 @@ window.reviewOrder = function(orderId) {
                         <td style="text-align:left;">${productName}</td>
                         <td style="text-align:center;">${orderedQty}</td>
                         <td style="text-align:center;">Reserved</td>
-                        <td style="text-align:center; font-weight:bold;">${rxStatus}</td>
+                        <td style="text-align:left;">${pharmacistCheck}</td>
                     </tr>
                 `;
             });
@@ -2190,7 +2176,7 @@ window.reviewOrder = function(orderId) {
                     : 'Order cannot advance';
                 messageP.textContent = canAdvance
                     ? 'Load this order in Point of Sale to complete pickup and payment.'
-                    : 'This order needs a valid pharmacist approval for every prescription medicine.';
+                    : 'This order has an invalid item quantity.';
                 messageP.style.color = canAdvance ? '#4b5563' : 'red';
             }
             cancelBtn.disabled = data.sale_completed || !['Pending', 'Processing', 'Ready for Pickup'].includes(data.status);
@@ -2350,14 +2336,37 @@ document.addEventListener("DOMContentLoaded", function() {
     // ===== SC/PWD TOGGLE =====
     const scPwdToggle = document.getElementById("scPwdToggle");
     scPwdToggle.addEventListener("change", () => {
+        if (!scPwdToggle.checked) {
+            clearPwdVerification();
+        } else if (!pwdVerificationSucceeded) {
+            const qrPayload = document.getElementById('pwdQrPayload')?.value.trim() || '';
+            if (qrPayload) {
+                verifyPwdQr();
+            } else {
+                setPwdVerificationStatus('Scan or enter the PWD ID QR code to authenticate it first.');
+            }
+        }
         updateScPwdDetailsVisibility();
         updateCart();
     });
-    ['discountIdType', 'discountIdNumber', 'discountIdHolderName', 'discountIdVerified'].forEach((id) => {
-        const field = document.getElementById(id);
-        field?.addEventListener('input', savePosDraft);
-        field?.addEventListener('change', savePosDraft);
-    });
+    const pwdQrPayload = document.getElementById('pwdQrPayload');
+    pwdQrPayload?.addEventListener('input', () => resetPwdVerification());
+    pwdQrPayload?.addEventListener('change', verifyPwdQr);
+    document.getElementById('verifyPwdQrBtn')?.addEventListener('click', verifyPwdQr);
+    document.getElementById('scanPwdQrBtn')?.addEventListener('click', () => openBarcodeScanner('pwd_qr'));
+    fetch('/api/cashier/pwd/verification-status', { credentials: 'same-origin' })
+        .then((response) => response.json())
+        .then((data) => {
+            if (data.available) {
+                setPwdVerificationStatus('Scan or enter the PWD ID QR code to authenticate it.');
+            } else {
+                setPwdVerificationStatus(
+                    'Authorized UPWDIS verification is not configured. PWD discount cannot be applied.',
+                    'error'
+                );
+            }
+        })
+        .catch(() => setPwdVerificationStatus('Could not check PWD verification service availability.', 'error'));
 
     // ===== LOYALTY POINTS TOGGLE =====
     const applyPointsToggle = document.getElementById("applyPointsToggle");
@@ -2543,7 +2552,7 @@ document.querySelectorAll(".add-btn").forEach(btn => {
 // max-stock check, cart push/increment, and visual stock update.
 let barcodeReader = null;
 let barcodeScanCooldown = false;
-let scannerMode = 'cart'; // 'cart' (add product to cart) | 'payment_ref' (fill GCash/Maya reference field)
+let scannerMode = 'cart'; // 'cart', 'payment_ref', or 'pwd_qr'
 
 function addProductFromLookup(p, statusEl) {
     const lotId = String(p.lot_inventory_id);
@@ -2627,7 +2636,9 @@ function openBarcodeScanner(mode = 'cart') {
     modal.style.display = 'flex';
     if (statusEl) statusEl.textContent = mode === 'payment_ref'
         ? 'Point the camera at the customer\'s GCash/Maya QR…'
-        : 'Point the camera at a barcode…';
+        : mode === 'pwd_qr'
+            ? 'Point the camera at the PWD ID QR code…'
+            : 'Point the camera at a barcode…';
 
     if (typeof ZXing === 'undefined') {
         if (statusEl) statusEl.textContent = '❌ Scanner library failed to load. Check your internet connection.';
@@ -2640,6 +2651,8 @@ function openBarcodeScanner(mode = 'cart') {
             barcodeScanCooldown = true;
             if (scannerMode === 'payment_ref') {
                 handleScannedPaymentRef(result.getText());
+            } else if (scannerMode === 'pwd_qr') {
+                handleScannedPwdQr(result.getText());
             } else {
                 addToCartByBarcode(result.getText());
             }
@@ -2765,10 +2778,9 @@ function finishEwalletSale() {
         points_redeemed: pending.pointsRedeemed,
         points_discount_value: pending.pointsDiscountValue,
         sc_pwd_applied: pending.sc_pwd_applied,
-        discount_id_type: pending.discount_id_type,
-        discount_id_number: pending.discount_id_number,
-        discount_id_holder_name: pending.discount_id_holder_name,
-        id_verified: pending.id_verified,
+        pwd_qr_payload: pending.pwd_qr_payload,
+        pwd_id_number: pending.pwd_id_number,
+        pwd_holder_name: pending.pwd_holder_name,
         items: pending.items
     };
     postCashierSale(saleData, null, false, 0, pending.paymentMethod, paymentReference);
@@ -3506,7 +3518,9 @@ function reprintSalesReceipt(sale, items) {
     const discountIdLine = sale.discount_id_type
         ? '<tr><td class="right">SC/PWD Discount:</td><td class="right">' +
           (sale.discount_id_type === 'Senior' ? 'Senior Citizen' : 'PWD') +
-          ', ID No.: ' + srEsc(sale.discount_id_number || '') + '</td></tr>'
+          (sale.discount_id_number
+              ? ', ID No.: ' + srEsc(sale.discount_id_number)
+              : ' ID authenticated') + '</td></tr>'
         : '';
     const paymentLine = method === 'cash'
         ? '<tr><td class="right">CASH:</td><td class="right">' + money(sale.cash_received) + '</td></tr>' +
@@ -3583,7 +3597,9 @@ function openSalesReportDetail(saleId) {
                 (s.payment_reference ? ' · Ref ' + srEsc(s.payment_reference) : '') + '</p>' +
                 (s.discount_id_type ? '<p><strong>SC/PWD Discount:</strong> ' +
                     srEsc(s.discount_id_type === 'Senior' ? 'Senior Citizen' : 'PWD') +
-                    ' · <strong>ID No.:</strong> ' + srEsc(s.discount_id_number || '') + '</p>' : '') +
+                    (s.discount_id_number
+                        ? ' · <strong>ID No.:</strong> ' + srEsc(s.discount_id_number)
+                        : ' · ID authenticated') + '</p>' : '') +
                 '<p><strong>Subtotal:</strong> ₱' + Number(s.subtotal).toFixed(2) +
                 ' · <strong>Discount:</strong> ₱' + Number(s.discount_amount).toFixed(2) +
                 ' · <strong>Total:</strong> ₱' + Number(s.total_amount).toFixed(2) + '</p>' +

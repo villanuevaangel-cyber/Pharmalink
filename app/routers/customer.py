@@ -787,40 +787,12 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 server_total = 0.0
                 affected = set()
-                approved_prescriptions = {}
                 for item in items:
                     lot_id = int(item.get("lot_id") or 0)
                     qty = int(item.get("quantity") or 0)
                     if lot_id <= 0 or qty <= 0:
                         raise ValueError("Invalid item in cart.")
                     drug_id = drug_id_for_lot(cur, lot_id)
-                    cur.execute(
-                        "SELECT COALESCE(sale_class, 'rx') AS sale_class FROM drugs_master WHERE drug_id = %s",
-                        (drug_id,),
-                    )
-                    drug_class = cur.fetchone()
-                    if not drug_class:
-                        raise ValueError("One of the items in your cart is no longer available.")
-                    if str(drug_class["sale_class"] or "rx").lower() == "rx":
-                        cur.execute(
-                            """
-                            SELECT id
-                            FROM prescriptions
-                            WHERE user_id = %s
-                              AND review_status = 'approved'
-                              AND %s = ANY(reviewed_drug_ids)
-                            ORDER BY reviewed_at DESC NULLS LAST, id DESC
-                            LIMIT 1
-                            FOR SHARE
-                            """,
-                            (customer_id, drug_id),
-                        )
-                        reviewed_rx = cur.fetchone()
-                        if not reviewed_rx:
-                            raise ValueError(
-                                "A pharmacist-approved prescription is required for every prescription medicine in your cart."
-                            )
-                        approved_prescriptions[drug_id] = int(reviewed_rx["id"])
                     if sellable_quantity(cur, drug_id) < qty:
                         available = sellable_quantity(cur, drug_id)
                         raise ValueError(
@@ -876,8 +848,8 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
                         cur.execute(
                             """
                             INSERT INTO order_details
-                                (detail_id, order_id, drug_id, lot_inventory_id, quantity, price_per_unit, prescription_id)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                (detail_id, order_id, drug_id, lot_inventory_id, quantity, price_per_unit)
+                            VALUES (%s, %s, %s, %s, %s, %s)
                             """,
                             (
                                 detail_id,
@@ -886,7 +858,6 @@ async def place_order_with_payload(request: Request, customer_id: int, payload: 
                                 part["lot_id"],
                                 part["qty"],
                                 unit_price,
-                                approved_prescriptions.get(drug_id),
                             ),
                         )
                     affected.add(drug_id)
@@ -1036,8 +1007,7 @@ def prescriptions(request: Request):
         return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
     rows = fetch_all(
         """
-        SELECT id, filename, extracted_text, availability_summary, ocr_status, created_at,
-               review_status, review_note, reviewed_drug_ids
+        SELECT id, filename, extracted_text, availability_summary, ocr_status, created_at
         FROM prescriptions WHERE user_id = %s ORDER BY created_at DESC
         """,
         (customer_id,),
@@ -1203,48 +1173,34 @@ def _pdf_page_images(pdf_path: Path, max_pages: int = 4) -> list[Path] | None:
 async def upload_prescription(
     request: Request,
     prescription_file: UploadFile = File(...),
-    id_file: UploadFile = File(...),
 ):
     customer_id = require_customer(request)
     if customer_id is None:
         return JSONResponse({"success": False, "message": "Not logged in."}, status_code=401)
     if not prescription_file.filename:
         return {"success": False, "message": "Please choose a file to upload."}
-    if not id_file.filename:
-        return {"success": False, "message": "Please upload a government-issued ID for pharmacist verification."}
 
     ext = Path(prescription_file.filename).suffix.lower().lstrip(".")
     if ext not in {"jpg", "jpeg", "png", "webp", "pdf"}:
         return {"success": False, "message": "Only JPG, PNG, WEBP, or PDF files are allowed."}
-    id_ext = Path(id_file.filename).suffix.lower().lstrip(".")
-    if id_ext not in {"jpg", "jpeg", "png", "webp", "pdf"}:
-        return {"success": False, "message": "The ID must be a JPG, PNG, WEBP, or PDF file."}
     content = await prescription_file.read()
-    id_content = await id_file.read()
     if len(content) > 5 * 1024 * 1024:
         return {"success": False, "message": "The prescription file must be under 5MB."}
-    if len(id_content) > 5 * 1024 * 1024:
-        return {"success": False, "message": "The ID file must be under 5MB."}
-    if not content or not id_content:
-        return {"success": False, "message": "Both files must contain data."}
+    if not content:
+        return {"success": False, "message": "The prescription file is empty."}
 
     dest_dir = RX_DIR
     dest_dir.mkdir(parents=True, exist_ok=True)
     upload_key = time.time_ns()
     filename = f"rx_{customer_id}_{upload_key}.{ext}"
-    id_filename = f"rxid_{customer_id}_{upload_key}.{id_ext}"
     filepath = dest_dir / filename
-    id_path = rx_id_filepath(id_filename)
     try:
         filepath.write_bytes(content)
-        id_path.parent.mkdir(parents=True, exist_ok=True)
-        id_path.write_bytes(id_content)
     except OSError:
-        for stored_path in (filepath, id_path):
-            try:
-                stored_path.unlink(missing_ok=True)
-            except OSError:
-                logger.warning("Could not remove incomplete prescription upload file.", exc_info=True)
+        try:
+            filepath.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Could not remove incomplete prescription upload file.", exc_info=True)
         raise
 
     with get_conn() as conn:
@@ -1253,10 +1209,10 @@ async def upload_prescription(
             cur.execute(
                 """
                 INSERT INTO prescriptions
-                    (id, user_id, filename, id_filename, identity_verified, ocr_status, created_at)
-                VALUES (%s, %s, %s, %s, FALSE, 'pending', NOW())
+                    (id, user_id, filename, ocr_status, created_at)
+                VALUES (%s, %s, %s, 'pending', NOW())
                 """,
-                (prescription_id, customer_id, filename, id_filename),
+                (prescription_id, customer_id, filename),
             )
 
             extracted_text = None
@@ -1315,7 +1271,7 @@ async def upload_prescription(
     }
     return {
         "success": True,
-        "message": messages.get(ocr_status, "Prescription uploaded.") + " Your ID will be removed after pharmacist review.",
+        "message": messages.get(ocr_status, "Prescription uploaded."),
         "prescription_id": prescription_id,
         "filename": filename,
         "ocr_status": ocr_status,
@@ -1335,7 +1291,7 @@ def cancel_prescription(request: Request, prescription_id: int):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT id_filename, review_status
+                SELECT id_filename
                 FROM prescriptions
                 WHERE id = %s AND user_id = %s
                 FOR UPDATE
@@ -1345,11 +1301,6 @@ def cancel_prescription(request: Request, prescription_id: int):
             prescription = cur.fetchone()
             if not prescription:
                 return JSONResponse({"success": False, "message": "Prescription not found."}, status_code=404)
-            if str(prescription.get("review_status") or "pending").lower() != "pending":
-                return JSONResponse(
-                    {"success": False, "message": "Only a prescription awaiting pharmacist review can be cancelled."},
-                    status_code=409,
-                )
             cur.execute(
                 "SELECT 1 FROM order_details WHERE prescription_id = %s LIMIT 1",
                 (prescription_id,),
@@ -1383,7 +1334,7 @@ def cancel_prescription(request: Request, prescription_id: int):
             rx_id_filepath(id_filename).unlink(missing_ok=True)
         except OSError:
             logger.warning("Could not remove cancelled ID document for prescription %s.", prescription_id, exc_info=True)
-    return {"success": True, "message": "Prescription submission cancelled."}
+    return {"success": True, "message": "Prescription upload removed."}
 
 
 @router.get("/notifications")

@@ -57,7 +57,8 @@ jobs:
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "$HOSTINGER_USER@$HOSTINGER_HOST" \
-            'sudo -n -u www-data /usr/bin/git -C /var/www/pharmalink pull --ff-only origin cursor/render-deploy &&
+            'if ! command -v tesseract >/dev/null 2>&1; then sudo -n /usr/bin/apt-get update && sudo -n /usr/bin/apt-get install -y tesseract-ocr; fi &&
+             sudo -n -u www-data /usr/bin/git -C /var/www/pharmalink pull --ff-only origin cursor/render-deploy &&
              sudo -n -u www-data /var/www/pharmalink/venv/bin/pip install -r /var/www/pharmalink/requirements.txt &&
              sudo -n /usr/bin/systemctl restart pharmalink &&
              sudo -n /usr/bin/systemctl is-active --quiet pharmalink'

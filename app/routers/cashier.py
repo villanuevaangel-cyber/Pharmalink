@@ -3,7 +3,6 @@ import hashlib
 import logging
 import os
 import random
-import re
 import subprocess
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -25,7 +24,14 @@ from app.mailer import send_mail
 from app.payments import CASHIER_PAYMENT_KEYS, CUSTOMER_EWALLET_KEYS
 from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
 from app.profile_photos import resolve_photo_url, staff_photo_url
-from app.rx_files import rx_file_response, rx_id_file_response, rx_id_filepath
+from app.pwd_verification import (
+    PwdVerificationProviderError,
+    PwdVerificationResult,
+    PwdVerificationUnavailableError,
+    create_pwd_verification_proof,
+    is_valid_pwd_verification_proof,
+    validate_pwd_qr_payload,
+)
 from app.stock import allocate_expiring_first, drug_id_for_lot, restore_order_stock, sellable_quantity, split_money, sync_stock_status_for_drug
 from app.validation import prepare_profile_fields
 
@@ -34,7 +40,6 @@ router = APIRouter(prefix="/api/cashier", tags=["cashier"])
 ROOT = Path(__file__).resolve().parent.parent.parent
 POINTS_TO_PESO_RATE = 0.30  # fallback if settings are missing; POS reads /loyalty-settings
 DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/2922/2922510.png"
-_HIDDEN_CASHIER_PRESCRIPTION_IDS = (1, 2, 3)
 
 
 def _unauthorized():
@@ -284,6 +289,108 @@ def cashier_checkout_rates(request: Request):
     return {"success": True, **get_checkout_rates()}
 
 
+async def _authenticate_pwd_qr(request: Request, qr_payload: str) -> PwdVerificationResult:
+    provider = getattr(request.app.state, "pwd_verification_provider", None)
+    if provider is None or not callable(getattr(provider, "verify_qr", None)):
+        raise PwdVerificationUnavailableError
+    result = await provider.verify_qr(qr_payload)
+    if not isinstance(result, PwdVerificationResult):
+        raise PwdVerificationProviderError
+    if type(result.authenticated) is not bool:
+        raise PwdVerificationProviderError
+    if result.id_number is not None and (
+        not isinstance(result.id_number, str) or len(result.id_number) > 80
+    ):
+        raise PwdVerificationProviderError
+    if result.holder_name is not None and (
+        not isinstance(result.holder_name, str) or len(result.holder_name) > 120
+    ):
+        raise PwdVerificationProviderError
+    return result
+
+
+@router.get("/pwd/verification-status")
+def cashier_pwd_verification_status(request: Request):
+    if not require_staff(request):
+        return _unauthorized()
+    provider = getattr(request.app.state, "pwd_verification_provider", None)
+    signing_key = getattr(request.app.state, "pwd_verification_signing_key", "")
+    available = (
+        provider is not None
+        and callable(getattr(provider, "verify_qr", None))
+        and isinstance(signing_key, str)
+        and bool(signing_key)
+    )
+    return {"success": True, "available": available}
+
+
+@router.post("/pwd/verify")
+async def cashier_verify_pwd_qr(request: Request):
+    staff_id = require_staff(request)
+    if not staff_id:
+        return _unauthorized()
+    request.session.pop("pwd_verification", None)
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse(
+            {"success": False, "verified": False, "message": "Invalid verification request."},
+            status_code=400,
+        )
+    if not isinstance(data, dict):
+        return JSONResponse(
+            {"success": False, "verified": False, "message": "Invalid verification request."},
+            status_code=400,
+        )
+    try:
+        qr_payload = validate_pwd_qr_payload(data.get("qr_payload"))
+        result = await _authenticate_pwd_qr(request, qr_payload)
+    except ValueError as exc:
+        return JSONResponse(
+            {"success": False, "verified": False, "message": str(exc)},
+            status_code=400,
+        )
+    except PwdVerificationUnavailableError:
+        return JSONResponse(
+            {
+                "success": False,
+                "verified": False,
+                "message": "Authorized UPWDIS verification is not configured. PWD discount is unavailable.",
+            },
+            status_code=503,
+        )
+    except PwdVerificationProviderError:
+        return JSONResponse(
+            {"success": False, "verified": False, "message": "The PWD ID could not be verified right now."},
+            status_code=502,
+        )
+    if result.authenticated:
+        signing_key = getattr(request.app.state, "pwd_verification_signing_key", "")
+        if not isinstance(signing_key, str) or not signing_key:
+            return JSONResponse(
+                {
+                    "success": False,
+                    "verified": False,
+                    "message": "PWD ID verification is not configured securely.",
+                },
+                status_code=503,
+            )
+        request.session["pwd_verification"] = create_pwd_verification_proof(
+            qr_payload,
+            staff_id,
+            signing_key,
+            id_number=result.id_number,
+            holder_name=result.holder_name,
+        )
+    return {
+        "success": True,
+        "verified": result.authenticated,
+        "message": "PWD ID authenticated." if result.authenticated else "PWD ID was not authenticated.",
+        "id_number": result.id_number if result.authenticated else None,
+        "holder_name": result.holder_name if result.authenticated else None,
+    }
+
+
 @router.get("/loyalty-settings")
 def cashier_loyalty_settings(request: Request):
     if not require_staff(request):
@@ -332,243 +439,6 @@ def _promos_payload():
         for item in out:
             item["drug_ids"] = by_promo.get(int(item["promo_id"]), [])
     return out
-
-
-@router.get("/prescriptions")
-def pharmacist_prescriptions(request: Request):
-    if not require_staff(request):
-        return _unauthorized()
-    rows = fetch_all(
-        """
-        SELECT p.id, p.user_id, p.filename, p.extracted_text, p.availability_summary,
-               p.ocr_status, p.created_at, p.review_status, p.review_note,
-               p.reviewed_by, p.reviewed_at, p.reviewed_drug_ids,
-               p.id_filename, p.identity_verified,
-               c.first_name, c.last_name
-        FROM prescriptions p
-        LEFT JOIN customers c ON c.customer_id = p.user_id
-        WHERE p.review_status = 'pending'
-          AND p.id NOT IN (%s, %s, %s)
-        ORDER BY p.created_at DESC
-        LIMIT 200
-        """,
-        _HIDDEN_CASHIER_PRESCRIPTION_IDS,
-    )
-    prescriptions = []
-    for raw in rows:
-        item = dict(raw)
-        summary = item.get("availability_summary")
-        if isinstance(summary, str) and summary:
-            try:
-                summary = json.loads(summary)
-            except json.JSONDecodeError:
-                summary = []
-        item["availability_summary"] = summary if isinstance(summary, list) else []
-        item["reviewed_drug_ids"] = [int(drug_id) for drug_id in (item.get("reviewed_drug_ids") or [])]
-        item["file_url"] = f"/api/cashier/prescriptions/{int(item['id'])}/file"
-        item["id_file_url"] = (
-            f"/api/cashier/prescriptions/{int(item['id'])}/id-file"
-            if item.get("id_filename")
-            else ""
-        )
-        item["customer_name"] = " ".join(
-            part for part in (str(item.get("first_name") or "").strip(), str(item.get("last_name") or "").strip()) if part
-        ) or f"Customer #{int(item['user_id'])}"
-        item["created_at"] = _fmt_dt(item.get("created_at"), "%b %d, %Y %I:%M %p")
-        item["reviewed_at"] = _fmt_dt(item.get("reviewed_at"), "%b %d, %Y %I:%M %p") or ""
-        prescriptions.append(_plain(item))
-    return {"success": True, "prescriptions": prescriptions}
-
-
-@router.get("/prescriptions/{prescription_id}/file")
-def pharmacist_prescription_file(request: Request, prescription_id: int):
-    if not require_staff(request):
-        return _unauthorized()
-    row = fetch_one(
-        "SELECT filename FROM prescriptions WHERE id = %s",
-        (prescription_id,),
-    )
-    if not row or not row.get("filename"):
-        return JSONResponse({"success": False, "message": "Prescription not found."}, status_code=404)
-    return rx_file_response(row["filename"])
-
-
-@router.get("/prescriptions/{prescription_id}/id-file")
-def pharmacist_prescription_id_file(request: Request, prescription_id: int):
-    if not require_staff(request):
-        return _unauthorized()
-    row = fetch_one(
-        "SELECT id_filename FROM prescriptions WHERE id = %s AND review_status = 'pending'",
-        (prescription_id,),
-    )
-    if not row or not row.get("id_filename"):
-        return JSONResponse({"success": False, "message": "ID document not found."}, status_code=404)
-    return rx_id_file_response(row["id_filename"])
-
-
-@router.get("/prescription-medicines")
-def prescription_medicines(request: Request, search: str = ""):
-    if not require_staff(request):
-        return _unauthorized()
-    term = str(search or "").strip()
-    if len(term) < 2:
-        return {"success": True, "medicines": []}
-    rows = fetch_all(
-        """
-        SELECT drug_id, generic_name, brand_name, dosage, form
-        FROM drugs_master
-        WHERE is_active = 1
-          AND COALESCE(sale_class, 'rx') = 'rx'
-          AND (
-              generic_name ILIKE %s OR COALESCE(brand_name, '') ILIKE %s
-              OR COALESCE(dosage, '') ILIKE %s OR COALESCE(form, '') ILIKE %s
-          )
-        ORDER BY generic_name, brand_name
-        LIMIT 30
-        """,
-        tuple(f"%{term}%" for _ in range(4)),
-    )
-    return {
-        "success": True,
-        "medicines": [
-            {
-                "drug_id": int(row["drug_id"]),
-                "generic_name": row.get("generic_name") or "",
-                "brand_name": row.get("brand_name") or "",
-                "dosage": row.get("dosage") or "",
-                "form": row.get("form") or "",
-            }
-            for row in rows
-        ],
-    }
-
-
-@router.post("/prescriptions/{prescription_id}/review")
-async def review_prescription(request: Request, prescription_id: int):
-    if not require_staff(request):
-        return _unauthorized()
-    payload = await request.json()
-    decision = str(payload.get("decision") or "").strip().lower()
-    note = str(payload.get("note") or "").strip()
-    if decision not in {"approved", "rejected"}:
-        return JSONResponse({"success": False, "message": "Choose approve or reject."}, status_code=400)
-    if len(note) > 1000:
-        return JSONResponse({"success": False, "message": "Review note must be 1,000 characters or fewer."}, status_code=400)
-    if decision == "rejected" and not note:
-        return JSONResponse({"success": False, "message": "Add a reason before rejecting this prescription."}, status_code=400)
-
-    raw_ids = payload.get("drug_ids") or []
-    if not isinstance(raw_ids, list):
-        return JSONResponse({"success": False, "message": "Selected medicines are invalid."}, status_code=400)
-    try:
-        drug_ids = list(dict.fromkeys(int(drug_id) for drug_id in raw_ids if int(drug_id) > 0))
-    except (TypeError, ValueError):
-        return JSONResponse({"success": False, "message": "Selected medicines are invalid."}, status_code=400)
-    if decision == "approved" and not drug_ids:
-        return JSONResponse(
-            {"success": False, "message": "Select at least one prescription-only medicine to approve."},
-            status_code=400,
-        )
-
-    user_id = int(require_staff(request))
-    id_filename_to_remove = None
-    try:
-        with get_conn() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    "SELECT user_id, extracted_text, id_filename, review_status FROM prescriptions WHERE id = %s FOR UPDATE",
-                    (prescription_id,),
-                )
-                prescription = cur.fetchone()
-                if not prescription:
-                    return JSONResponse({"success": False, "message": "Prescription not found."}, status_code=404)
-                if str(prescription.get("review_status") or "pending").lower() != "pending":
-                    return JSONResponse(
-                        {"success": False, "message": "This prescription is no longer awaiting review."},
-                        status_code=409,
-                    )
-                cur.execute(
-                    "SELECT 1 FROM order_details WHERE prescription_id = %s LIMIT 1",
-                    (prescription_id,),
-                )
-                if cur.fetchone():
-                    return JSONResponse(
-                        {"success": False, "message": "This prescription has already been attached to an order and can no longer be changed."},
-                        status_code=409,
-                    )
-
-                if decision == "approved":
-                    if not prescription.get("id_filename"):
-                        return JSONResponse(
-                            {"success": False, "message": "A government-issued ID is required before approval."},
-                            status_code=409,
-                        )
-                    if not rx_id_filepath(prescription["id_filename"]).is_file():
-                        return JSONResponse(
-                            {"success": False, "message": "The uploaded ID document is unavailable. Ask the customer to upload it again."},
-                            status_code=409,
-                        )
-                    if payload.get("id_verified") is not True:
-                        return JSONResponse(
-                            {"success": False, "message": "Verify the customer ID and prescription document before approval."},
-                            status_code=400,
-                        )
-                    cur.execute(
-                        """
-                        SELECT drug_id FROM drugs_master
-                        WHERE drug_id = ANY(%s)
-                          AND is_active = 1
-                          AND COALESCE(sale_class, 'rx') = 'rx'
-                        """,
-                        (drug_ids,),
-                    )
-                    valid_ids = {int(row["drug_id"]) for row in cur.fetchall()}
-                    if valid_ids != set(drug_ids):
-                        return JSONResponse(
-                            {"success": False, "message": "Select active prescription-only medicines from the catalog."},
-                            status_code=400,
-                        )
-                reviewed_ids = drug_ids if decision == "approved" else []
-                cur.execute(
-                    """
-                    UPDATE prescriptions
-                    SET review_status = %s,
-                        review_note = %s,
-                        reviewed_by = %s,
-                        reviewed_at = NOW(),
-                        reviewed_drug_ids = %s,
-                        identity_verified = %s,
-                        id_filename = NULL
-                    WHERE id = %s AND review_status = 'pending'
-                    """,
-                    (
-                        decision,
-                        note or None,
-                        user_id,
-                        reviewed_ids,
-                        payload.get("id_verified") is True,
-                        prescription_id,
-                    ),
-                )
-                id_filename_to_remove = prescription.get("id_filename")
-                write_activity_log(
-                    cur,
-                    "Review Prescription",
-                    f"Prescription #{prescription_id} {decision} by staff #{user_id}.",
-                    request=request,
-                )
-    except ValueError as exc:
-        return JSONResponse({"success": False, "message": str(exc)}, status_code=409)
-    if id_filename_to_remove:
-        try:
-            rx_id_filepath(id_filename_to_remove).unlink(missing_ok=True)
-        except OSError:
-            logger.warning(
-                "Could not remove reviewed ID document for prescription %s.",
-                prescription_id,
-                exc_info=True,
-            )
-    return {"success": True, "review_status": decision}
 
 
 @router.get("/online-orders")
@@ -649,7 +519,7 @@ def online_order_details(order_id: int, request: Request):
     items = fetch_all(
         """
         SELECT od.drug_id, od.lot_inventory_id, od.quantity AS ordered_qty, od.price_per_unit,
-               od.prescription_id, COALESCE(dm.sale_class, 'rx') AS sale_class,
+               COALESCE(dm.sale_class, 'rx') AS sale_class,
                dm.brand_name, dm.generic_name, dm.category, il.current_stock
         FROM order_details od
         JOIN drugs_master dm ON od.drug_id = dm.drug_id
@@ -777,35 +647,6 @@ async def update_order_status(request: Request):
                             {"success": False, "message": f"Order cannot move from {previous} to {status}."},
                             status_code=409,
                         )
-                    if status in {"Processing", "Ready for Pickup"}:
-                        cur.execute(
-                            """
-                            SELECT od.drug_id, od.prescription_id, dm.sale_class,
-                                   p.user_id AS prescription_user_id,
-                                   p.review_status, p.reviewed_drug_ids
-                            FROM order_details od
-                            JOIN drugs_master dm ON dm.drug_id = od.drug_id
-                            LEFT JOIN prescriptions p ON p.id = od.prescription_id
-                            WHERE od.order_id = %s
-                            """,
-                            (order_id,),
-                        )
-                        for line in cur.fetchall():
-                            if str(line.get("sale_class") or "rx").lower() != "rx":
-                                continue
-                            approved_ids = [int(value) for value in (line.get("reviewed_drug_ids") or [])]
-                            if (
-                                line.get("review_status") != "approved"
-                                or int(line.get("prescription_user_id") or 0) != int(row["customer_id"])
-                                or int(line["drug_id"]) not in approved_ids
-                            ):
-                                return JSONResponse(
-                                    {
-                                        "success": False,
-                                        "message": "This order contains a prescription medicine without a valid pharmacist approval.",
-                                    },
-                                    status_code=409,
-                                )
                     if status == "Completed":
                         cur.execute(
                             """
@@ -1360,33 +1201,57 @@ async def create_sale(request: Request):
     discount_id_number = None
     discount_id_holder = None
     if sc_pwd_applied:
-        discount_id_type = str(payload.get("discount_id_type") or "").strip()
-        discount_id_number = str(payload.get("discount_id_number") or "").strip()
-        discount_id_holder = str(payload.get("discount_id_holder_name") or "").strip()
-        if discount_id_type != "PWD":
+        try:
+            qr_payload = validate_pwd_qr_payload(payload.get("pwd_qr_payload"))
+        except ValueError as exc:
             return JSONResponse(
-                {"status": "error", "message": "Choose PWD as the discount ID type."},
+                {"status": "error", "message": str(exc)},
                 status_code=400,
             )
-        if not re.fullmatch(r"[A-Za-z0-9-]{4,30}", discount_id_number):
-            return JSONResponse(
-                {"status": "error", "message": "Enter a valid PWD ID number (4-30 letters, digits, or dashes)."},
-                status_code=400,
-            )
-        if (
-            not discount_id_holder
-            or len(discount_id_holder) > 120
-            or len(discount_id_holder.split()) < 2
+        verified_id_number = payload.get("pwd_id_number")
+        verified_holder_name = payload.get("pwd_holder_name")
+        if verified_id_number is not None and (
+            not isinstance(verified_id_number, str) or len(verified_id_number) > 80
         ):
             return JSONResponse(
-                {"status": "error", "message": "Enter the ID holder's full name (up to 120 characters)."},
+                {"status": "error", "message": "The verified PWD ID details are invalid."},
                 status_code=400,
             )
-        if payload.get("id_verified") is not True:
+        if verified_holder_name is not None and (
+            not isinstance(verified_holder_name, str) or len(verified_holder_name) > 120
+        ):
             return JSONResponse(
-                {"status": "error", "message": "Confirm that you verified the original PWD ID in person."},
+                {"status": "error", "message": "The verified PWD ID details are invalid."},
                 status_code=400,
             )
+        signing_key = getattr(request.app.state, "pwd_verification_signing_key", "")
+        if not isinstance(signing_key, str) or not signing_key:
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "PWD ID verification is not configured securely.",
+                },
+                status_code=503,
+            )
+        pwd_proof = request.session.get("pwd_verification")
+        if not isinstance(pwd_proof, dict) or not is_valid_pwd_verification_proof(
+            pwd_proof,
+            qr_payload,
+            user_id,
+            signing_key,
+            id_number=verified_id_number,
+            holder_name=verified_holder_name,
+        ):
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "Authenticate this PWD ID QR code before applying the discount.",
+                },
+                status_code=403,
+            )
+        discount_id_type = "PWD"
+        discount_id_number = verified_id_number.strip() or None if verified_id_number else None
+        discount_id_holder = verified_holder_name.strip() or None if verified_holder_name else None
 
     customer_id = payload.get("customer_id")
     try:
@@ -1567,7 +1432,7 @@ async def create_sale(request: Request):
                 transaction_id = f"TXN-{_manila_now().strftime('%Y%m%d%H%M%S')}-{random.randint(1000, 9999)}"
                 discount_amount_with_points = discount_total + points_discount_value
                 sale_id = next_id(cur, "sales", "sale_id")
-                if sc_pwd_applied:
+                if sc_pwd_applied and discount_id_number:
                     cur.execute(
                         f"""
                         SELECT 1
@@ -1675,10 +1540,9 @@ async def create_sale(request: Request):
 
                 details = f"Sale #{sale_id} - total ₱{total_amount:.2f}, {len(items)} item(s)."
                 if sc_pwd_applied:
-                    details += (
-                        f"PWD discount ID verified in person; "
-                        f"ID {_mask_discount_id(discount_id_number)}."
-                    )
+                    details += " PWD ID authenticated by the configured verification provider."
+                    if discount_id_number:
+                        details += f" ID {_mask_discount_id(discount_id_number)}."
                 if points_redeemed > 0:
                     details += f" Points redeemed: {points_redeemed:.2f} (₱{points_discount_value:.2f})."
                 write_activity_log(cur, "POS Sale", details, request=request)
@@ -1699,6 +1563,7 @@ async def create_sale(request: Request):
         }
         if warning:
             result["warning"] = warning
+        request.session.pop("pwd_verification", None)
         return result
     except ValueError as exc:
         return JSONResponse({"status": "error", "message": str(exc)}, status_code=409)

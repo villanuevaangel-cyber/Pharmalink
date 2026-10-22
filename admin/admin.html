@@ -962,7 +962,7 @@
 <section id="purchase-orders" style="display:none;">
     <div class="dashboard-header">
         <h2>Purchase Orders</h2>
-        <p>Select medicines and choose a supplier in each table row. Use the PO cart to review the selected suppliers and set final quantities before creating Pending POs.</p>
+        <p>Prophet estimates demand for the next 30 days. Suggested order quantities cover forecast demand and are adjusted to whole boxes and stock limits; recent-average estimates are labeled when Prophet data is unavailable.</p>
     </div>
     <div class="purchase-planner-filters" aria-label="Filter low-stock medicines">
         <label for="purchasePlannerSearch">Search medicine
@@ -983,7 +983,7 @@
                         <th>Medicine</th>
                         <th>Current qty (pcs)</th>
                         <th>Needed stock (pcs)</th>
-                        <th>Suggested qty (pcs)</th>
+                        <th>Forecast / order qty (pcs)</th>
                         <th>Pieces per Box</th>
                         <th>Supplier</th>
                     </tr>
@@ -5952,6 +5952,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 ).join('');
                 plannerSupplierFilter.value = selectedSupplier;
             }
+            const forecastDays = Number(suggestionData.assumptions?.target_coverage_days) || 30;
             const suggestions = (suggestionData.suggestions || [])
                 .filter((item) => item.action === 'increase' && item.auto_po !== false);
             if (!suggestions.length) {
@@ -5964,9 +5965,20 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             body.innerHTML = suggestions.map((item) => {
                 const pcsPerBox = Math.max(1, Number(item.units_per_box) || 1);
                 const maxOrderQty = Math.max(0, Number(item.max_order_qty) || 0);
-                const quantity = Math.min(maxOrderQty, Math.max(0, Number(item.suggested_qty) || 0));
+                const quantity = Math.min(maxOrderQty, Math.max(0, Number(item.suggested_po_qty) || 0));
                 const current = Number(item.current_stock || 0);
                 const needed = Math.max(0, Number(item.minimum_stock || 0) - current);
+                const forecastUnits = item.forecast_units == null
+                    ? (item.demand_source === 'recent_average'
+                        ? Math.round(Number(item.avg_daily_sales || 0) * forecastDays)
+                        : null)
+                    : Number(item.forecast_units);
+                const forecastLabel = item.demand_source === 'prophet'
+                    ? `Prophet · next ${forecastDays} days`
+                    : forecastUnits == null
+                        ? 'No sales forecast'
+                        : `Recent average · ${forecastDays} days`;
+                const forecastText = forecastUnits == null ? 'Unavailable' : `~${forecastUnits.toLocaleString()} pcs`;
                 const suggestedSupplierId = Number(item.suggested_supplier_id) || 0;
                 const label = `${escapePlanner(item.generic_name)}${item.brand_name ? ` (${escapePlanner(item.brand_name)})` : ''} - ${escapePlanner(item.dosage)} ${escapePlanner(item.form)}`;
                 return `<tr class="purchase-planner-row"
@@ -5981,7 +5993,12 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                     <td class="purchase-planner-medicine">${label}</td>
                     <td>${current.toLocaleString()}</td>
                     <td>${needed.toLocaleString()}</td>
-                    <td>${quantity.toLocaleString()}</td>
+                    <td class="purchase-planner-qty">
+                        <strong>${forecastText}</strong>
+                        <small>${forecastLabel}</small>
+                        <strong>${quantity.toLocaleString()} pcs</strong>
+                        <small>Suggested order · ${Math.floor(quantity / pcsPerBox)} box(es)</small>
+                    </td>
                     <td>${pcsPerBox.toLocaleString()} pcs</td>
                     <td><select class="purchase-planner-supplier" aria-label="Supplier for ${label}">${supplierOptions(item.drug_id, suggestedSupplierId)}</select></td>
                 </tr>`;

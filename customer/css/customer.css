@@ -289,8 +289,10 @@ html, body {
     align-items:stretch;
     margin-bottom:18px;
 }
+#prescription .rx-layout--single{
+    grid-template-columns:minmax(0, 720px);
+}
 #prescription #prescriptionFile,
-#prescription #prescriptionIdFile,
 #prescription #prescriptionCameraCapture{ display:none; }
 #prescription .rx-drop{
     background:#fff;
@@ -347,12 +349,6 @@ html, body {
 #prescription .rx-file-actions{
     display:flex; gap:8px; flex-wrap:wrap;
 }
-#prescription .rx-id-upload{
-    padding:16px;
-    border:1px solid #e2e8f0;
-    border-radius:12px;
-    background:#fbfdff;
-}
 #prescription .rx-choose, #prescription .rx-upload{
     width:auto !important; margin:0 !important;
     min-height:40px; padding:10px 14px !important; font-size:13px !important;
@@ -373,10 +369,10 @@ html, body {
     display:flex; justify-content:space-between; align-items:center;
     gap:16px; margin-top:16px;
 }
-#prescription .rx-privacy-note{
-    margin:0; color:#64748b; font-size:.78rem; line-height:1.45;
+#prescription .rx-store-check-note{
+    margin:0; color:#64748b; font-size:.78rem; line-height:1.45; flex:1;
 }
-#prescription .rx-privacy-note i{ color:#047857; margin-right:5px; }
+#prescription .rx-store-check-note i{ color:#047857; margin-right:5px; }
 #prescription .rx-upload{ flex-shrink:0; }
 #prescription .rx-msg{ margin:10px 0 0; font-weight:700; min-height:1.2em; }
 #prescription .rx-history{
@@ -519,6 +515,8 @@ html, body {
 }
 .rx-stock-row:last-child{ border-bottom:none; }
 .rx-stock-row strong{ color:#1e2333; font-size:.92rem; text-align:left; }
+.rx-match-info{ display:grid; gap:3px; min-width:0; }
+.rx-match-info small{ color:#64748b; font-size:.78rem; line-height:1.35; }
 .rx-price{ color:#1E3A34; font-size:.9rem; font-weight:700; white-space:nowrap; }
 .rx-add-cart{
     width:auto !important; margin:0 !important; flex-shrink:0;
@@ -580,7 +578,6 @@ html, body {
 }
 @media (max-width: 520px){
     #prescription .rx-drop,
-    #prescription .rx-documents-panel,
     #prescription .rx-history{ padding:16px; }
     #prescription .rx-file-actions{ flex-direction:column; align-items:stretch; }
     #prescription .rx-file-actions .rx-choose{ justify-content:center; }
