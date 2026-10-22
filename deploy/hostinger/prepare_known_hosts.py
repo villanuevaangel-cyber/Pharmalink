@@ -10,7 +10,12 @@ from pathlib import Path
 
 
 def _fingerprint(key: str) -> str:
-    digest = hashlib.sha256(base64.b64decode(key)).digest()
+    padded_key = key + "=" * (-len(key) % 4)
+    try:
+        key_data = base64.b64decode(padded_key, validate=True)
+    except ValueError as error:
+        raise ValueError("SSH public key is not valid base64.") from error
+    digest = hashlib.sha256(key_data).digest()
     encoded = base64.b64encode(digest).decode("ascii").rstrip("=")
     return f"SHA256:{encoded}"
 
@@ -60,9 +65,16 @@ def main() -> int:
             for line in result.stdout.splitlines()
             if len(fields := line.split()) >= 3
         }
-        pinned_fingerprints = sorted(
-            f"{key_type} {_fingerprint(key)}" for key_type, key in pinned_keys
-        )
+        try:
+            pinned_fingerprints = sorted(
+                f"{key_type} {_fingerprint(key)}" for key_type, key in pinned_keys
+            )
+        except ValueError as error:
+            print(
+                f"HOSTINGER_KNOWN_HOSTS contains a malformed SSH public key: {error}",
+                file=sys.stderr,
+            )
+            return 1
         presented_fingerprints = sorted(
             f"{key_type} {_fingerprint(key)}" for key_type, key in presented_keys
         )
