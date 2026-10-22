@@ -25,7 +25,7 @@ def _key_pairs(path: Path) -> set[tuple[str, str]]:
     for line in path.read_text(encoding="utf-8").splitlines():
         fields = line.split()
         offset = 1 if fields and fields[0].startswith("@") else 0
-        if len(fields) == 2 and fields[0].startswith(("ssh-", "ecdsa-")):
+        if len(fields) >= 2 and fields[0].startswith(("ssh-", "ecdsa-", "sk-")):
             pairs.add((fields[0], fields[1]))
         elif len(fields) >= offset + 3:
             pairs.add((fields[offset + 1], fields[offset + 2]))
