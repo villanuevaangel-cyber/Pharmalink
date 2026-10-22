@@ -32,6 +32,7 @@ jobs:
           HOSTINGER_KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
           HOSTINGER_HOST: ${{ secrets.HOSTINGER_HOST || vars.HOSTINGER_HOST }}
           HOSTINGER_USER: ${{ secrets.HOSTINGER_USER }}
+          HOSTINGER_PORT: ${{ secrets.HOSTINGER_PORT }}
         run: |
           set -euo pipefail
           test -n "$HOSTINGER_HOST"
@@ -44,6 +45,7 @@ jobs:
           chmod 600 "$HOME/.ssh/pharmalink_deploy"
           printf '%s\n' "$HOSTINGER_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
+          python deploy/hostinger/prepare_known_hosts.py
 
       - name: Deploy and restart service
         env:
