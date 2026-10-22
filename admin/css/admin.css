@@ -1067,6 +1067,37 @@ button.drug-pick-item.is-active{
   width:100%;
   min-width:0;
 }
+.purchase-planner-filters{
+  display:grid;
+  grid-template-columns:minmax(0, 1.3fr) minmax(0, 1fr);
+  gap:10px;
+  align-items:end;
+  width:100%;
+  max-width:460px;
+  margin:0 0 10px;
+}
+.purchase-planner-filters label{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  color:var(--ph-text);
+  font-size:12px;
+  font-weight:600;
+}
+.purchase-planner-filters input,
+.purchase-planner-filters select{
+  width:100%;
+  min-width:0;
+  height:34px;
+  padding:0 8px;
+  box-sizing:border-box;
+}
+.po-search-filters input{
+  min-width:220px;
+}
+.po-search-filters select{
+  min-width:180px;
+}
 .purchase-planner-table-wrap{
   min-width:0;
   margin:0;
@@ -1230,6 +1261,18 @@ button.drug-pick-item.is-active{
   }
 }
 @media (max-width: 620px){
+  .purchase-planner-filters{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .po-search-filters{
+    width:100%;
+    flex-wrap:wrap;
+  }
+  .po-search-filters input,
+  .po-search-filters select{
+    flex:1 1 180px;
+    min-width:0;
+  }
   .purchase-planner-layout{
     grid-template-columns:minmax(0, 1fr);
   }
