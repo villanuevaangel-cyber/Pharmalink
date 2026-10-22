@@ -1,10 +1,18 @@
 """Pin the SSH host key for the deployment host using the configured trusted keys."""
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+
+def _fingerprint(key: str) -> str:
+    digest = hashlib.sha256(base64.b64decode(key)).digest()
+    encoded = base64.b64encode(digest).decode("ascii").rstrip("=")
+    return f"SHA256:{encoded}"
 
 
 def _key_pairs(path: Path) -> set[tuple[str, str]]:
@@ -47,10 +55,23 @@ def main() -> int:
             scanned_keys.append(f"{fields[0]} {fields[1]} {fields[2]}")
 
     if not scanned_keys:
+        presented_keys = {
+            (fields[1], fields[2])
+            for line in result.stdout.splitlines()
+            if len(fields := line.split()) >= 3
+        }
+        pinned_fingerprints = sorted(
+            f"{key_type} {_fingerprint(key)}" for key_type, key in pinned_keys
+        )
+        presented_fingerprints = sorted(
+            f"{key_type} {_fingerprint(key)}" for key_type, key in presented_keys
+        )
         print(
-            "The SSH key presented by HOSTINGER_HOST does not match any key in "
-            "HOSTINGER_KNOWN_HOSTS. Verify that the host points to the expected VPS "
-            "and update HOSTINGER_KNOWN_HOSTS with that VPS's verified host key.",
+            f"SSH host-key mismatch for {host}:{port}. "
+            f"Pinned fingerprints: {', '.join(pinned_fingerprints) or 'none'}. "
+            f"Server fingerprints: {', '.join(presented_fingerprints) or 'none'}. "
+            "Compare these fingerprints with the VPS console before changing "
+            "HOSTINGER_HOST or HOSTINGER_KNOWN_HOSTS.",
             file=sys.stderr,
         )
         return 1
