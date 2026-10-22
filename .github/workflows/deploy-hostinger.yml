@@ -41,8 +41,23 @@ jobs:
           test -n "$HOSTINGER_KNOWN_HOSTS"
           mkdir -p "$HOME/.ssh"
           chmod 700 "$HOME/.ssh"
-          printf '%s\n' "$HOSTINGER_SSH_KEY" > "$HOME/.ssh/pharmalink_deploy"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          key = os.environ["HOSTINGER_SSH_KEY"].strip()
+          if "\\n" in key and "\n" not in key:
+              key = key.replace("\\n", "\n")
+          key = key.replace("\r\n", "\n").replace("\r", "\n")
+          Path.home().joinpath(".ssh", "pharmalink_deploy").write_text(
+              key.rstrip() + "\n", encoding="utf-8"
+          )
+          PY
           chmod 600 "$HOME/.ssh/pharmalink_deploy"
+          if ! ssh-keygen -y -f "$HOME/.ssh/pharmalink_deploy" >/dev/null 2>&1; then
+            echo "HOSTINGER_SSH_KEY is not a readable unencrypted OpenSSH private key. Check for literal \\n escapes or replace it with the private key matching the VPS authorized key; do not use the .pub key." >&2
+            exit 1
+          fi
           printf '%s\n' "$HOSTINGER_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
           python deploy/hostinger/prepare_known_hosts.py
