@@ -1002,70 +1002,80 @@
         </div>
         <small class="purchase-po-schedule-note">A monthly date that does not exist in a given month runs on that month’s last day. Email failures remain visible in the PO list for retry.</small>
     </div>
-    <div class="purchase-planner-filters" aria-label="Filter low-stock medicines">
-        <label for="purchasePlannerSearch">Search medicine
-            <input type="search" id="purchasePlannerSearch" placeholder="Search medicine name or brand..." autocomplete="off">
-        </label>
-        <label for="purchasePlannerStatusFilter">PO status
-            <select id="purchasePlannerStatusFilter">
-                <option value="needs_po">Needs PO</option>
-                <option value="already_ordered">Already on open PO</option>
-                <option value="not_orderable">Cannot order within stock limits</option>
-                <option value="all">All reorder suggestions</option>
-            </select>
-        </label>
-        <label for="purchasePlannerSupplierFilter">Supplier
-            <select id="purchasePlannerSupplierFilter">
-                <option value="">All suppliers</option>
-            </select>
-        </label>
-    </div>
-    <div class="purchase-planner-layout">
-        <div class="table-wrap purchase-planner-table-wrap">
-            <table id="purchasePlannerTable">
-                <thead>
-                    <tr>
-                        <th><input type="checkbox" id="purchasePlannerSelectAll" aria-label="Select all low-stock medicines"></th>
-                        <th>Medicine</th>
-                        <th>Current qty (pcs)</th>
-                        <th>Needed stock (pcs)</th>
-                        <th>Forecast / order qty (pcs)</th>
-                        <th>Pieces per Box</th>
-                        <th>Supplier</th>
-                    </tr>
-                </thead>
-                <tbody id="purchasePlannerBody">
-                    <tr><td colspan="7" style="text-align:center;padding:16px;">Open this module to load low-stock medicines.</td></tr>
-                </tbody>
-            </table>
-            <div class="purchase-planner-pagination" aria-label="Low-stock medicine pages">
-                <button type="button" id="purchasePlannerPrev" class="um-page-btn" disabled><i class="fas fa-chevron-left"></i> Prev</button>
-                <span id="purchasePlannerPageInfo" aria-live="polite">Page 1 of 1</span>
-                <button type="button" id="purchasePlannerNext" class="um-page-btn" disabled>Next <i class="fas fa-chevron-right"></i></button>
+    <div class="purchase-planner-section">
+        <div class="purchase-planner-section-heading">
+            <span class="purchase-planner-step">1</span>
+            <div>
+                <h3>Select medicines that need a PO</h3>
+                <p>Filter the reorder list, select medicines, then review supplier and final quantities below.</p>
             </div>
-            <p id="purchasePlannerNoResults" class="purchase-planner-no-results" hidden></p>
+        </div>
+        <div class="purchase-planner-filters" aria-label="Filter low-stock medicines">
+            <label for="purchasePlannerSearch">Search medicine
+                <input type="search" id="purchasePlannerSearch" placeholder="Search medicine name or brand..." autocomplete="off">
+            </label>
+            <label for="purchasePlannerStatusFilter">PO status
+                <select id="purchasePlannerStatusFilter">
+                    <option value="needs_po">Needs PO</option>
+                    <option value="already_ordered">Already on open PO</option>
+                    <option value="not_orderable">Cannot order within stock limits</option>
+                    <option value="all">All reorder suggestions</option>
+                </select>
+            </label>
+            <label for="purchasePlannerSupplierFilter">Supplier
+                <select id="purchasePlannerSupplierFilter">
+                    <option value="">All suppliers</option>
+                </select>
+            </label>
+        </div>
+        <div class="purchase-planner-table-card">
+            <div class="table-wrap purchase-planner-table-wrap">
+                <table id="purchasePlannerTable">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="purchasePlannerSelectAll" aria-label="Select all low-stock medicines"></th>
+                            <th>Medicine</th>
+                            <th>Current qty (pcs)</th>
+                            <th>Needed stock (pcs)</th>
+                            <th>Forecast / order qty (pcs)</th>
+                            <th>Pieces per Box</th>
+                            <th>Supplier</th>
+                        </tr>
+                    </thead>
+                    <tbody id="purchasePlannerBody">
+                        <tr><td colspan="7" style="text-align:center;padding:16px;">Open this module to load low-stock medicines.</td></tr>
+                    </tbody>
+                </table>
+                <div class="purchase-planner-pagination" aria-label="Low-stock medicine pages">
+                    <button type="button" id="purchasePlannerPrev" class="um-page-btn" disabled><i class="fas fa-chevron-left"></i> Prev</button>
+                    <span id="purchasePlannerPageInfo" aria-live="polite">Page 1 of 1</span>
+                    <button type="button" id="purchasePlannerNext" class="um-page-btn" disabled>Next <i class="fas fa-chevron-right"></i></button>
+                </div>
+                <p id="purchasePlannerNoResults" class="purchase-planner-no-results" hidden></p>
+            </div>
         </div>
         <aside class="purchase-planner-cart" aria-label="Selected purchase order items">
             <div class="purchase-planner-cart-heading">
+                <span class="purchase-planner-step">2</span>
                 <div>
-                    <h3><i class="fas fa-cart-shopping"></i> PO cart</h3>
+                    <h3><i class="fas fa-cart-shopping"></i> Review supplier and final quantities</h3>
                     <p id="purchasePlannerSelection">0 items selected</p>
                 </div>
             </div>
-            <p class="purchase-planner-cart-hint">Review the supplier and final quantity for each selected medicine.</p>
+            <p class="purchase-planner-cart-hint">Each quantity must be a whole number of boxes and stay within stock limits.</p>
             <div id="purchasePlannerCartBody" class="purchase-planner-cart-body">
-                <p class="purchase-planner-cart-empty">Select low-stock medicines to add them here.</p>
+                <p class="purchase-planner-cart-empty">Select medicines from the reorder list to add them here.</p>
             </div>
             <button type="button" id="createSelectedPurchaseOrders" class="action-btn" disabled>
-                <i class="fas fa-clipboard-check"></i> Review purchase order
+                <i class="fas fa-clipboard-check"></i> Review and confirm PO
             </button>
         </aside>
     </div>
     <div class="purchase-planner-orders">
         <div class="purchase-planner-orders-heading">
             <div>
-                <h3>Confirmed purchase orders</h3>
-                <p>Track PO dates, expected delivery estimates, and supplier email status. Receiving stays in Deliveries.</p>
+                <h3>Open POs and supplier email status</h3>
+                <p>Check queued, sent, or failed supplier emails here. Retry failures here; receiving stays in Deliveries.</p>
             </div>
             <button type="button" id="refreshPurchasePlannerOrders" class="action-btn">
                 <i class="fas fa-rotate"></i> Refresh
@@ -6394,15 +6404,8 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 ? `Created ${created.map((po) => `${po.po_number} (${po.supplier_name}, ${po.item_count} item(s))`).join(', ')}.`
                 : 'No purchase orders were created.';
             if (skipped.length) message += `\nSkipped: ${skipped.map((item) => `${item.name}: ${item.reason}`).join('; ')}`;
-            const emailResults = result.email_results || [];
-            if (emailResults.length) {
-                message += '\n\nSupplier email:\n' + emailResults
-                    .map((r) => `${r.po_number} - ${r.success ? 'sent to ' + r.supplier_name : 'NOT sent (' + (r.message || 'unknown error') + ')'}`)
-                    .join('\n');
-            } else if (result.email_scheduled) {
-                message += '\n\nSupplier email is scheduled for the planned PO date.';
-            } else if (!sendEmailBox?.checked) {
-                message += '\n\nSupplier email was not scheduled. You can send it from the Purchase Orders module.';
+            if (result.email_scheduled) {
+                message += `\n\nOpen unsent POs will be emailed on the global schedule: ${formatPoSchedule(currentPoSchedule)}.`;
             }
             alert(message);
             if (reviewModal) reviewModal.style.display = 'none';
@@ -6417,13 +6420,13 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     });
     document.querySelector('.nav-item[data-target="purchase-orders"]')?.addEventListener('click', () => {
         loadPurchasePlanner();
-        loadConfirmedPurchaseOrders();
+        loadPoSchedule().then(loadConfirmedPurchaseOrders);
     });
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('purchase-orders');
         if (section && section.style.display !== 'none') {
             loadPurchasePlanner();
-            loadConfirmedPurchaseOrders();
+            loadPoSchedule().then(loadConfirmedPurchaseOrders);
         }
     });
 })();

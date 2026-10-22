@@ -24,7 +24,7 @@ jobs:
         run: |
           python -m compileall -q app
           node --check customer/js/customer-boot.js
-          node --check cashier/js/prescriptions.js
+          node --check cashier/js/cashier-boot.js
 
       - name: Configure SSH
         env:
@@ -61,4 +61,5 @@ jobs:
              sudo -n -u www-data /usr/bin/git -C /var/www/pharmalink pull --ff-only origin cursor/render-deploy &&
              sudo -n -u www-data /var/www/pharmalink/venv/bin/pip install -r /var/www/pharmalink/requirements.txt &&
              sudo -n /usr/bin/systemctl restart pharmalink &&
-             sudo -n /usr/bin/systemctl is-active --quiet pharmalink'
+             sudo -n /usr/bin/systemctl is-active --quiet pharmalink &&
+             sudo -n -u www-data /var/www/pharmalink/venv/bin/python /var/www/pharmalink/deploy/hostinger/check_smtp.py'
