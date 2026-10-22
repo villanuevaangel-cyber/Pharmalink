@@ -1023,6 +1023,34 @@
             </button>
         </aside>
     </div>
+    <div class="purchase-planner-orders">
+        <div class="purchase-planner-orders-heading">
+            <div>
+                <h3>Confirmed purchase orders</h3>
+                <p>View planned supplier email dates and delivery estimates. Receiving stays in Deliveries.</p>
+            </div>
+            <button type="button" id="refreshPurchasePlannerOrders" class="action-btn">
+                <i class="fas fa-rotate"></i> Refresh
+            </button>
+        </div>
+        <div class="table-wrap purchase-planner-table-wrap">
+            <table id="purchasePlannerOrdersTable">
+                <thead>
+                    <tr>
+                        <th>PO</th>
+                        <th>Supplier</th>
+                        <th>Planned send</th>
+                        <th>Expected delivery</th>
+                        <th>Email status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="purchasePlannerOrdersBody">
+                    <tr><td colspan="6" style="text-align:center;padding:14px;">Loading purchase orders...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </section>
 
 <div id="purchaseOrderReviewModal" class="modal">
@@ -1031,10 +1059,17 @@
             <h2><i class="fas fa-clipboard-check"></i> Confirm purchase orders</h2>
             <button type="button" class="close" id="closePurchaseOrderReview" aria-label="Close">&times;</button>
         </div>
-        <p class="purchase-order-review-note">Confirm the supplier and final quantity for each item. This creates Pending purchase orders; it does not send an email.</p>
+        <p class="purchase-order-review-note">Confirm the supplier and final quantity. Opt in to send the PO automatically on the planned date.</p>
         <label for="purchaseOrderScheduleDate">Planned PO date</label>
         <input type="date" id="purchaseOrderScheduleDate">
-        <small class="purchase-order-review-note">This records the planned order date. The PO is created as Pending now; no email is sent automatically.</small>
+        <small class="purchase-order-review-note">The PO is created as Pending now. If email is enabled, it is sent on this date (or immediately if today).</small>
+        <label for="purchaseOrderExpectedDate" style="margin-top:10px;display:block;">Expected delivery date</label>
+        <input type="date" id="purchaseOrderExpectedDate">
+        <small class="purchase-order-review-note">Optional estimate; enter the supplier-confirmed date when known. It is not treated as a confirmed delivery date.</small>
+        <label style="display:flex;align-items:center;gap:8px;margin:12px 0;font-weight:600;">
+            <input type="checkbox" id="purchaseOrderSendEmail" checked style="width:auto;margin:0;">
+            Send the PO to the supplier automatically on the planned date
+        </label>
         <div id="purchaseOrderReviewBody"></div>
         <button type="button" id="confirmCreatePurchaseOrders" class="action-btn">
             <i class="fas fa-file-circle-plus"></i> Confirm and create PO(s)
@@ -3065,6 +3100,7 @@
             .then((d) => {
                 if (!d || !d.success) return;
                 showCheckoutPercent(document.getElementById('scPwdPercent'), d.sc_pwd_percent);
+                showCheckoutPercent(document.getElementById('seniorPercent'), d.senior_percent);
                 showCheckoutPercent(document.getElementById('vatPercent'), d.vat_percent);
             })
             .catch(() => {});
@@ -3074,7 +3110,7 @@
         const btn = e.target.closest('.save-checkout-rate');
         if (!btn) return;
         const kind = btn.getAttribute('data-rate');
-        const input = document.getElementById(kind === 'vat' ? 'vatPercent' : 'scPwdPercent');
+        const input = document.getElementById(kind === 'vat' ? 'vatPercent' : kind === 'senior' ? 'seniorPercent' : 'scPwdPercent');
         const msg = document.getElementById('checkoutRatesMsg');
         const percent = parseFloat(input?.value);
         if (!isFinite(percent) || percent < 0 || percent > 100) {
@@ -3091,13 +3127,14 @@
             .then((d) => {
                 if (msg) {
                     msg.style.color = d.success ? '#4BAA8B' : '#dc2626';
-                    const saved = kind === 'vat' ? d.vat_percent : d.sc_pwd_percent;
+                    const saved = kind === 'vat' ? d.vat_percent : kind === 'senior' ? d.senior_percent : d.sc_pwd_percent;
                     msg.textContent = d.success
                         ? `Saved. Cashier will use ${Number(saved)}%.`
                         : (d.message || 'Could not save.');
                 }
                 if (d.success) {
                     showCheckoutPercent(document.getElementById('scPwdPercent'), d.sc_pwd_percent);
+                    showCheckoutPercent(document.getElementById('seniorPercent'), d.senior_percent);
                     showCheckoutPercent(document.getElementById('vatPercent'), d.vat_percent);
                 }
             })
@@ -3680,7 +3717,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('poSearch')?.addEventListener('input', renderPurchaseOrders);
     document.getElementById('poSupplierFilter')?.addEventListener('change', renderPurchaseOrders);
 
-    document.getElementById('poBody')?.addEventListener('click', e => {
+    document.getElementById('poBody')?.addEventListener('click', async e => {
         const viewBtn = e.target.closest('.view-po-btn');
         if (viewBtn) openViewPoModal(parseInt(viewBtn.dataset.poId, 10));
     });
@@ -3696,7 +3733,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 document.getElementById('viewPoTitle').innerHTML = `<i class="fas fa-truck-loading"></i> ${escapeHtmlPo(po.po_number)} - ${escapeHtmlPo(po.supplier_name)}`;
                 document.getElementById('viewPoMeta').textContent =
-                    `Ordered ${po.order_date}${po.expected_date ? ' • Expected ' + po.expected_date : ''} • Status: ${po.status}${po.notes ? ' • Notes: ' + po.notes : ''}`;
+                    `Ordered ${po.order_date}${po.expected_date ? ' • Expected ' + po.expected_date : ''} • ${po.sent_to_supplier_at ? 'Emailed to supplier ' + String(po.sent_to_supplier_at).slice(0, 10) : 'Not yet emailed to supplier'} • Status: ${po.status}${po.notes ? ' • Notes: ' + po.notes : ''}`;
 
                 document.getElementById('delivery_date').value = manilaTodayYmd();
                 lockFutureDateInput(document.getElementById('delivery_date'));
@@ -5740,6 +5777,8 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     const reviewModal = document.getElementById('purchaseOrderReviewModal');
     const reviewBody = document.getElementById('purchaseOrderReviewBody');
     const scheduleDate = document.getElementById('purchaseOrderScheduleDate');
+    const expectedDate = document.getElementById('purchaseOrderExpectedDate');
+    const sendEmailBox = document.getElementById('purchaseOrderSendEmail');
     const confirmButton = document.getElementById('confirmCreatePurchaseOrders');
     const selectionLabel = document.getElementById('purchasePlannerSelection');
     const previousPageButton = document.getElementById('purchasePlannerPrev');
@@ -5749,6 +5788,8 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     const plannerStatusFilter = document.getElementById('purchasePlannerStatusFilter');
     const plannerSupplierFilter = document.getElementById('purchasePlannerSupplierFilter');
     const noResults = document.getElementById('purchasePlannerNoResults');
+    const confirmedOrdersBody = document.getElementById('purchasePlannerOrdersBody');
+    const refreshOrdersButton = document.getElementById('refreshPurchasePlannerOrders');
     const pageSize = 10;
     let plannerPage = 1;
     let activeSuppliers = [];
@@ -5941,18 +5982,114 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             scheduleDate.min = today;
             if (!scheduleDate.value) scheduleDate.value = today;
         }
+        if (expectedDate) {
+            expectedDate.value = '';
+            expectedDate.min = scheduleDate?.value || today;
+        }
         reviewBody.innerHTML = `<div class="purchase-order-review-table-wrap"><table>
-            <thead><tr><th>Medicine</th><th>Supplier</th><th>Final qty</th></tr></thead>
+            <thead><tr><th>Medicine</th><th>Supplier</th><th>Supplier email</th><th>Final qty</th></tr></thead>
             <tbody>${items.map((item) => {
                 const supplier = selectedSupplierName(item.row);
                 const medicine = item.row?.querySelector('.purchase-planner-medicine')?.textContent || '';
                 const packSize = Number(item.row?.dataset.pcsPerBox) || 1;
                 const boxes = item.quantity_pieces / packSize;
-                return `<tr><td>${escapePlanner(medicine)}</td><td>${escapePlanner(supplier)}</td><td>${item.quantity_pieces.toLocaleString()} pcs (${boxes} box${boxes === 1 ? '' : 'es'})</td></tr>`;
+                const supplierRow = activeSuppliers.find((sp) => Number(sp.supplier_id) === Number(item.supplier_id));
+                const supplierEmail = String(supplierRow?.email || '').trim();
+                const emailCell = supplierEmail
+                    ? escapePlanner(supplierEmail)
+                    : '<span style="color:var(--ph-danger);">No email on file</span>';
+                return `<tr><td>${escapePlanner(medicine)}</td><td>${escapePlanner(supplier)}</td><td>${emailCell}</td><td>${item.quantity_pieces.toLocaleString()} pcs (${boxes} box${boxes === 1 ? '' : 'es'})</td></tr>`;
             }).join('')}</tbody>
         </table></div>`;
         if (reviewModal) reviewModal.style.display = 'flex';
     }
+
+    function syncExpectedDate() {
+        if (!scheduleDate || !expectedDate || !scheduleDate.value) return;
+        expectedDate.min = scheduleDate.value;
+        if (expectedDate.value && expectedDate.value < scheduleDate.value) expectedDate.value = '';
+    }
+    scheduleDate?.addEventListener('change', syncExpectedDate);
+
+    function loadConfirmedPurchaseOrders() {
+        if (!confirmedOrdersBody) return Promise.resolve();
+        confirmedOrdersBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:14px;">Loading purchase orders...</td></tr>';
+        return fetch('/api/admin/purchase-orders?status=open', { credentials: 'same-origin' })
+            .then(async (response) => {
+                const orders = await response.json();
+                if (!response.ok) throw new Error(orders.message || 'Could not load purchase orders.');
+                return Array.isArray(orders) ? orders : [];
+            })
+            .then((orders) => {
+                if (!orders.length) {
+                    confirmedOrdersBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:14px;">No open purchase orders.</td></tr>';
+                    return;
+                }
+                const today = manilaTodayYmd();
+                confirmedOrdersBody.innerHTML = orders.map((po) => {
+                    const sent = !!po.sent_to_supplier_at;
+                    const sending = !!po.send_started_at && !sent && !po.send_error;
+                    const sendDate = String(po.order_date || '').slice(0, 10);
+                    const future = sendDate > today;
+                    let emailStatus;
+                    let action;
+                    if (sent) {
+                        emailStatus = `Emailed ${escapePlanner(String(po.sent_to_supplier_at).slice(0, 16).replace('T', ' '))}`;
+                        action = `<button type="button" class="purchase-planner-send-po action-btn" data-po-id="${Number(po.po_id)}" data-resend="true">Resend email</button>`;
+                    } else if (sending) {
+                        emailStatus = 'Email sending in progress';
+                        action = '<button type="button" class="action-btn" disabled>Sending...</button>';
+                    } else if (po.send_error) {
+                        emailStatus = `<span class="purchase-planner-email-error">Email failed: ${escapePlanner(po.send_error)}</span>`;
+                        action = `<button type="button" class="purchase-planner-send-po action-btn" data-po-id="${Number(po.po_id)}">Retry email</button>`;
+                    } else if (po.send_on_schedule && future) {
+                        emailStatus = `Scheduled for ${escapePlanner(sendDate)}`;
+                        action = '<button type="button" class="action-btn" disabled>Scheduled</button>';
+                    } else if (po.send_on_schedule) {
+                        emailStatus = `Due to send ${escapePlanner(sendDate)}`;
+                        action = `<button type="button" class="purchase-planner-send-po action-btn" data-po-id="${Number(po.po_id)}">Send now</button>`;
+                    } else {
+                        emailStatus = 'Not scheduled';
+                        action = `<button type="button" class="purchase-planner-send-po action-btn" data-po-id="${Number(po.po_id)}">Email supplier</button>`;
+                    }
+                    return `<tr>
+                        <td>${escapePlanner(po.po_number)}</td>
+                        <td>${escapePlanner(po.supplier_name)}<small class="purchase-planner-supplier-email">${escapePlanner(po.supplier_email || 'No supplier email on file')}</small></td>
+                        <td>${escapePlanner(sendDate)}</td>
+                        <td>${escapePlanner(po.expected_date || 'To be confirmed')}</td>
+                        <td>${emailStatus}</td>
+                        <td>${action}</td>
+                    </tr>`;
+                }).join('');
+            })
+            .catch((error) => {
+                console.error('Purchase order status load failed:', error);
+                confirmedOrdersBody.innerHTML = `<tr><td colspan="6" class="purchase-planner-email-error" style="text-align:center;padding:14px;">${escapePlanner(error.message || 'Could not load purchase orders.')}</td></tr>`;
+            });
+    }
+
+    confirmedOrdersBody?.addEventListener('click', async (event) => {
+        const button = event.target.closest('.purchase-planner-send-po');
+        if (!button) return;
+        const resend = button.dataset.resend === 'true';
+        if (resend && !confirm('This PO was already emailed. Send it again?')) return;
+        button.disabled = true;
+        try {
+            const response = await fetch(`/api/admin/purchase-orders/${Number(button.dataset.poId)}/send`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ resend }),
+            });
+            const result = await response.json();
+            alert(result.message || (response.ok ? 'Supplier email sent.' : 'Could not email the supplier.'));
+        } catch (error) {
+            alert(error.message || 'Could not email the supplier.');
+        } finally {
+            await loadConfirmedPurchaseOrders();
+        }
+    });
+    refreshOrdersButton?.addEventListener('click', loadConfirmedPurchaseOrders);
 
     async function loadPurchasePlanner() {
         if (!body) return;
@@ -6112,13 +6249,23 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             scheduleDate?.focus();
             return;
         }
+        if (expectedDate?.value && expectedDate.value < scheduleDate.value) {
+            alert('Expected delivery date cannot be earlier than the planned PO date.');
+            expectedDate?.focus();
+            return;
+        }
         confirmButton.disabled = true;
         try {
             const response = await fetch('/api/admin/reorder-suggestions/create-pos', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ items, order_date: scheduleDate.value }),
+                body: JSON.stringify({
+                    items,
+                    order_date: scheduleDate.value,
+                    expected_date: expectedDate?.value || null,
+                    send_email: !!sendEmailBox?.checked,
+                }),
             });
             const result = await response.json();
             if (!response.ok || !result.success) {
@@ -6135,9 +6282,19 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 ? `Created ${created.map((po) => `${po.po_number} (${po.supplier_name}, ${po.item_count} item(s))`).join(', ')}.`
                 : 'No purchase orders were created.';
             if (skipped.length) message += `\nSkipped: ${skipped.map((item) => `${item.name}: ${item.reason}`).join('; ')}`;
+            const emailResults = result.email_results || [];
+            if (emailResults.length) {
+                message += '\n\nSupplier email:\n' + emailResults
+                    .map((r) => `${r.po_number} - ${r.success ? 'sent to ' + r.supplier_name : 'NOT sent (' + (r.message || 'unknown error') + ')'}`)
+                    .join('\n');
+            } else if (result.email_scheduled) {
+                message += '\n\nSupplier email is scheduled for the planned PO date.';
+            } else if (!sendEmailBox?.checked) {
+                message += '\n\nSupplier email was not scheduled. You can send it from the Purchase Orders module.';
+            }
             alert(message);
             if (reviewModal) reviewModal.style.display = 'none';
-            if (typeof window.loadPurchaseOrders === 'function') window.loadPurchaseOrders();
+            loadConfirmedPurchaseOrders();
             await loadPurchasePlanner();
         } catch (error) {
             alert(error.message || 'Could not create purchase orders.');
@@ -6146,10 +6303,16 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             updatePlannerSelectionState();
         }
     });
-    document.querySelector('.nav-item[data-target="purchase-orders"]')?.addEventListener('click', loadPurchasePlanner);
+    document.querySelector('.nav-item[data-target="purchase-orders"]')?.addEventListener('click', () => {
+        loadPurchasePlanner();
+        loadConfirmedPurchaseOrders();
+    });
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('purchase-orders');
-        if (section && section.style.display !== 'none') loadPurchasePlanner();
+        if (section && section.style.display !== 'none') {
+            loadPurchasePlanner();
+            loadConfirmedPurchaseOrders();
+        }
     });
 })();
 </script>

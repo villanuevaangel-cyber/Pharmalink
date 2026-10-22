@@ -6,10 +6,12 @@ import hashlib
 import json
 import logging
 import math
+import os
 import subprocess
 import sys
 import threading
 from datetime import date, datetime, timedelta
+from html import escape as _esc
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -24,6 +26,19 @@ logger = logging.getLogger("pharmalink.automation")
 MANILA = ZoneInfo("Asia/Manila")
 
 LEAD_DAYS = 7
+# How automatic purchase orders are raised:
+#   weekly    - one batched PO run on a fixed day/time (default); no PO per low-stock event
+#   immediate - old behaviour, a PO is drafted as soon as a medicine goes low
+AUTO_PO_MODE = (os.getenv("AUTO_PO_MODE", "weekly") or "weekly").strip().lower()
+AUTO_PO_DAY = (os.getenv("AUTO_PO_DAY", "mon") or "mon").strip().lower()
+try:
+    AUTO_PO_HOUR = max(0, min(23, int(os.getenv("AUTO_PO_HOUR", "8"))))
+except ValueError:
+    AUTO_PO_HOUR = 8
+# Email each automatic PO to the supplier address on file.
+AUTO_PO_EMAIL_SUPPLIER = (os.getenv("AUTO_PO_EMAIL_SUPPLIER", "true") or "true").strip().lower() in {"1", "true", "yes", "on"}
+PHARMACY_NAME = (os.getenv("PHARMACY_NAME", "PharmaLink") or "PharmaLink").strip()
+PHARMACY_CONTACT = (os.getenv("PHARMACY_CONTACT", "") or "").strip()
 TARGET_DAYS = 30
 OVERSTOCK_DAYS = 90
 SALES_WINDOW_DAYS = 30
@@ -38,6 +53,20 @@ _pending_all_drugs = False
 _restock_task_scheduled = False
 def ensure_automation_schema(conn) -> None:
     with conn.cursor() as cur:
+        cur.execute(
+            """
+            DO $$
+            BEGIN
+                IF to_regclass('purchase_orders') IS NOT NULL THEN
+                    ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS sent_to_supplier_at TIMESTAMPTZ;
+                    ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS sent_to_supplier_by VARCHAR(100);
+                    ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS send_error TEXT;
+                    ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS send_on_schedule BOOLEAN NOT NULL DEFAULT FALSE;
+                    ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS send_started_at TIMESTAMPTZ;
+                END IF;
+            END $$;
+            """
+        )
         cur.execute(
             """
             ALTER TABLE prescriptions
@@ -1053,6 +1082,8 @@ def create_purchase_orders_from_needs(
     notes: str,
     raise_alerts: bool = False,
     order_date: date | None = None,
+    expected_date: date | None = None,
+    send_on_schedule: bool = False,
 ) -> dict:
     """Create one Pending PO per supplier from reorder-style need rows."""
     created = []
@@ -1131,7 +1162,7 @@ def create_purchase_orders_from_needs(
                     "quantity_ordered_boxes": requested_pieces // units_per_box,
                 })
             po_order_date = order_date or datetime.now(MANILA).date()
-            expected = (po_order_date + timedelta(days=LEAD_DAYS)).isoformat()
+            expected = expected_date.isoformat() if expected_date else None
             for supplier_id, items in by_supplier.items():
                 cur.execute(
                     "SELECT supplier_id, supplier_name FROM suppliers WHERE supplier_id = %s AND status = 'Active'",
@@ -1149,10 +1180,18 @@ def create_purchase_orders_from_needs(
                 cur.execute(
                     """
                     INSERT INTO purchase_orders
-                        (po_id, supplier_id, status, order_date, expected_date, notes, created_by)
-                    VALUES (%s, %s, 'Pending', %s, %s, %s, %s)
+                        (po_id, supplier_id, status, order_date, expected_date, notes, created_by, send_on_schedule)
+                    VALUES (%s, %s, 'Pending', %s, %s, %s, %s, %s)
                     """,
-                    (po_id, supplier_id, po_order_date.isoformat(), expected, notes, created_by),
+                    (
+                        po_id,
+                        supplier_id,
+                        po_order_date.isoformat(),
+                        expected,
+                        notes,
+                        created_by,
+                        bool(send_on_schedule),
+                    ),
                 )
                 for item in items:
                     item_id = next_id(cur, "purchase_order_items", "po_item_id")
@@ -1178,7 +1217,7 @@ def create_purchase_orders_from_needs(
                         f"po:{po_id}",
                         "info",
                         "Automatic purchase order",
-                        f"{po_number} drafted for {supplier['supplier_name']} ({len(items)} item(s)). Confirm in Purchasing.",
+                        f"{po_number} created for {supplier['supplier_name']} ({len(items)} item(s)).",
                     )
                 created.append({
                     "po_id": po_id,
@@ -1247,7 +1286,170 @@ def _low_stock_drug_ids() -> set[int]:
     }
 
 
-def create_auto_purchase_orders(drug_ids: set[int] | None = None, use_forecast: bool = True) -> dict:
+def _po_email_html(po: dict, items: list[dict]) -> str:
+    rows = []
+    for it in items:
+        name = it.get("generic_name") or "Medicine"
+        if it.get("brand_name"):
+            name += f" ({it['brand_name']})"
+        detail = " ".join(x for x in [str(it.get("dosage") or "").strip(), str(it.get("form") or "").strip()] if x)
+        boxes = int(it.get("quantity_ordered") or 0)
+        per_box = max(1, int(it.get("units_per_box") or 1))
+        cell = "padding:6px 10px;border:1px solid #ddd;"
+        rows.append(
+            f"<tr><td style='{cell}'>{_esc(name)}</td><td style='{cell}'>{_esc(detail or '-')}</td>"
+            f"<td style='{cell}text-align:right;'>{boxes:,}</td>"
+            f"<td style='{cell}text-align:right;'>{boxes * per_box:,}</td></tr>"
+        )
+    th = "padding:6px 10px;border:1px solid #ddd;background:#f4f4f4;text-align:left;"
+    notes = f"<p><strong>Notes:</strong> {_esc(str(po['notes']))}</p>" if po.get("notes") else ""
+    contact = f"<p>Questions about this order? Contact us: {_esc(PHARMACY_CONTACT)}</p>" if PHARMACY_CONTACT else ""
+    return (
+        f"<p>Good day, {_esc(po['supplier_name'])}.</p>"
+        f"<p>{_esc(PHARMACY_NAME)} would like to place the following purchase order.</p>"
+        f"<p><strong>PO number:</strong> {_esc(po['po_number'])}<br>"
+        f"<strong>Order date:</strong> {_esc(str(po['order_date']))}<br>"
+        f"<strong>Expected delivery date:</strong> {_esc(str(po['expected_date'] or 'To be confirmed'))}</p>"
+        f"<table style='border-collapse:collapse;font-size:14px;'>"
+        f"<thead><tr><th style='{th}'>Medicine</th><th style='{th}'>Strength / form</th>"
+        f"<th style='{th}text-align:right;'>Boxes</th><th style='{th}text-align:right;'>Total pieces</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+        f"{notes}"
+        "<p>Please reply to confirm this order and your delivery date, or let us know if any item is unavailable.</p>"
+        f"{contact}"
+        f"<p>Thank you,<br>{_esc(PHARMACY_NAME)}</p>"
+    )
+
+
+def _record_po_send(po_id: int, po_number: str, supplier_name: str, ok: bool, message: str, actor: str) -> None:
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if ok:
+                    cur.execute(
+                        "UPDATE purchase_orders SET sent_to_supplier_at = NOW(), sent_to_supplier_by = %s, send_error = NULL, send_started_at = NULL WHERE po_id = %s",
+                        (actor, po_id),
+                    )
+                    write_activity_log(cur, "Email Purchase Order", f"Emailed {po_number} to {supplier_name}.", actor=actor)
+                else:
+                    cur.execute(
+                        "UPDATE purchase_orders SET send_error = %s, send_started_at = NULL WHERE po_id = %s",
+                        (message[:500], po_id),
+                    )
+                    write_activity_log(
+                        cur, "Email Purchase Order Failed",
+                        f"Could not email {po_number} to {supplier_name}: {message}", actor=actor,
+                    )
+                    if actor == "System":
+                        _upsert_alert(
+                            cur, "auto_po", f"po_mail:{po_id}", "info",
+                            "Purchase order not emailed",
+                            f"{po_number} for {supplier_name} was created but not emailed: {message} Retry from the Purchase Orders module once fixed.",
+                        )
+    except Exception:
+        logger.exception("could not record PO email result for %s", po_number)
+
+
+def send_po_to_supplier(po_id: int, actor: str = "System", resend: bool = False) -> dict:
+    """Email a purchase order to the supplier's address on file and record that it was sent."""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT po.po_id, po.status, po.order_date, po.expected_date, po.notes,
+                       po.sent_to_supplier_at, po.send_started_at,
+                       s.supplier_name, s.email
+                FROM purchase_orders po
+                JOIN suppliers s ON s.supplier_id = po.supplier_id
+                WHERE po.po_id = %s
+                """,
+                (int(po_id),),
+            )
+            po = cur.fetchone()
+            if not po:
+                return {"success": False, "message": "Purchase order not found."}
+            if po["status"] not in ("Pending", "Partially Received"):
+                return {"success": False, "message": f"A {po['status']} purchase order cannot be emailed."}
+            if po["sent_to_supplier_at"] and not resend:
+                return {
+                    "success": False,
+                    "already_sent": True,
+                    "message": "This purchase order was already emailed to the supplier.",
+                }
+            cur.execute(
+                """
+                UPDATE purchase_orders
+                SET send_started_at = NOW(), send_error = NULL
+                WHERE po_id = %s
+                  AND (sent_to_supplier_at IS NULL OR %s = TRUE)
+                  AND (
+                      send_started_at IS NULL
+                      OR send_started_at < NOW() - INTERVAL '15 minutes'
+                  )
+                RETURNING po_id
+                """,
+                (int(po_id), bool(resend)),
+            )
+            if not cur.fetchone():
+                return {
+                    "success": False,
+                    "send_in_progress": True,
+                    "message": "A supplier email for this PO is already being processed. Refresh the PO status shortly.",
+                }
+            cur.execute(
+                """
+                SELECT poi.quantity_ordered, COALESCE(d.units_per_box, 1) AS units_per_box,
+                       d.generic_name, d.brand_name, d.dosage, d.form
+                FROM purchase_order_items poi
+                JOIN drugs_master d ON d.drug_id = poi.drug_id
+                WHERE poi.po_id = %s
+                ORDER BY poi.po_item_id
+                """,
+                (int(po_id),),
+            )
+            items = cur.fetchall()
+    po = dict(po)
+    po["po_number"] = f"PO-{int(po_id):05d}"
+    supplier_name = po["supplier_name"]
+    to_email = str(po.get("email") or "").strip()
+    if "@" not in to_email:
+        message = f"{supplier_name} has no email address on file. Add one under Suppliers, then send again."
+        _record_po_send(int(po_id), po["po_number"], supplier_name, False, message, actor)
+        return {"success": False, "no_email": True, "po_number": po["po_number"], "supplier_name": supplier_name, "message": message}
+    if not items:
+        _record_po_send(
+            int(po_id),
+            po["po_number"],
+            supplier_name,
+            False,
+            "This purchase order has no items.",
+            actor,
+        )
+        return {"success": False, "message": "This purchase order has no items."}
+    result = send_mail(
+        to_email,
+        f"Purchase Order {po['po_number']} from {PHARMACY_NAME}",
+        _po_email_html(po, [dict(i) for i in items]),
+    )
+    ok = bool(result.get("success"))
+    message = "Sent." if ok else str(result.get("message") or "Email could not be sent.")
+    _record_po_send(int(po_id), po["po_number"], supplier_name, ok, message, actor)
+    return {
+        "success": ok,
+        "po_number": po["po_number"],
+        "supplier_name": supplier_name,
+        "to": to_email,
+        "message": f"{po['po_number']} emailed to {supplier_name} ({to_email})." if ok else message,
+    }
+
+
+def create_auto_purchase_orders(
+    drug_ids: set[int] | None = None,
+    use_forecast: bool = True,
+    require_prophet: bool = True,
+    email_suppliers: bool = False,
+    notes: str | None = None,
+) -> dict:
     data = compute_reorder_suggestions(use_forecast=use_forecast)
     needs = [
         s
@@ -1255,23 +1457,95 @@ def create_auto_purchase_orders(drug_ids: set[int] | None = None, use_forecast: 
         if s["action"] == "increase"
         and s["suggested_po_qty"] > 0
         and s.get("auto_po", True)
-        and str(s.get("demand_source") or "") == "prophet"
+        and (not require_prophet or str(s.get("demand_source") or "") == "prophet")
         and _is_low_stock(int(s.get("current_stock") or 0), int(s.get("minimum_stock") or 0))
     ]
     needs = [{**item, "suggested_qty": item["suggested_po_qty"]} for item in needs]
     if drug_ids is not None:
         needs = [s for s in needs if int(s["drug_id"]) in drug_ids]
-    notes = (
+    notes = notes or (
         "This is an automatic order. PharmaLink prepared it from historical sales modeled by Prophet for the target coverage period, capped at maximum stock."
     )
     result = create_purchase_orders_from_needs(needs, "System", notes, raise_alerts=True)
+    emailed = not_sent = 0
+    if email_suppliers:
+        for po in result["created"]:
+            outcome = send_po_to_supplier(int(po["po_id"]), "System")
+            if outcome.get("success"):
+                emailed += 1
+            else:
+                not_sent += 1
     return {
         "created": result["created"],
         "skipped": len(result["skipped"]),
         "needed": len(needs),
-        "emailed": 0,
-        "not_sent": 0,
+        "emailed": emailed,
+        "not_sent": not_sent,
     }
+
+
+def run_weekly_po_job() -> dict:
+    """Scheduled batch: one PO per supplier for everything that is low, then email suppliers."""
+    with _restock_lock:
+        try:
+            result = create_auto_purchase_orders(
+                use_forecast=True,
+                require_prophet=False,
+                email_suppliers=AUTO_PO_EMAIL_SUPPLIER,
+                notes=(
+                    "Weekly automatic order. PharmaLink batched every medicine that was at or below minimum stock "
+                    "on the scheduled order day, capped at maximum stock."
+                ),
+            )
+            with get_conn() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    scan_stock_alerts(cur)
+        except Exception:
+            logger.exception("weekly PO job failed")
+            result = {"created": [], "skipped": 0, "needed": 0, "emailed": 0, "not_sent": 0, "error": "failed"}
+        stamp = {"at": datetime.now(MANILA).isoformat(), **result}
+        _last_run["weekly_po"] = stamp
+        _last_run["daily"] = stamp
+        logger.info("weekly PO job: %s", json.dumps(stamp, default=str))
+        return result
+
+
+def send_scheduled_purchase_order_emails() -> dict:
+    """Send opted-in POs once their planned order date arrives."""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT po.po_id
+                FROM purchase_orders po
+                WHERE po.send_on_schedule = TRUE
+                  AND po.sent_to_supplier_at IS NULL
+                  AND po.send_error IS NULL
+                  AND po.status IN ('Pending', 'Partially Received')
+                  AND po.order_date <= (NOW() AT TIME ZONE 'Asia/Manila')::date
+                  AND (
+                      po.send_started_at IS NULL
+                      OR po.send_started_at < NOW() - INTERVAL '15 minutes'
+                  )
+                ORDER BY po.order_date, po.po_id
+                """
+            )
+            due_po_ids = [int(row["po_id"]) for row in cur.fetchall()]
+
+    sent = failed = 0
+    results = []
+    for po_id in due_po_ids:
+        result = send_po_to_supplier(po_id, "System")
+        if result.get("success"):
+            sent += 1
+        else:
+            failed += 1
+        results.append({
+            "po_id": po_id,
+            "success": bool(result.get("success")),
+            "message": result.get("message"),
+        })
+    return {"due": len(due_po_ids), "sent": sent, "failed": failed, "results": results}
 
 
 def run_restock_if_needed() -> dict:
@@ -1286,10 +1560,14 @@ def run_restock_if_needed() -> dict:
             _pending_drug_ids.clear()
             all_drugs = _pending_all_drugs
             _pending_all_drugs = False
-        result = create_auto_purchase_orders(
-            drug_ids=None if all_drugs else drug_ids,
-            use_forecast=True,
-        )
+        if AUTO_PO_MODE == "immediate":
+            result = create_auto_purchase_orders(
+                drug_ids=None if all_drugs else drug_ids,
+                use_forecast=True,
+            )
+        else:
+            # Weekly mode: only refresh low-stock alerts now; POs wait for the scheduled run.
+            result = {"created": [], "skipped": 0, "needed": 0, "emailed": 0, "not_sent": 0, "deferred": "weekly"}
         with get_conn() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 scan_stock_alerts(cur)
@@ -1588,7 +1866,12 @@ def last_run_status() -> dict:
     return {
         "scheduler": "running" if _scheduler and _scheduler.running else "stopped",
         "timezone": "Asia/Manila",
-        "auto_po_mode": "on_restock",
+        "auto_po_mode": "on_restock" if AUTO_PO_MODE == "immediate" else "weekly",
+        "auto_po_schedule": (
+            None if AUTO_PO_MODE == "immediate"
+            else f"Every {AUTO_PO_DAY.upper()} at {AUTO_PO_HOUR:02d}:00 (Asia/Manila)"
+        ),
+        "auto_po_email_supplier": AUTO_PO_EMAIL_SUPPLIER,
         "last_run": _last_run,
         "alert_email": alert_email_status(),
     }
@@ -1599,6 +1882,7 @@ def start_scheduler() -> None:
     if _scheduler is not None:
         return
     from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.cron import CronTrigger
     from apscheduler.triggers.interval import IntervalTrigger
 
     scheduler = BackgroundScheduler(timezone=MANILA)
@@ -1618,9 +1902,34 @@ def start_scheduler() -> None:
         max_instances=1,
         coalesce=True,
     )
+    scheduler.add_job(
+        send_scheduled_purchase_order_emails,
+        IntervalTrigger(minutes=5),
+        id="pharmalink-scheduled-po-email",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    if AUTO_PO_MODE != "immediate":
+        scheduler.add_job(
+            run_weekly_po_job,
+            CronTrigger(day_of_week=AUTO_PO_DAY, hour=AUTO_PO_HOUR, minute=0, timezone=MANILA),
+            id="pharmalink-weekly-po",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=3600,
+        )
     scheduler.start()
     _scheduler = scheduler
     scheduler.add_job(run_startup_jobs, "date", run_date=datetime.now(MANILA) + timedelta(seconds=12), id="pharmalink-startup")
+    scheduler.add_job(
+        send_scheduled_purchase_order_emails,
+        "date",
+        run_date=datetime.now(MANILA) + timedelta(seconds=15),
+        id="pharmalink-scheduled-po-email-startup",
+        max_instances=1,
+    )
     scheduler.add_job(
         refresh_prophet_reorder_forecast,
         "date",
