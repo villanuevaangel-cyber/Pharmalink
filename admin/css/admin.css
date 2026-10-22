@@ -1078,6 +1078,72 @@ button.drug-pick-item.is-active{
   border-radius:14px;
   background:#fff;
 }
+.purchase-planner-section{
+  display:grid;
+  grid-template-columns:minmax(0, 1.7fr) minmax(280px, .8fr);
+  gap:16px;
+  align-items:start;
+  padding:20px;
+  border-color:#e4eae7;
+  box-shadow:0 4px 18px rgba(25, 55, 45, .05);
+}
+.purchase-planner-section > .purchase-planner-section-heading,
+.purchase-planner-section > .purchase-planner-filters{
+  grid-column:1 / -1;
+}
+.purchase-planner-section > .purchase-planner-table-card{
+  grid-column:1;
+  grid-row:3;
+}
+.purchase-planner-section > .purchase-planner-cart{
+  grid-column:2;
+  grid-row:3;
+  position:sticky;
+  top:16px;
+  margin:0;
+  border-color:#dce9e3;
+  background:#f8fbf9;
+}
+.purchase-planner-section .purchase-planner-section-heading{
+  align-items:center;
+}
+.purchase-planner-section .purchase-planner-section-heading h3{
+  font-size:18px;
+  letter-spacing:-.01em;
+}
+.purchase-planner-section .purchase-planner-step{
+  width:30px;
+  height:30px;
+  flex-basis:30px;
+}
+.purchase-planner-section .purchase-planner-filters{
+  grid-template-columns:minmax(220px, 1.4fr) repeat(2, minmax(160px, .8fr));
+  gap:12px;
+  padding:14px;
+  border:1px solid #e8eeeb;
+  border-radius:10px;
+  background:#f8faf9;
+}
+.purchase-planner-section .purchase-planner-filters input,
+.purchase-planner-section .purchase-planner-filters select{
+  height:40px;
+  padding:0 11px;
+  border:1px solid #d8e1dc;
+  border-radius:7px;
+  background:#fff;
+}
+.purchase-planner-section .purchase-planner-table-card{
+  border-color:#e4eae7;
+}
+.purchase-planner-section .purchase-planner-cart-heading{
+  align-items:center;
+}
+.purchase-planner-section .purchase-planner-cart-heading h3{
+  line-height:1.35;
+}
+.purchase-planner-section .purchase-planner-cart-body{
+  max-height:460px;
+}
 .purchase-planner-section-heading,
 .purchase-planner-cart-heading{
   display:flex;
@@ -1117,17 +1183,19 @@ button.drug-pick-item.is-active{
 }
 .purchase-planner-orders{
   margin-top:16px;
-  padding:16px;
-  border:1px solid var(--ph-border-soft, #FFE3B3);
+  padding:20px;
+  border:1px solid #e4eae7;
   border-radius:14px;
   background:#fff;
+  box-shadow:0 4px 18px rgba(25, 55, 45, .04);
 }
 .purchase-po-schedule{
   margin:0 0 16px;
-  padding:16px;
-  border:1px solid var(--ph-border-soft, #FFE3B3);
+  padding:20px;
+  border:1px solid #e4eae7;
   border-radius:14px;
   background:#fff;
+  box-shadow:0 4px 18px rgba(25, 55, 45, .04);
 }
 .purchase-po-schedule .purchase-planner-orders-heading{
   margin-bottom:14px;
@@ -1145,16 +1213,20 @@ button.drug-pick-item.is-active{
   font-weight:700;
 }
 .purchase-po-schedule-controls{
-  display:flex;
+  display:grid;
+  grid-template-columns:repeat(4, minmax(130px, 1fr)) auto;
   align-items:end;
-  flex-wrap:wrap;
-  gap:10px;
+  gap:12px;
+  padding:14px;
+  border:1px solid #e8eeeb;
+  border-radius:10px;
+  background:#f8faf9;
 }
 .purchase-po-schedule-controls label{
   display:flex;
   flex-direction:column;
   gap:4px;
-  min-width:140px;
+  min-width:0;
   color:var(--ph-text);
   font-size:12px;
   font-weight:600;
@@ -1164,9 +1236,10 @@ button.drug-pick-item.is-active{
 }
 .purchase-po-schedule-controls select,
 .purchase-po-schedule-controls input{
-  min-height:38px;
-  padding:7px 10px;
-  border:1px solid var(--ph-border-soft, #FFE3B3);
+  width:100%;
+  min-height:40px;
+  padding:7px 11px;
+  border:1px solid #d8e1dc;
   border-radius:8px;
   background:#fff;
   color:var(--ph-text);
@@ -1177,6 +1250,7 @@ button.drug-pick-item.is-active{
   white-space:nowrap;
 }
 #purchasePoScheduleStatus{
+  grid-column:1 / -1;
   color:var(--ph-text-soft);
   font-size:12px;
 }
@@ -1430,6 +1504,29 @@ button.drug-pick-item.is-active{
   font-size:12px;
 }
 
+@media (max-width: 900px){
+  .purchase-planner-section{
+    grid-template-columns:minmax(0, 1fr);
+  }
+  .purchase-planner-section > .purchase-planner-table-card,
+  .purchase-planner-section > .purchase-planner-cart{
+    grid-column:1;
+    grid-row:auto;
+  }
+  .purchase-planner-section > .purchase-planner-cart{
+    position:static;
+  }
+  .purchase-planner-section .purchase-planner-filters{
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+  }
+  .purchase-po-schedule-controls{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+  .purchase-po-schedule-controls .action-btn{
+    grid-column:1 / -1;
+  }
+}
+
 @media (max-width: 620px){
   .purchase-po-schedule{ padding:12px; }
   .purchase-po-schedule .purchase-planner-orders-heading{ align-items:flex-start; flex-direction:column; }
@@ -1455,6 +1552,30 @@ button.drug-pick-item.is-active{
   }
   .purchase-planner-layout{
     grid-template-columns:minmax(0, 1fr);
+  }
+  .purchase-planner-section{
+    grid-template-columns:minmax(0, 1fr);
+    gap:12px;
+    padding:12px;
+  }
+  .purchase-planner-section > .purchase-planner-table-card,
+  .purchase-planner-section > .purchase-planner-cart{
+    grid-column:1;
+    grid-row:auto;
+  }
+  .purchase-planner-section > .purchase-planner-cart{
+    position:static;
+  }
+  .purchase-planner-section .purchase-planner-filters{
+    grid-template-columns:minmax(0, 1fr);
+    padding:10px;
+  }
+  .purchase-po-schedule-controls{
+    grid-template-columns:minmax(0, 1fr);
+    padding:10px;
+  }
+  #purchasePoScheduleStatus{
+    grid-column:1;
   }
   .purchase-planner-cart{
     position:static;
