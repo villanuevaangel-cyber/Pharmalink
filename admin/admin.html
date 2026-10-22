@@ -5749,6 +5749,10 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         }[char]));
     }
 
+    function manilaTodayYmd() {
+        return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    }
+
     function selectedPlannerRows() {
         return Array.from(body?.querySelectorAll('.purchase-planner-row') || [])
             .filter((row) => row.querySelector('.purchase-planner-select')?.checked);
