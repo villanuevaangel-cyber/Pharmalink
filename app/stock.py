@@ -26,10 +26,15 @@ def sync_stock_status_for_drug(cur, drug_id: int) -> None:
 
 
 def match_prescription_to_stock(cur, text: str) -> list[dict]:
+    from difflib import SequenceMatcher
     import re
 
-    normalized = " " + re.sub(r"[^A-Za-z0-9]+", " ", text).upper() + " "
+    def normalize(value: str) -> str:
+        return re.sub(r"[^A-Za-z0-9]+", " ", value).upper().strip()
+
+    normalized = " " + normalize(text) + " "
     raw_lines = [line.strip() for line in text.splitlines() if line.strip()]
+    normalized_lines = [normalize(line) for line in raw_lines]
     dosage_pattern = re.compile(
         r"\b\d+(?:\.\d+)?\s*(?:mcg|μg|mg|g|kg|ml|l|iu|units?)"
         r"(?:\s*/\s*\d+(?:\.\d+)?\s*(?:mcg|μg|mg|g|ml|l))?\b",
@@ -53,62 +58,101 @@ def match_prescription_to_stock(cur, text: str) -> list[dict]:
     )
     drug_rows = cur.fetchall()
     catalog_needles = set()
+    candidates_by_drug = {}
     for drug_row in drug_rows:
+        drug_id = int(drug_row["drug_id"])
+        candidates_by_drug[drug_id] = [
+            name
+            for field in ("generic_name", "brand_name")
+            if (name := str(drug_row.get(field) or "").strip())
+        ]
         for field in ("generic_name", "brand_name"):
             name = str(drug_row.get(field) or "").strip()
             if name:
-                catalog_needles.add(
-                    " " + re.sub(r"[^A-Za-z0-9]+", " ", name).upper().strip() + " "
-                )
-    matches = []
+                catalog_needles.add(" " + normalize(name) + " ")
+
+    matched_drugs = {}
     for row in drug_rows:
         row = dict(row) if not isinstance(row, dict) else row
-        candidates = []
-        if row.get("generic_name"):
-            candidates.append(str(row["generic_name"]).strip())
-        if row.get("brand_name"):
-            candidates.append(str(row["brand_name"]).strip())
-        matched_name = None
-        matched_line_index = None
-        for name in dict.fromkeys(candidates):
-            if not name:
+        candidates = candidates_by_drug[int(row["drug_id"])]
+        for name in candidates:
+            needle = " " + normalize(name) + " "
+            if needle not in normalized:
                 continue
-            needle = " " + name.upper() + " "
-            if needle in normalized:
-                matched_name = name
-                break
-        if matched_name is not None:
-            matched_line = ""
-            matched_needle = " " + re.sub(r"[^A-Za-z0-9]+", " ", matched_name).upper().strip() + " "
-            for line_index, line in enumerate(raw_lines):
-                line_normalized = " " + re.sub(r"[^A-Za-z0-9]+", " ", line).upper().strip() + " "
-                if matched_needle in line_normalized:
-                    matched_line_index = line_index
+            line_index = next(
+                (
+                    index
+                    for index, line in enumerate(normalized_lines)
+                    if needle in f" {line} "
+                ),
+                None,
+            )
+            matched_drugs[int(row["drug_id"])] = (name, line_index, "exact")
+            break
+
+    for line_index, line in enumerate(normalized_lines):
+        if not line or any(needle in f" {line} " for needle in catalog_needles):
+            continue
+        words = line.split()
+        scores = {}
+        for row in drug_rows:
+            drug_id = int(row["drug_id"])
+            if drug_id in matched_drugs:
+                continue
+            best = (0.0, "")
+            for name in candidates_by_drug[drug_id]:
+                normalized_name = normalize(name)
+                compact_name = normalized_name.replace(" ", "")
+                if len(compact_name) < 8:
+                    continue
+                name_words = normalized_name.split()
+                for width in range(max(1, len(name_words) - 1), len(name_words) + 2):
+                    for start in range(max(0, len(words) - width + 1)):
+                        window = "".join(words[start:start + width])
+                        score = SequenceMatcher(None, compact_name, window).ratio()
+                        if score > best[0]:
+                            best = (score, name)
+            if best[0] >= 0.80:
+                scores[drug_id] = best
+
+        ranked = sorted(scores.items(), key=lambda item: item[1][0], reverse=True)
+        if ranked and (len(ranked) == 1 or ranked[0][1][0] - ranked[1][1][0] >= 0.08):
+            drug_id, (score, name) = ranked[0]
+            matched_drugs[drug_id] = (name, line_index, "approximate")
+
+    matches = []
+    rows_by_id = {
+        int(row["drug_id"]): (dict(row) if not isinstance(row, dict) else row)
+        for row in drug_rows
+    }
+    for drug_id, (matched_name, matched_line_index, match_method) in matched_drugs.items():
+        row = rows_by_id[drug_id]
+        matched_line = ""
+        if matched_line_index is not None:
+            context_lines = [raw_lines[matched_line_index]]
+            for line_index in range(matched_line_index + 1, min(len(raw_lines), matched_line_index + 4)):
+                line_normalized = " " + normalized_lines[line_index] + " "
+                if any(needle in line_normalized for needle in catalog_needles):
                     break
-            if matched_line_index is not None:
-                context_lines = [raw_lines[matched_line_index]]
-                for line in raw_lines[matched_line_index + 1:matched_line_index + 4]:
-                    line_normalized = " " + re.sub(r"[^A-Za-z0-9]+", " ", line).upper().strip() + " "
-                    if any(needle in line_normalized for needle in catalog_needles):
-                        break
-                    context_lines.append(line)
-                matched_line = " ".join(context_lines)
-            dosage = dosage_pattern.search(matched_line)
-            quantity = quantity_pattern.search(matched_line)
-            matches.append({
-                "drug_id": int(row["drug_id"]),
-                "name": matched_name,
-                "generic_name": row.get("generic_name") or "",
-                "brand_name": row.get("brand_name") or "",
-                "catalog_dosage": row.get("dosage") or "",
-                "ocr_dosage": dosage.group(0).strip() if dosage else None,
-                "prescribed_quantity": int(quantity.group(1)) if quantity else None,
-                "sale_class": row.get("sale_class") or "rx",
-                "status": "In Stock" if int(row["total_stock"] or 0) > 0 else "Out of Stock",
-                "lot_id": None,
-                "price": 0.0,
-                "stock": int(row["total_stock"] or 0),
-            })
+                context_lines.append(raw_lines[line_index])
+            matched_line = " ".join(context_lines)
+        dosage = dosage_pattern.search(matched_line)
+        quantity = quantity_pattern.search(matched_line)
+        matches.append({
+            "drug_id": drug_id,
+            "name": matched_name,
+            "generic_name": row.get("generic_name") or "",
+            "brand_name": row.get("brand_name") or "",
+            "catalog_dosage": row.get("dosage") or "",
+            "ocr_dosage": dosage.group(0).strip() if dosage else None,
+            "prescribed_quantity": int(quantity.group(1)) if quantity else None,
+            "sale_class": row.get("sale_class") or "rx",
+            "status": "In Stock" if int(row["total_stock"] or 0) > 0 else "Out of Stock",
+            "lot_id": None,
+            "price": 0.0,
+            "stock": int(row["total_stock"] or 0),
+            "match_method": match_method,
+        })
     if matches:
         ids = [m["drug_id"] for m in matches]
         cur.execute(

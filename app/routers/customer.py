@@ -1134,11 +1134,14 @@ def _run_rapidocr(image_path: Path) -> str | None:
 def _extract_prescription_text(image_path: Path) -> str | None:
     """Return OCR text, empty string if nothing readable, or None if no OCR engine."""
     text = _run_tesseract(image_path)
-    if text and text.strip():
-        return text
     rapid_text = _run_rapidocr(image_path)
-    if rapid_text and rapid_text.strip():
-        return rapid_text
+    recognized_text = [
+        candidate.strip()
+        for candidate in (text, rapid_text)
+        if candidate and candidate.strip()
+    ]
+    if recognized_text:
+        return "\n".join(dict.fromkeys(recognized_text))
     if text is not None or rapid_text is not None:
         return ""
     return None
