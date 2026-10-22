@@ -29,19 +29,39 @@ def match_prescription_to_stock(cur, text: str) -> list[dict]:
     import re
 
     normalized = " " + re.sub(r"[^A-Za-z0-9]+", " ", text).upper() + " "
+    raw_lines = [line.strip() for line in text.splitlines() if line.strip()]
+    dosage_pattern = re.compile(
+        r"\b\d+(?:\.\d+)?\s*(?:mcg|μg|mg|g|kg|ml|l|iu|units?)"
+        r"(?:\s*/\s*\d+(?:\.\d+)?\s*(?:mcg|μg|mg|g|ml|l))?\b",
+        re.IGNORECASE,
+    )
+    quantity_pattern = re.compile(
+        r"\b(?:qty|quantity|dispense|disp\.?|#)\s*[:#-]?\s*(\d{1,3})\b",
+        re.IGNORECASE,
+    )
     cur.execute(
         """
         SELECT dm.drug_id, dm.generic_name, dm.brand_name, COALESCE(dm.sale_class, 'rx') AS sale_class,
+               dm.dosage,
                COALESCE(SUM(CASE WHEN il.is_active = 1 AND il.expiration_date >= CURRENT_DATE
                                   THEN il.current_stock ELSE 0 END), 0) AS total_stock
         FROM drugs_master dm
         LEFT JOIN inventory_lots il ON dm.drug_id = il.drug_id
         WHERE dm.is_active = 1
-        GROUP BY dm.drug_id, dm.generic_name, dm.brand_name
+        GROUP BY dm.drug_id, dm.generic_name, dm.brand_name, dm.sale_class, dm.dosage
         """
     )
+    drug_rows = cur.fetchall()
+    catalog_needles = set()
+    for drug_row in drug_rows:
+        for field in ("generic_name", "brand_name"):
+            name = str(drug_row.get(field) or "").strip()
+            if name:
+                catalog_needles.add(
+                    " " + re.sub(r"[^A-Za-z0-9]+", " ", name).upper().strip() + " "
+                )
     matches = []
-    for row in cur.fetchall():
+    for row in drug_rows:
         row = dict(row) if not isinstance(row, dict) else row
         candidates = []
         if row.get("generic_name"):
@@ -49,6 +69,7 @@ def match_prescription_to_stock(cur, text: str) -> list[dict]:
         if row.get("brand_name"):
             candidates.append(str(row["brand_name"]).strip())
         matched_name = None
+        matched_line_index = None
         for name in dict.fromkeys(candidates):
             if not name:
                 continue
@@ -57,11 +78,31 @@ def match_prescription_to_stock(cur, text: str) -> list[dict]:
                 matched_name = name
                 break
         if matched_name is not None:
+            matched_line = ""
+            matched_needle = " " + re.sub(r"[^A-Za-z0-9]+", " ", matched_name).upper().strip() + " "
+            for line_index, line in enumerate(raw_lines):
+                line_normalized = " " + re.sub(r"[^A-Za-z0-9]+", " ", line).upper().strip() + " "
+                if matched_needle in line_normalized:
+                    matched_line_index = line_index
+                    break
+            if matched_line_index is not None:
+                context_lines = [raw_lines[matched_line_index]]
+                for line in raw_lines[matched_line_index + 1:matched_line_index + 4]:
+                    line_normalized = " " + re.sub(r"[^A-Za-z0-9]+", " ", line).upper().strip() + " "
+                    if any(needle in line_normalized for needle in catalog_needles):
+                        break
+                    context_lines.append(line)
+                matched_line = " ".join(context_lines)
+            dosage = dosage_pattern.search(matched_line)
+            quantity = quantity_pattern.search(matched_line)
             matches.append({
                 "drug_id": int(row["drug_id"]),
                 "name": matched_name,
                 "generic_name": row.get("generic_name") or "",
                 "brand_name": row.get("brand_name") or "",
+                "catalog_dosage": row.get("dosage") or "",
+                "ocr_dosage": dosage.group(0).strip() if dosage else None,
+                "prescribed_quantity": int(quantity.group(1)) if quantity else None,
                 "sale_class": row.get("sale_class") or "rx",
                 "status": "In Stock" if int(row["total_stock"] or 0) > 0 else "Out of Stock",
                 "lot_id": None,

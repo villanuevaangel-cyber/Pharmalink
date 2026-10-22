@@ -6,8 +6,8 @@ import hashlib
 import json
 import logging
 import math
-import os
 import subprocess
+import sys
 import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -27,7 +27,7 @@ LEAD_DAYS = 7
 TARGET_DAYS = 30
 OVERSTOCK_DAYS = 90
 SALES_WINDOW_DAYS = 30
-MAX_EOQ_ORDER_UNITS = 200
+MAX_ORDER_UNITS = 200
 
 _scheduler = None
 _last_run: dict = {}
@@ -664,7 +664,11 @@ def scan_stock_alerts(cur) -> int:
     return created
 
 
-def _prophet_units_by_drug(period: int = TARGET_DAYS) -> tuple[dict, str]:
+def _prophet_units_by_drug(
+    period: int = TARGET_DAYS,
+    *,
+    allow_background_fit: bool = False,
+) -> tuple[dict, str]:
     """Predicted units per drug for the next `period` days, from Facebook Prophet.
 
     Returns ({drug_id: units}, engine). Engine is "prophet" when the model ran,
@@ -677,26 +681,15 @@ def _prophet_units_by_drug(period: int = TARGET_DAYS) -> tuple[dict, str]:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT drug_id, sale_date, SUM(daily_qty) AS daily_qty
-                FROM (
-                    SELECT si.drug_id, s.date_created::date AS sale_date, SUM(si.quantity) AS daily_qty
-                    FROM sales_items si
-                    JOIN sales s ON si.sale_id = s.sale_id
-                    WHERE LOWER(TRIM(s.status)) = 'completed'
-                      AND s.date_created::date >= (CURRENT_DATE - %s)
-                    GROUP BY si.drug_id, s.date_created::date
-                    UNION ALL
-                    SELECT od.drug_id, co.order_date::date AS sale_date, SUM(od.quantity) AS daily_qty
-                    FROM order_details od
-                    JOIN customer_orders co ON od.order_id = co.order_id
-                    WHERE LOWER(TRIM(co.order_status)) IN ('completed', 'ready for pickup')
-                      AND co.order_date::date >= (CURRENT_DATE - %s)
-                    GROUP BY od.drug_id, co.order_date::date
-                ) t
-                GROUP BY drug_id, sale_date
-                ORDER BY drug_id, sale_date ASC
+                SELECT si.drug_id, s.date_created::date AS sale_date, SUM(si.quantity) AS daily_qty
+                FROM sales_items si
+                JOIN sales s ON si.sale_id = s.sale_id
+                WHERE LOWER(TRIM(s.status)) = 'completed'
+                  AND s.date_created::date >= (CURRENT_DATE - %s)
+                GROUP BY si.drug_id, s.date_created::date
+                ORDER BY si.drug_id, s.date_created::date ASC
                 """,
-                (history_days, history_days),
+                (history_days,),
             )
             for row in cur.fetchall():
                 did = int(row["drug_id"])
@@ -719,12 +712,18 @@ def _prophet_units_by_drug(period: int = TARGET_DAYS) -> tuple[dict, str]:
     if cache_file.exists():
         try:
             cached = json.loads(cache_file.read_text(encoding="utf-8"))
-            if cached.get("fingerprint") == fingerprint and isinstance(cached.get("demand"), dict):
-                return {int(k): int(v) for k, v in cached["demand"].items()}, "prophet"
+            cached_demand = cached.get("demand")
+            if isinstance(cached_demand, dict):
+                if cached.get("fingerprint") == fingerprint:
+                    return {int(k): int(v) for k, v in cached_demand.items()}, "prophet"
+                generated_at = datetime.fromisoformat(str(cached.get("generated_at") or ""))
+                if generated_at.date() == today:
+                    logger.info("Using today's cached Prophet reorder forecast while it refreshes.")
+                    return {int(k): int(v) for k, v in cached_demand.items()}, "prophet"
         except Exception:
             pass
-    if os.getenv("RENDER"):
-        logger.warning("Skip Prophet fit on Render web process so cashier APIs stay up.")
+    if not allow_background_fit:
+        logger.warning("Prophet reorder forecast is not ready; using recent sales until the background refresh completes.")
         return {}, "recent_average"
     payload = json.dumps({
         "purpose": "reorder",
@@ -737,9 +736,9 @@ def _prophet_units_by_drug(period: int = TARGET_DAYS) -> tuple[dict, str]:
     script = Path(__file__).resolve().parent.parent / "python" / "forecast_prophet.py"
     decoded = None
     if script.exists():
-        for cmd in (["python", str(script)], ["py", "-3", str(script)]):
+        for cmd in ([sys.executable, str(script)], ["py", "-3", str(script)]):
             try:
-                proc = subprocess.run(cmd, input=payload, capture_output=True, text=True, timeout=25)
+                proc = subprocess.run(cmd, input=payload, capture_output=True, text=True, timeout=180)
                 if proc.returncode != 0:
                     continue
                 decoded = json.loads(proc.stdout or "{}")
@@ -759,12 +758,40 @@ def _prophet_units_by_drug(period: int = TARGET_DAYS) -> tuple[dict, str]:
     try:
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         cache_file.write_text(
-            json.dumps({"fingerprint": fingerprint, "demand": {str(k): v for k, v in demand.items()}}),
+            json.dumps({
+                "fingerprint": fingerprint,
+                "generated_at": datetime.now(MANILA).isoformat(),
+                "demand": {str(k): v for k, v in demand.items()},
+            }),
             encoding="utf-8",
         )
     except Exception:
         pass
     return demand, "prophet"
+
+
+def refresh_prophet_reorder_forecast() -> None:
+    """Refresh the reorder forecast away from customer-facing request workers."""
+    try:
+        demand, engine = _prophet_units_by_drug(TARGET_DAYS, allow_background_fit=True)
+        if engine != "prophet":
+            logger.warning("Background Prophet reorder forecast did not complete; suggestions will use recent averages.")
+            return
+        logger.info("Background Prophet reorder forecast refreshed for %s medicines.", len(demand))
+    except Exception:
+        logger.exception("Background Prophet reorder forecast refresh failed.")
+
+
+def _default_maximum(minimum: int) -> int:
+    minimum = max(1, int(minimum or 0))
+    return max(minimum * 3, minimum + 20)
+
+
+def _max_order_boxes(maximum_stock: int, current_stock: int, units_per_box: int) -> int:
+    """Whole boxes allowed by the stock ceiling and the 200-piece order cap."""
+    room = max(0, int(maximum_stock) - int(current_stock))
+    pack_size = max(1, int(units_per_box or 1))
+    return min(room, MAX_ORDER_UNITS) // pack_size
 
 
 EOQ_ORDER_COST = 50.0
@@ -778,18 +805,6 @@ def _eoq_units(annual_demand: float, unit_cost: float) -> int:
         return 0
     holding = max(float(unit_cost or 0) * EOQ_HOLDING_RATE, 1.0)
     return max(1, int(math.ceil(math.sqrt((2.0 * demand * EOQ_ORDER_COST) / holding))))
-
-
-def _default_maximum(minimum: int) -> int:
-    minimum = max(1, int(minimum or 0))
-    return max(minimum * 3, minimum + 20)
-
-
-def _max_order_boxes(maximum_stock: int, current_stock: int, units_per_box: int) -> int:
-    """Whole boxes allowed by the stock ceiling and the 200-piece order cap."""
-    room = max(0, int(maximum_stock) - int(current_stock))
-    pack_size = max(1, int(units_per_box or 1))
-    return min(room, MAX_EOQ_ORDER_UNITS) // pack_size
 
 
 def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
@@ -892,7 +907,7 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
         if source == "prophet":
             signal = f"Prophet forecast: {rate_text} for the next {target} days (about {forecast_n} {unit_word})"
         elif sold > 0:
-            signal = f"Recent {window}-day average {rate_text} (Prophet needs at least 2 sale days for this medicine)"
+            signal = f"Recent {window}-day average {rate_text} (Prophet forecast unavailable for this medicine)"
         else:
             signal = ""
         action, qty, reduce_qty, reasoning = "ok", 0, 0, ""
@@ -908,6 +923,7 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
         max_order_qty = max_order_boxes * units_per_box
         below_minimum = minimum > 0 and stock_for_order <= minimum
         at_or_above_max = maximum > 0 and stock_for_order >= maximum
+        suggested_po_qty = 0
         if at_or_above_max:
             action = "decrease"
             qty = 0
@@ -921,19 +937,22 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             requested_qty = eoq if eoq > 0 else room
             qty = min(max(0, int(requested_qty or 0)), max_order_qty)
             qty = (qty // units_per_box) * units_per_box
+            po_requested_qty = max(0, int(math.ceil(target_stock - stock_for_order))) if has_demand else room
+            suggested_po_qty = min(po_requested_qty, max_order_qty)
+            suggested_po_qty = (suggested_po_qty // units_per_box) * units_per_box
             counted = f" Unexpired stock is {current} (min {minimum}, max {maximum})."
-            eoq_text = (
-                f" Default order is EOQ {eoq} piece(s), capped at {MAX_EOQ_ORDER_UNITS} "
-                "and adjusted to whole boxes so stock does not pass the maximum."
+            demand_text = (
+                f" Replenishment targets about {math.ceil(target_stock)} pieces for the next {target} days, "
+                f"using the {source.replace('_', ' ')} estimate; PO planner suggestion is {suggested_po_qty}."
             )
             reasoning = (
-                f"{signal}.{counted}{eoq_text} Order {qty}."
+                f"{signal}.{counted}{demand_text} EOQ reorder suggestion is {qty}."
                 if has_demand
-                else f"{counted} No forecasted demand; fill toward the maximum. Order {qty}."
+                else f"{counted} No forecasted demand; fill toward the maximum. EOQ and PO planner quantities are {qty}."
             )
             if qty == 0:
                 reasoning += (
-                    f" No full box fits under the {MAX_EOQ_ORDER_UNITS}-piece order cap "
+                    f" No full box fits under the {MAX_ORDER_UNITS}-piece order cap "
                     "and maximum-stock level; review the package size or maximum stock."
                 )
         elif has_demand and days_of_stock is not None and days_of_stock > overstock:
@@ -976,10 +995,12 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             "eoq_qty": eoq,
             "avg_daily_sales": round(avg, 2),
             "forecast_units": int(round(predicted)) if predicted is not None else None,
+            "forecast_period_days": target,
             "demand_source": source,
             "days_of_stock": days_of_stock,
             "action": action,
             "suggested_qty": qty,
+            "suggested_po_qty": suggested_po_qty,
             "suggested_reduce_qty": reduce_qty,
             "reasoning": reasoning,
             "suggested_supplier_id": int(row["suggested_supplier_id"]) if row["suggested_supplier_id"] is not None else None,
@@ -1002,7 +1023,9 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             "sales_window_days": window,
             "demand_model": demand_engine,
             "order_qty_model": "eoq",
-            "max_eoq_order_units": MAX_EOQ_ORDER_UNITS,
+            "po_planner_qty_model": "forecast_demand_coverage",
+            "max_order_units": MAX_ORDER_UNITS,
+            "max_eoq_order_units": MAX_ORDER_UNITS,
             "eoq_order_cost": EOQ_ORDER_COST,
             "eoq_holding_rate": EOQ_HOLDING_RATE,
             "unexpired_stock_only": True,
@@ -1217,15 +1240,16 @@ def create_auto_purchase_orders(drug_ids: set[int] | None = None, use_forecast: 
         s
         for s in data["suggestions"]
         if s["action"] == "increase"
-        and s["suggested_qty"] > 0
+        and s["suggested_po_qty"] > 0
         and s.get("auto_po", True)
         and str(s.get("demand_source") or "") == "prophet"
         and _is_low_stock(int(s.get("current_stock") or 0), int(s.get("minimum_stock") or 0))
     ]
+    needs = [{**item, "suggested_qty": item["suggested_po_qty"]} for item in needs]
     if drug_ids is not None:
         needs = [s for s in needs if int(s["drug_id"]) in drug_ids]
     notes = (
-        "This is an automatic order. PharmaLink prepared it from the Prophet 30-day sales forecast and EOQ, capped at maximum stock."
+        "This is an automatic order. PharmaLink prepared it from historical sales modeled by Prophet for the target coverage period, capped at maximum stock."
     )
     result = create_purchase_orders_from_needs(needs, "System", notes, raise_alerts=True)
     return {
@@ -1573,9 +1597,24 @@ def start_scheduler() -> None:
         max_instances=1,
         coalesce=True,
     )
+    scheduler.add_job(
+        refresh_prophet_reorder_forecast,
+        IntervalTrigger(hours=12),
+        id="pharmalink-prophet-reorder",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.start()
     _scheduler = scheduler
     scheduler.add_job(run_startup_jobs, "date", run_date=datetime.now(MANILA) + timedelta(seconds=12), id="pharmalink-startup")
+    scheduler.add_job(
+        refresh_prophet_reorder_forecast,
+        "date",
+        run_date=datetime.now(MANILA) + timedelta(seconds=20),
+        id="pharmalink-prophet-reorder-startup",
+        max_instances=1,
+    )
     logger.info("automation scheduler started")
 
 

@@ -13,3 +13,4 @@ fpdf2
 pywebpush
 numpy
 scikit-learn
+prophet>=1.1.5,<2

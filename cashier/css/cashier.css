@@ -285,9 +285,13 @@
 #pos-page .summary label{ display:block; font-size:12px; font-weight:700; color:#4b5563; margin:8px 0 4px; }
 #pos-page .summary input[type="number"],
 #pos-page .summary input[type="text"],
+#pos-page .summary textarea,
 #pos-page .summary select{
     width:100%; height:40px; padding:0 10px; margin-bottom:6px;
     border:1px solid #FFE3B3; border-radius:8px; box-sizing:border-box;
+}
+#pos-page .summary textarea{
+    height:auto; min-height:68px; padding:8px 10px; resize:vertical;
 }
 #pos-page .pos-total-row{
     display:flex; justify-content:space-between; align-items:center;
@@ -304,6 +308,22 @@
     align-items:center; gap:8px; margin:0 !important; width:auto;
     font-weight:700; color:#1E3A34; cursor:pointer; white-space:nowrap;
 }
+#pos-page .pwd-qr-actions{
+    display:flex; gap:8px; margin:2px 0 6px;
+}
+#pos-page .pwd-qr-actions button{
+    flex:1; min-height:36px; padding:6px 10px; border:1px solid #1E3A34;
+    border-radius:8px; background:#1E3A34; color:#fff; font-weight:700;
+}
+#pos-page .pwd-qr-actions button:disabled{
+    cursor:not-allowed; opacity:.6;
+}
+#pos-page .pwd-verification-status{
+    margin:4px 0 0; color:#4b5563; font-size:.82rem; line-height:1.4;
+}
+#pos-page .pwd-verification-status[data-state="verified"]{ color:#16734b; }
+#pos-page .pwd-verification-status[data-state="rejected"],
+#pos-page .pwd-verification-status[data-state="error"]{ color:#b42318; }
 #pos-page input[type="checkbox"]{
     width:16px !important; height:16px !important; min-width:16px;
     max-width:16px; padding:0 !important; margin:0 !important;
@@ -784,271 +804,5 @@
     #pos-page #closeEwalletQrModal,
     #pos-page #closeBarcodeScannerModal{
         cursor:pointer; font-size:22px; line-height:1; color:#4BAA8B;
-    }
-}
-
-#pharmacistPrescriptionReviewModal{
-    align-items:center;
-    justify-content:center;
-    padding:20px;
-}
-#pharmacistPrescriptionReviewModal .pharmacist-rx-card{
-    display:flex;
-    flex-direction:column;
-    gap:16px;
-    width:min(820px,100%);
-    max-width:820px;
-    max-height:calc(100vh - 40px);
-    padding:24px;
-    overflow:auto;
-    box-sizing:border-box;
-    background:#fff;
-    border:1px solid #e5e7eb;
-    border-radius:16px;
-    box-shadow:0 24px 64px rgba(15,23,42,.24);
-}
-.pharmacist-rx-header{
-    display:flex;
-    align-items:flex-start;
-    justify-content:space-between;
-    gap:16px;
-    padding-bottom:14px;
-    border-bottom:1px solid #e5e7eb;
-}
-.pharmacist-rx-header h3{
-    margin:0;
-    color:#1E3A34;
-    font-size:21px;
-}
-.pharmacist-rx-customer{
-    margin:6px 0 0;
-    color:#64748b;
-    font-size:14px;
-}
-.pharmacist-rx-close{
-    display:grid;
-    flex:0 0 36px;
-    width:36px;
-    height:36px;
-    place-items:center;
-    border:0;
-    border-radius:9px;
-    background:#f1f5f9;
-    color:#334155;
-    font-size:23px;
-    cursor:pointer;
-}
-.pharmacist-rx-documents{
-    display:flex;
-    flex-wrap:wrap;
-    gap:10px;
-}
-.pharmacist-rx-documents a{
-    display:inline-flex;
-    align-items:center;
-    min-height:40px;
-    padding:8px 12px;
-    border:1px solid #b9e5d6;
-    border-radius:9px;
-    background:#f0fdf8;
-    color:#176b51;
-    font-weight:700;
-    text-decoration:none;
-}
-.pharmacist-rx-documents a[hidden]{
-    display:none;
-}
-.pharmacist-rx-verification{
-    padding:14px 16px;
-    border:1px solid #f3d58b;
-    border-radius:11px;
-    background:#fffbeb;
-}
-.pharmacist-rx-verification label{
-    display:flex;
-    align-items:flex-start;
-    gap:10px;
-    color:#334155;
-    font-weight:700;
-    line-height:1.45;
-    cursor:pointer;
-}
-.pharmacist-rx-verification input{
-    flex:0 0 17px;
-    width:17px;
-    height:17px;
-    margin:2px 0 0;
-    accent-color:#22845f;
-}
-.pharmacist-rx-verification p{
-    margin:7px 0 0 27px;
-    color:#64748b;
-    font-size:13px;
-}
-.pharmacist-rx-section{
-    display:flex;
-    flex-direction:column;
-    gap:10px;
-}
-.pharmacist-rx-section-heading h4{
-    margin:0;
-    color:#1E3A34;
-    font-size:16px;
-}
-.pharmacist-rx-section-heading p{
-    margin:4px 0 0;
-    color:#64748b;
-    font-size:13px;
-    line-height:1.45;
-}
-.pharmacist-rx-ocr-status{
-    margin:0;
-    padding:10px 12px;
-    border-left:3px solid #4BAA8B;
-    border-radius:5px;
-    background:#f0fdf8;
-    color:#334155;
-    font-size:13px;
-    line-height:1.45;
-}
-.pharmacist-rx-matches{
-    display:flex;
-    flex-direction:column;
-    gap:6px;
-    max-height:180px;
-    padding:10px 12px;
-    overflow:auto;
-    border:1px solid #e2e8f0;
-    border-radius:10px;
-    background:#f8fafc;
-}
-.pharmacist-rx-matches > label{
-    display:flex;
-    align-items:flex-start;
-    gap:10px;
-    padding:8px;
-    border-radius:7px;
-    color:#334155;
-    line-height:1.4;
-    cursor:pointer;
-}
-.pharmacist-rx-matches > label:hover{
-    background:#eef6f2;
-}
-.pharmacist-rx-matches input{
-    flex:0 0 17px;
-    width:17px;
-    height:17px;
-    margin:2px 0 0;
-    accent-color:#22845f;
-}
-.pharmacist-rx-section > label,
-.pharmacist-rx-note > label{
-    color:#334155;
-    font-size:13px;
-    font-weight:700;
-}
-#pharmacistRxDrugSearch,
-#pharmacistRxNote{
-    width:100%;
-    min-height:42px;
-    padding:10px 12px;
-    box-sizing:border-box;
-    border:1px solid #cbd5e1;
-    border-radius:9px;
-    background:#fff;
-    color:#1e293b;
-    font:inherit;
-}
-#pharmacistRxDrugSearch:focus,
-#pharmacistRxNote:focus{
-    border-color:#4BAA8B;
-    outline:3px solid rgba(75,170,139,.18);
-}
-.pharmacist-rx-search-results{
-    display:flex;
-    flex-direction:column;
-    gap:4px;
-    max-height:150px;
-    overflow:auto;
-}
-.pharmacist-rx-search-results button{
-    padding:9px 11px;
-    border:1px solid #e2e8f0;
-    border-radius:8px;
-    background:#fff;
-    color:#1e3a34;
-    text-align:left;
-    cursor:pointer;
-}
-.pharmacist-rx-search-results button:hover{
-    border-color:#4BAA8B;
-    background:#f0fdf8;
-}
-.pharmacist-rx-ocr{
-    border:1px solid #e2e8f0;
-    border-radius:9px;
-    background:#f8fafc;
-}
-.pharmacist-rx-ocr summary{
-    padding:11px 13px;
-    color:#334155;
-    font-weight:700;
-    cursor:pointer;
-}
-.pharmacist-rx-ocr pre{
-    max-height:200px;
-    margin:0;
-    padding:0 13px 13px;
-    overflow:auto;
-    color:#475569;
-    font:13px/1.5 Consolas,monospace;
-    white-space:pre-wrap;
-    overflow-wrap:anywhere;
-}
-.pharmacist-rx-note{
-    display:flex;
-    flex-direction:column;
-    gap:7px;
-}
-#pharmacistRxNote{
-    min-height:86px;
-    resize:vertical;
-}
-.pharmacist-rx-message{
-    min-height:20px;
-    margin:0;
-    color:#b91c1c;
-    font-size:13px;
-}
-.pharmacist-rx-actions{
-    display:flex;
-    justify-content:flex-end;
-    flex-wrap:wrap;
-    gap:10px;
-    padding-top:12px;
-    border-top:1px solid #e5e7eb;
-}
-.pharmacist-rx-actions button{
-    min-height:42px;
-    padding:9px 16px;
-}
-
-@media (max-width:620px){
-    #pharmacistPrescriptionReviewModal{
-        align-items:flex-end;
-        padding:8px;
-    }
-    #pharmacistPrescriptionReviewModal .pharmacist-rx-card{
-        width:100%;
-        max-width:100%;
-        max-height:calc(100vh - 16px);
-        padding:17px;
-        gap:13px;
-        border-radius:16px 16px 10px 10px;
-    }
-    .pharmacist-rx-actions{
-        display:grid;
-        grid-template-columns:1fr 1fr;
     }
 }

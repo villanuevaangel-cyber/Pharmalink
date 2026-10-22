@@ -6,7 +6,7 @@
     <title>PharmaLink - Customer Portal</title>
     <link rel="icon" href="/assets/pmds-logo.jpg" type="image/jpeg">
     <link rel="stylesheet" href="/assets/theme.css?v=notif-new1">
-    <link rel="stylesheet" href="/customer/css/customer.css?v=dash-colors1">
+    <link rel="stylesheet" href="/customer/css/customer.css?v=rx-availability1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -190,20 +190,19 @@
 
 <section id="prescription">
 <div class="prescription-header">
-    <h2>Upload Prescription</h2>
-    <p>Send your prescription for pharmacist review and check medicine availability.</p>
+    <h2>Prescription Availability Check</h2>
+    <p>Upload or photograph your prescription to check matching medicines, current stock, and prices.</p>
 </div>
 <form id="prescriptionUploadForm" enctype="multipart/form-data">
     <input type="file" id="prescriptionFile" name="prescription_file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" required>
-    <input type="file" id="prescriptionIdFile" name="id_file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" required>
     <input type="file" id="prescriptionCameraCapture" accept="image/*" capture="environment">
-    <div class="rx-layout">
+    <div class="rx-layout rx-layout--single">
         <div class="upload-box rx-drop rx-panel" id="rxDropzone">
             <div class="rx-panel-heading">
                 <div class="rx-drop-icon"><i class="fas fa-file-prescription"></i></div>
                 <div>
                     <h3>Prescription</h3>
-                    <p>Upload a clear photo or PDF of your prescription.</p>
+                    <p>Upload a clear photo or PDF. You can also take a photo with your camera.</p>
                 </div>
             </div>
             <div class="rx-file-actions">
@@ -211,23 +210,9 @@
                 <button type="button" id="rxCameraBtn" class="rx-choose"><i class="fas fa-camera"></i> Take photo</button>
             </div>
             <p class="rx-filename" id="rxFileName">No prescription selected</p>
-        </div>
-        <div class="rx-panel rx-documents-panel">
-            <div class="rx-panel-heading">
-                <div class="rx-drop-icon"><i class="fas fa-cloud-arrow-up"></i></div>
-                <div>
-                    <h3>Upload your documents</h3>
-                    <p>Add a government-issued ID for pharmacist verification.</p>
-                </div>
-            </div>
-            <div class="rx-id-upload">
-                <label for="prescriptionIdFile" class="rx-field-label">Government-issued ID</label>
-                <label for="prescriptionIdFile" class="rx-choose"><i class="fas fa-id-card"></i> Choose ID file</label>
-                <p class="rx-filename" id="rxIdFileName">No ID selected</p>
-            </div>
             <div class="rx-upload-footer">
-                <p class="rx-privacy-note"><i class="fas fa-lock"></i> Only pharmacy staff can view your ID. It is removed after review or cancellation.</p>
-                <button type="submit" class="rx-upload"><i class="fas fa-upload"></i> Submit for review</button>
+                <p class="rx-store-check-note"><i class="fas fa-circle-info"></i> OCR may misread a prescription. Bring the original prescription to the pharmacy for checking before purchase. No ID is needed here.</p>
+                <button type="submit" class="rx-upload"><i class="fas fa-magnifying-glass"></i> Check availability</button>
             </div>
         </div>
     </div>
@@ -237,7 +222,7 @@
     <div class="rx-history-head">
         <div>
             <h3>My Prescriptions</h3>
-            <p>Track pharmacist reviews and check which matched medicines are available.</p>
+            <p>Review detected medicines, current availability, and prices. Add available matches to your cart.</p>
         </div>
     </div>
     <div class="rx-filters">
@@ -256,7 +241,7 @@
                     <th>Date</th>
                     <th>File</th>
                     <th>Availability</th>
-                    <th>Pharmacist review</th>
+                    <th>Detected medicines</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -474,6 +459,6 @@
     </script>
     <script src="/assets/theme.js?v=load1"></script>
     <script src="/assets/profile-validate.js?v=pv4"></script>
-    <script src="/customer/js/customer-boot.js?v=rx-id-cancel1"></script>
+    <script src="/customer/js/customer-boot.js?v=rx-availability1"></script>
 </body>
 </html>
