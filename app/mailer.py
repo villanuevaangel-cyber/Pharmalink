@@ -138,9 +138,11 @@ def send_mail(to_email: str, subject: str, body_html: str) -> dict:
         except Exception as exc:
             return {"success": False, "message": str(exc) or type(exc).__name__}
 
-        attempts = [(465, "ssl"), (port, "starttls" if port != 465 else "ssl")]
+        attempts = [(port, "ssl" if port == 465 else "starttls")]
+        if port != 465:
+            attempts.append((465, "ssl"))
         seen = set()
-        last_exc = None
+        connection_errors = []
         for try_port, mode in attempts:
             key = (try_port, mode)
             if key in seen:
@@ -152,13 +154,19 @@ def send_mail(to_email: str, subject: str, body_html: str) -> dict:
             except smtplib.SMTPAuthenticationError as exc:
                 return {"success": False, "message": str(exc) or "SMTP login failed."}
             except _CONNECT_ERRORS as exc:
-                last_exc = exc
+                protocol = "SSL" if mode == "ssl" else "STARTTLS"
+                detail = str(exc) or type(exc).__name__
+                if isinstance(exc, (TimeoutError, socket.timeout)):
+                    detail = "connection timed out"
+                connection_errors.append(
+                    f"{host}:{try_port} ({protocol}): {detail}"
+                )
                 continue
             except Exception as exc:
                 smtp_error = str(exc) or type(exc).__name__
                 break
-        if last_exc is not None and smtp_error is None:
-            smtp_error = str(last_exc) or "Could not reach the mail server."
+        if connection_errors and smtp_error is None:
+            smtp_error = "; ".join(connection_errors)
 
     if _clean(os.getenv("RESEND_API_KEY", "")):
         https = _send_resend(to_email, subject, body_html, from_name, user)
