@@ -190,8 +190,8 @@
 
 <section id="prescription">
 <div class="prescription-header">
-    <h2>Prescription Availability Check</h2>
-    <p>Upload or photograph your prescription to check matching medicines, current stock, and prices.</p>
+    <h2>Prescription Check</h2>
+    <p>Check medicine stock and prices.</p>
 </div>
 <form id="prescriptionUploadForm" enctype="multipart/form-data">
     <input type="file" id="prescriptionFile" name="prescription_file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" required>
@@ -201,7 +201,7 @@
                 <div class="rx-drop-icon"><i class="fas fa-file-prescription"></i></div>
                 <div>
                     <h3>Prescription</h3>
-                    <p>Upload a clear photo or PDF. You can also take a photo with your camera.</p>
+                    <p>Upload a photo or PDF.</p>
                 </div>
             </div>
             <div class="rx-file-actions">
@@ -210,8 +210,8 @@
             </div>
             <p class="rx-filename" id="rxFileName">No prescription selected</p>
             <div class="rx-upload-footer">
-                <p class="rx-store-check-note"><i class="fas fa-circle-info"></i> OCR may misread a prescription. Bring the original prescription to the pharmacy for checking before purchase. No ID is needed here.</p>
-                <button type="submit" class="rx-upload"><i class="fas fa-magnifying-glass"></i> Check availability</button>
+                <p class="rx-store-check-note"><i class="fas fa-circle-info"></i> Bring the original prescription for pharmacist review.</p>
+                <button type="submit" class="rx-upload"><i class="fas fa-magnifying-glass"></i> Check stock</button>
             </div>
         </div>
     </div>
@@ -221,7 +221,7 @@
     <div class="rx-history-head">
         <div>
             <h3>My Prescriptions</h3>
-            <p>Review detected medicines, current availability, and prices. Add available matches to your cart.</p>
+            <p>View results and add available medicines to your cart.</p>
         </div>
     </div>
     <div class="rx-filters">
@@ -272,12 +272,12 @@
 <div id="rxCameraOverlay" class="rx-modal" style="display:none;">
     <div class="rx-modal-card rx-camera-card" role="dialog" aria-modal="true" aria-labelledby="rxCameraTitle">
         <div class="rx-modal-head">
-            <h3 id="rxCameraTitle">Take a photo of your prescription</h3>
+            <h3 id="rxCameraTitle">Take photo</h3>
             <button id="rxCameraClose" type="button" class="rx-modal-close" aria-label="Close">&times;</button>
         </div>
         <video id="rxCameraVideo" autoplay playsinline muted></video>
         <canvas id="rxCameraCanvas" hidden></canvas>
-        <p id="rxCameraHint" class="rx-modal-file">Hold the Rx steady, then capture.</p>
+        <p id="rxCameraHint" class="rx-modal-file">Align prescription and capture.</p>
         <div class="rx-camera-actions">
             <button type="button" id="rxCameraSnap" class="rx-upload"><i class="fas fa-camera"></i> Capture</button>
             <button type="button" id="rxCameraCancel" class="rx-choose">Cancel</button>

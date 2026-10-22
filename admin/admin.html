@@ -962,13 +962,13 @@
 <section id="purchase-orders" style="display:none;">
     <div class="dashboard-header">
         <h2>Purchase Orders</h2>
-        <p>At the recurring PO run, forecast demand and the reorder point determine which medicines need replenishment. Suggested quantities remain reviewable and are capped to whole boxes and stock limits.</p>
+        <p>Low stock, forecast, and suggested order quantities.</p>
     </div>
     <div class="purchase-po-schedule">
         <div class="purchase-planner-orders-heading">
             <div>
-                <h3>Automatic PO and supplier email schedule</h3>
-                <p>At each scheduled run, the forecast checks replenishment needs, creates one PO per supplier, then emails open unsent POs with supplier email addresses.</p>
+                <h3>PO &amp; email schedule</h3>
+                <p>Creates POs and emails suppliers on schedule.</p>
             </div>
             <span id="purchasePoNextRun" class="purchase-po-next-run">Loading schedule...</span>
         </div>
@@ -1000,14 +1000,14 @@
             <button type="button" id="savePurchasePoSchedule" class="action-btn">Save schedule</button>
             <span id="purchasePoScheduleStatus" role="status" aria-live="polite"></span>
         </div>
-        <small class="purchase-po-schedule-note">A monthly date that does not exist in a given month runs on that month’s last day. Email failures remain visible in the PO list for retry.</small>
+        <small class="purchase-po-schedule-note">Unavailable dates use month-end. Retry failed emails in Open POs.</small>
     </div>
     <div class="purchase-planner-section">
         <div class="purchase-planner-section-heading">
             <span class="purchase-planner-step">1</span>
             <div>
-                <h3>Select medicines that need a PO</h3>
-                <p>Filter the reorder list, select medicines, then review supplier and final quantities below.</p>
+                <h3>Select medicines</h3>
+                <p>Choose items, then set supplier and quantity.</p>
             </div>
         </div>
         <div class="purchase-planner-filters" aria-label="Filter low-stock medicines">
@@ -1037,8 +1037,8 @@
                             <th>Medicine</th>
                             <th>Current qty (pcs)</th>
                             <th>Needed stock (pcs)</th>
-                            <th>Forecast / order qty (pcs)</th>
-                            <th>Pieces per Box</th>
+                            <th>Suggested qty (pcs)</th>
+                            <th>Pcs/box</th>
                             <th>Supplier</th>
                         </tr>
                     </thead>
@@ -1058,13 +1058,13 @@
             <div class="purchase-planner-cart-heading">
                 <span class="purchase-planner-step">2</span>
                 <div>
-                    <h3><i class="fas fa-cart-shopping"></i> Review supplier and final quantities</h3>
+                    <h3><i class="fas fa-cart-shopping"></i> Review order</h3>
                     <p id="purchasePlannerSelection">0 items selected</p>
                 </div>
             </div>
-            <p class="purchase-planner-cart-hint">Each quantity must be a whole number of boxes and stay within stock limits.</p>
+            <p class="purchase-planner-cart-hint">Whole boxes only. Within stock limits.</p>
             <div id="purchasePlannerCartBody" class="purchase-planner-cart-body">
-                <p class="purchase-planner-cart-empty">Select medicines from the reorder list to add them here.</p>
+                <p class="purchase-planner-cart-empty">Select medicines to add them here.</p>
             </div>
             <button type="button" id="createSelectedPurchaseOrders" class="action-btn" disabled>
                 <i class="fas fa-clipboard-check"></i> Review and confirm PO
@@ -1074,8 +1074,8 @@
     <div class="purchase-planner-orders">
         <div class="purchase-planner-orders-heading">
             <div>
-                <h3>Open POs and supplier email status</h3>
-                <p>Check queued, sent, or failed supplier emails here. Retry failures here; receiving stays in Deliveries.</p>
+                <h3>Open POs</h3>
+                <p>Email status and retry. Receive in Deliveries.</p>
             </div>
             <button type="button" id="refreshPurchasePlannerOrders" class="action-btn">
                 <i class="fas fa-rotate"></i> Refresh
@@ -1104,13 +1104,13 @@
 <div id="purchaseOrderReviewModal" class="modal">
     <div class="modal-content purchase-order-review-modal">
         <div class="modal-header">
-            <h2><i class="fas fa-clipboard-check"></i> Confirm purchase orders</h2>
+            <h2><i class="fas fa-clipboard-check"></i> Confirm PO</h2>
             <button type="button" class="close" id="closePurchaseOrderReview" aria-label="Close">&times;</button>
         </div>
-        <p class="purchase-order-review-note">Confirm the supplier and final quantity. Open unsent POs are emailed on the recurring schedule configured in this module.</p>
+        <p class="purchase-order-review-note">Check supplier and quantity. Emails send on schedule.</p>
         <label for="purchaseOrderExpectedDate" style="margin-top:10px;display:block;">Expected delivery date</label>
         <input type="date" id="purchaseOrderExpectedDate">
-        <small class="purchase-order-review-note">Optional estimate; enter the supplier-confirmed date when known. It is not treated as a confirmed delivery date.</small>
+        <small class="purchase-order-review-note">Optional estimate. Confirm the date with the supplier.</small>
         <div id="purchaseOrderReviewBody"></div>
         <button type="button" id="confirmCreatePurchaseOrders" class="action-btn">
             <i class="fas fa-file-circle-plus"></i> Confirm and create PO(s)
