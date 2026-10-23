@@ -1016,10 +1016,10 @@
             </label>
             <label for="purchasePlannerStatusFilter">PO status
                 <select id="purchasePlannerStatusFilter">
-                    <option value="needs_po">Needs PO</option>
+                    <option value="needs_po">Needs reorder</option>
                     <option value="already_ordered">Already on open PO</option>
-                    <option value="not_orderable">Cannot order within stock limits</option>
-                    <option value="all">All reorder suggestions</option>
+                    <option value="not_orderable">Blocked by stock limits</option>
+                    <option value="all">All items</option>
                 </select>
             </label>
             <label for="purchasePlannerSupplierFilter">Supplier
@@ -1036,9 +1036,9 @@
                             <th><input type="checkbox" id="purchasePlannerSelectAll" aria-label="Select all low-stock medicines"></th>
                             <th>Medicine</th>
                             <th>Current qty (pcs)</th>
-                            <th>Needed stock (pcs)</th>
-                            <th>Suggested qty (pcs)</th>
-                            <th>Pcs/box</th>
+                            <th>Short to min. (pcs)</th>
+                            <th>Order suggestion</th>
+                            <th>Pack size</th>
                             <th>Supplier</th>
                         </tr>
                     </thead>
@@ -1062,7 +1062,7 @@
                     <p id="purchasePlannerSelection">0 items selected</p>
                 </div>
             </div>
-            <p class="purchase-planner-cart-hint">Whole boxes only. Within stock limits.</p>
+            <p class="purchase-planner-cart-hint">Order in whole boxes, within the medicine's maximum stock.</p>
             <div id="purchasePlannerCartBody" class="purchase-planner-cart-body">
                 <p class="purchase-planner-cart-empty">Select medicines to add them here.</p>
             </div>
@@ -6063,10 +6063,10 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                     <strong>${escapePlanner(label)}</strong>
                     <button type="button" class="purchase-planner-remove" aria-label="Remove ${escapePlanner(label)} from PO cart">&times;</button>
                 </div>
-                <p class="purchase-planner-cart-stock">Current ${current} pcs · Needed ${needed} pcs · Suggested ${suggestedQty} pcs</p>
+                <p class="purchase-planner-cart-stock">Current ${current} pcs · Short to min. ${needed} pcs · Suggested order ${suggestedQty} pcs</p>
                 <p class="purchase-planner-cart-supplier${supplier ? '' : ' is-missing'}"><strong>Supplier:</strong> ${escapePlanner(supplier || 'Choose a supplier in the table')}</p>
                 ${maxQty > 0
-                    ? `<label>Final quantity (pcs) <input type="number" class="purchase-planner-cart-qty" min="${packSize}" max="${maxQty}" step="${packSize}" value="${escapePlanner(saved.quantity || suggestedQty)}" aria-label="Final quantity for ${escapePlanner(label)}"></label>
+                    ? `<label>Final order (pcs) <input type="number" class="purchase-planner-cart-qty" min="${packSize}" max="${maxQty}" step="${packSize}" value="${escapePlanner(saved.quantity || suggestedQty)}" aria-label="Final order quantity for ${escapePlanner(label)}"></label>
                        <small>${suggestedBoxes} suggested box${suggestedBoxes === 1 ? '' : 'es'} · ${packSize} pcs per box</small>`
                     : '<p class="purchase-planner-cart-warning">No full box fits under this medicine’s maximum stock/order limit. Adjust its package size or maximum stock in Maintenance.</p>'}
             </article>`;
@@ -6255,21 +6255,22 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 const forecastUnits = item.forecast_units == null
                     ? (item.demand_source === 'recent_average'
                         ? Math.round(Number(item.avg_daily_sales || 0) * forecastDays)
+                const orderBoxes = Math.floor(quantity / pcsPerBox);
                         : null)
                     : Number(item.forecast_units);
                 const noDemandForecast = forecastUnits === 0;
                 const forecastLabel = forecastUnits == null
-                    ? 'No sales forecast available'
+                    ? 'Demand data unavailable'
                     : item.demand_source === 'prophet'
-                        ? `Prophet · next ${forecastDays} days`
+                        ? `${forecastDays}-day forecast`
                         : noDemandForecast
                             ? `No completed sales in the last ${forecastDays} days`
-                            : `Recent average · ${forecastDays} days`;
+                            : 'Based on recent sales';
                 const forecastText = forecastUnits == null
-                    ? 'Unavailable'
+                    ? 'No forecast'
                     : noDemandForecast
-                        ? 'No demand projected'
-                        : `~${forecastUnits.toLocaleString()} pcs`;
+                        ? 'Projected sales: 0 pcs'
+                        : `Projected sales: ~${forecastUnits.toLocaleString()} pcs`;
                 const suggestedSupplierId = Number(item.suggested_supplier_id) || 0;
                 const label = `${escapePlanner(item.generic_name)}${item.brand_name ? ` (${escapePlanner(item.brand_name)})` : ''} - ${escapePlanner(item.dosage)} ${escapePlanner(item.form)}`;
                 const openPoNumbers = String(item.open_po_numbers || '').trim();
@@ -6279,29 +6280,35 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                     : '';
                 const poStatus = alreadyOrdered
                     ? 'already_ordered'
-                    : maxOrderQty < pcsPerBox
+                    : notOrderable
                         ? 'not_orderable'
                         : 'needs_po';
+                const notOrderable = maxOrderQty < pcsPerBox;
                 return `<tr class="purchase-planner-row"
                     data-drug-id="${Number(item.drug_id)}"
                     data-po-status="${poStatus}"
                     data-pcs-per-box="${pcsPerBox}"
                     data-max-order-qty="${maxOrderQty}"
+                const checkboxDisabled = alreadyOrdered || notOrderable;
+                const checkboxTitle = alreadyOrdered
+                    ? `Already ordered on ${openPoNumbers}`
+                    : notOrderable
+                        ? 'No full box fits within the maximum stock limit'
+                        : '';
                     data-suggested-qty="${quantity}"
                     data-current-qty="${current}"
                     data-needed-qty="${needed}"
                     data-suggested-supplier-id="${suggestedSupplierId}">
-                    <td><input type="checkbox" class="purchase-planner-select" aria-label="Select ${label}" ${alreadyOrdered ? `disabled title="Already ordered on ${escapePlanner(openPoNumbers)}"` : ''}></td>
+                    <td><input type="checkbox" class="purchase-planner-select" aria-label="Select ${label}" ${checkboxDisabled ? `disabled title="${escapePlanner(checkboxTitle)}"` : ''}></td>
                     <td class="purchase-planner-medicine"><span>${label}</span>${openPoNote}</td>
                     <td>${current.toLocaleString()}</td>
                     <td>${needed.toLocaleString()}</td>
                     <td class="purchase-planner-qty">
-                        <strong>${forecastText}</strong>
                         <small>${forecastLabel}</small>
                         <strong>${quantity.toLocaleString()} pcs</strong>
-                        <small>Suggested order · ${Math.floor(quantity / pcsPerBox)} box(es)</small>
+                        <small>${orderBoxes.toLocaleString()} box${orderBoxes === 1 ? '' : 'es'} · ${forecastText}</small>
                     </td>
-                    <td>${pcsPerBox.toLocaleString()} pcs</td>
+                    <td>${pcsPerBox.toLocaleString()} pcs/box</td>
                     <td><select class="purchase-planner-supplier" aria-label="Supplier for ${label}">${supplierOptions(item.drug_id, suggestedSupplierId)}</select></td>
                 </tr>`;
             }).join('');

@@ -990,6 +990,22 @@ def _max_order_boxes(maximum_stock: int, current_stock: int, units_per_box: int)
     return min(room, MAX_ORDER_UNITS) // pack_size
 
 
+def _suggested_po_quantity(
+    current_stock: int,
+    minimum_stock: int,
+    target_stock: float,
+    has_demand: bool,
+    units_per_box: int,
+    max_order_qty: int,
+) -> int:
+    """Suggest whole boxes to reach forecast coverage, or minimum stock without demand."""
+    target = target_stock if has_demand else minimum_stock
+    shortfall = max(0, math.ceil(target - current_stock))
+    pack_size = max(1, int(units_per_box or 1))
+    requested = math.ceil(shortfall / pack_size) * pack_size
+    return min(requested, max(0, int(max_order_qty)))
+
+
 EOQ_ORDER_COST = 50.0
 EOQ_HOLDING_RATE = 0.20
 
@@ -1147,9 +1163,14 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             requested_qty = eoq if eoq > 0 else room
             qty = min(max(0, int(requested_qty or 0)), max_order_qty)
             qty = (qty // units_per_box) * units_per_box
-            po_requested_qty = max(0, int(math.ceil(target_stock - stock_for_order))) if has_demand else room
-            suggested_po_qty = min(po_requested_qty, max_order_qty)
-            suggested_po_qty = (suggested_po_qty // units_per_box) * units_per_box
+            suggested_po_qty = _suggested_po_quantity(
+                stock_for_order,
+                minimum,
+                target_stock,
+                has_demand,
+                units_per_box,
+                max_order_qty,
+            )
             counted = f" Unexpired stock is {current} (min {minimum}, max {maximum})."
             demand_text = (
                 f" Replenishment targets about {math.ceil(target_stock)} pieces for the next {target} days, "
@@ -1158,7 +1179,7 @@ def compute_reorder_suggestions(use_forecast: bool = True) -> dict:
             reasoning = (
                 f"{signal}.{counted}{demand_text} EOQ reorder suggestion is {qty}."
                 if has_demand
-                else f"{counted} No forecasted demand; fill toward the maximum. EOQ and PO planner quantities are {qty}."
+                else f"{counted} No recent demand; the PO planner suggests {suggested_po_qty} pieces to reach at least the minimum stock."
             )
             if qty == 0:
                 reasoning += (
