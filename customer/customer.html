@@ -6,7 +6,7 @@
     <title>PharmaLink - Customer Portal</title>
     <link rel="icon" href="/assets/pmds-logo.jpg" type="image/jpeg">
     <link rel="stylesheet" href="/assets/theme.css?v=notif-new1">
-    <link rel="stylesheet" href="/customer/css/customer.css?v=rx-layout2">
+    <link rel="stylesheet" href="/customer/css/customer.css?v=rx-prescription-layout3">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -208,10 +208,20 @@
                 <label for="prescriptionFile" class="rx-choose"><i class="fas fa-folder-open"></i> Choose file</label>
                 <button type="button" id="rxCameraBtn" class="rx-choose"><i class="fas fa-camera"></i> Take photo</button>
             </div>
-            <p class="rx-filename" id="rxFileName">No prescription selected</p>
             <div class="rx-upload-footer">
-                <p class="rx-store-check-note"><i class="fas fa-circle-info"></i> Bring the original prescription for pharmacist review.</p>
+                <p class="rx-filename" id="rxFileName">No prescription selected</p>
                 <button type="submit" class="rx-upload"><i class="fas fa-magnifying-glass"></i> Check stock</button>
+            </div>
+            <p class="rx-store-check-note"><i class="fas fa-circle-info"></i> Bring the original prescription for pharmacist review.</p>
+            <div class="rx-filters rx-filters--compact" aria-label="Filter prescription history by date">
+                <span class="rx-filter-caption">History dates</span>
+                <label>From
+                    <input type="date" id="rxFromDate">
+                </label>
+                <label>To
+                    <input type="date" id="rxToDate">
+                </label>
+                <button type="button" id="rxApplyFilter" class="rx-filter-btn"><i class="fas fa-filter"></i> Apply</button>
             </div>
         </div>
     </div>
@@ -223,15 +233,6 @@
             <h3>My Prescriptions</h3>
             <p>View results and add available medicines to your cart.</p>
         </div>
-    </div>
-    <div class="rx-filters">
-        <label>From
-            <input type="date" id="rxFromDate">
-        </label>
-        <label>To
-            <input type="date" id="rxToDate">
-        </label>
-        <button type="button" id="rxApplyFilter" class="rx-filter-btn"><i class="fas fa-filter"></i> Apply</button>
     </div>
     <div class="rx-table-wrap">
         <table class="rx-table">
@@ -458,6 +459,6 @@
     </script>
     <script src="/assets/theme.js?v=load1"></script>
     <script src="/assets/profile-validate.js?v=pv4"></script>
-    <script src="/customer/js/customer-boot.js?v=rx-availability1"></script>
+    <script src="/customer/js/customer-boot.js?v=rx-history-actions2"></script>
 </body>
 </html>

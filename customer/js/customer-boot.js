@@ -470,7 +470,6 @@
                 const canView = p.file_available && p.view_url;
                 const matches = Array.isArray(p.availability_summary) ? p.availability_summary : [];
                 const canAdd = matches.some(canAddMatch);
-                const canCancel = true;
                 const fileLabel = 'Rx #' + p.id + (p.file_type ? ' · ' + p.file_type : '');
                 const itemSummary = matches.length
                     ? matches.map((match) => {
@@ -492,7 +491,6 @@
                     <td data-label="Actions" class="rx-actions-cell">
                         <button type="button" class="rx-view-btn" data-rx-id="${attr(p.id)}" ${canView ? '' : 'disabled'} title="View prescription" aria-label="View prescription"><i class="fas fa-eye"></i></button>
                         <button type="button" class="rx-cart-btn" data-rx-id="${attr(p.id)}" ${canAdd ? '' : 'disabled'} title="${canAdd ? 'Add available matches to cart' : 'No in-stock medicine to add'}" aria-label="Add to cart"><i class="fas fa-cart-plus"></i></button>
-                        ${canCancel ? `<button type="button" class="rx-cancel-btn" data-rx-id="${attr(p.id)}">Cancel</button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
@@ -582,12 +580,6 @@
             }
         }
         function handleRxTableClick(e) {
-            const cancelBtn = e.target.closest('.rx-cancel-btn');
-            if (cancelBtn) {
-                e.preventDefault();
-                cancelPrescription(cancelBtn);
-                return;
-            }
             const viewBtn = e.target.closest('.rx-view-btn');
             if (viewBtn) {
                 e.preventDefault();
@@ -602,25 +594,6 @@
                 return;
             }
             handleRxAddCart(e);
-        }
-        async function cancelPrescription(button) {
-            const id = button.getAttribute('data-rx-id');
-            if (!id || !window.confirm('Cancel this prescription submission?')) return;
-            button.disabled = true;
-            try {
-                const response = await fetch(`/api/customer/prescriptions/${encodeURIComponent(id)}`, {
-                    method: 'DELETE',
-                    credentials: 'same-origin'
-                });
-                const data = await response.json();
-                if (!response.ok || !data.success) throw new Error(data.message || 'Could not cancel this prescription.');
-                loadHistory();
-            } catch (error) {
-                button.disabled = false;
-                const text = error.message || 'Could not cancel this prescription.';
-                if (typeof window.phAlert === 'function') window.phAlert(text);
-                else window.alert(text);
-            }
         }
         tbody.addEventListener('click', handleRxTableClick);
         document.querySelector('.nav-item[data-target="prescription"]')?.addEventListener('click', loadHistory);
