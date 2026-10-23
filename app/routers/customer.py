@@ -1312,9 +1312,9 @@ async def upload_prescription(
         "skipped_pdf": "Prescription uploaded. The PDF is saved for the pharmacist; the text could not be converted for OCR on this server.",
         "failed": "Prescription uploaded, but the text could not be read clearly. A pharmacist will review it manually.",
         "completed": (
-            "Prescription uploaded and read successfully."
+            "Prescription read."
             if availability_summary
-            else "Prescription uploaded and read, but no matching medicines were found in our catalog."
+            else "No matching medicine found."
         ),
     }
     return {

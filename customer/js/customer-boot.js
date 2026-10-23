@@ -385,7 +385,7 @@
                 ? 'Quantity not detected'
                 : `Quantity (OCR): ${m.prescribed_quantity} · review before adding`;
             const matchNote = m.match_method === 'approximate'
-                ? '<small class="rx-match-warning">Possible OCR match — verify against the original prescription.</small>'
+                ? '<small class="rx-match-warning">Possible match — verify prescription.</small>'
                 : '';
             const action = ok
                 ? `<button type="button" class="rx-add-cart" data-lot-id="${attr(m.lot_id)}" data-name="${attr(label)}" data-price="${attr(m.price)}" data-drug-id="${attr(m.drug_id)}" data-stock="${attr(m.stock)}"><i class="fas fa-cart-plus"></i> Add to cart</button>`
@@ -459,7 +459,7 @@
         function renderHistoryTable() {
             const rows = rxRows.filter(inDateRange);
             if (!rxRows.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="rx-empty-cell"><div class="rx-empty"><i class="fas fa-file-medical"></i><h4>No uploads yet</h4><p>Your prescription files will show up here.</p></div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="rx-empty-cell"><div class="rx-empty"><i class="fas fa-file-medical"></i><h4>No prescriptions</h4><p>Uploaded prescriptions appear here.</p></div></td></tr>';
                 return;
             }
             if (!rows.length) {
@@ -479,11 +479,11 @@
                             ? ''
                             : ` · Qty ${match.prescribed_quantity} (OCR)`;
                         const confidenceNote = match.match_method === 'approximate'
-                            ? ' (possible OCR match; verify original)'
+                            ? ' (possible match; check Rx)'
                             : '';
                         return `${matchLabel(match)}${confidenceNote}${dosage ? ` · ${dosage}` : ''}${quantity}`;
                     }).filter(Boolean).join(', ')
-                    : 'No medicines matched';
+                    : 'No match';
                 return `<tr>
                     <td data-label="Date">${escapeHtml(rxDateLabel(p))}</td>
                     <td data-label="File">${escapeHtml(fileLabel)}</td>
@@ -740,8 +740,8 @@
         async function openLiveCamera() {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 showRxError(window.isSecureContext
-                    ? 'Camera access is not supported by this browser. Use Choose file to upload a prescription photo.'
-                    : 'Camera access requires a secure HTTPS connection. Open PharmaLink using its HTTPS address.');
+                    ? 'Camera not supported. Upload a photo instead.'
+                    : 'Camera needs HTTPS. Open the secure site.');
                 return;
             }
             try {
@@ -758,12 +758,12 @@
                 stopRxCamera();
                 const errorName = err && typeof err === 'object' ? err.name : '';
                 const message = errorName === 'NotAllowedError' || errorName === 'SecurityError'
-                    ? 'Camera access was blocked. Allow camera permission for this site in your browser settings, then try again.'
+                    ? 'Camera blocked. Allow access in browser settings.'
                     : errorName === 'NotFoundError'
-                        ? 'No camera was found on this device.'
+                        ? 'No camera found.'
                         : errorName === 'NotReadableError'
-                            ? 'The camera is already in use by another app. Close it and try again.'
-                            : 'Could not open the camera. Check camera permission and try again.';
+                            ? 'Camera is in use by another app.'
+                            : 'Could not open camera. Check permissions.';
                 showRxError(message);
             }
         }
@@ -798,7 +798,7 @@
             const fd = new FormData();
             fd.append('prescription_file', file);
             msg.style.color = '#555';
-            msg.textContent = 'Uploading and reading prescription...';
+            msg.textContent = 'Checking prescription...';
             fetch('/api/customer/prescriptions', { method: 'POST', body: fd, credentials: 'same-origin' })
                 .then((r) => r.json())
                 .then((d) => {
