@@ -1059,70 +1059,31 @@ button.drug-pick-item.is-active{
   .um-pagination{ justify-content:space-between; flex-wrap:wrap; }
 }
 
-.purchase-planner-layout{
-  display:grid;
-  grid-template-columns:minmax(0, 1fr);
-  gap:12px;
-  align-items:start;
-  width:100%;
-  min-width:0;
-}
 .purchase-planner-section{
   display:flex;
   flex-direction:column;
-  gap:12px;
+  gap:16px;
   min-width:0;
   margin-bottom:16px;
-  padding:16px;
+  padding:20px;
   border:1px solid var(--ph-border-soft, #FFE3B3);
   border-radius:14px;
   background:#fff;
-}
-.purchase-planner-section{
-  display:grid;
-  grid-template-columns:minmax(0, 1.7fr) minmax(280px, .8fr);
-  gap:16px;
-  align-items:start;
-  padding:20px;
   border-color:#e4eae7;
   box-shadow:0 4px 18px rgba(25, 55, 45, .05);
-}
-.purchase-planner-section > .purchase-planner-section-heading,
-.purchase-planner-section > .purchase-planner-filters{
-  grid-column:1 / -1;
-}
-.purchase-planner-section > .purchase-planner-table-card{
-  grid-column:1;
-  grid-row:3;
-}
-.purchase-planner-section > .purchase-planner-cart{
-  grid-column:2;
-  grid-row:3;
-  position:sticky;
-  top:16px;
-  margin:0;
-  border-color:#dce9e3;
-  background:#f8fbf9;
-}
-.purchase-planner-section .purchase-planner-section-heading{
-  align-items:center;
 }
 .purchase-planner-section .purchase-planner-section-heading h3{
   font-size:18px;
   letter-spacing:-.01em;
 }
-.purchase-planner-section .purchase-planner-step{
-  width:30px;
-  height:30px;
-  flex-basis:30px;
-}
 .purchase-planner-section .purchase-planner-filters{
-  grid-template-columns:minmax(220px, 1.4fr) repeat(2, minmax(160px, .8fr));
+  grid-template-columns:minmax(220px, 1.4fr) repeat(3, minmax(150px, .8fr));
   gap:12px;
-  padding:14px;
+  padding:0 0 14px;
   border:1px solid #e8eeeb;
-  border-radius:10px;
-  background:#f8faf9;
+  border-width:0 0 1px;
+  border-radius:0;
+  background:transparent;
 }
 .purchase-planner-section .purchase-planner-filters input,
 .purchase-planner-section .purchase-planner-filters select{
@@ -1135,31 +1096,39 @@ button.drug-pick-item.is-active{
 .purchase-planner-section .purchase-planner-table-card{
   border-color:#e4eae7;
 }
-.purchase-planner-section .purchase-planner-cart-heading{
-  align-items:center;
-}
-.purchase-planner-section .purchase-planner-cart-heading h3{
-  line-height:1.35;
-}
-.purchase-planner-section .purchase-planner-cart-body{
-  max-height:460px;
-}
-.purchase-planner-section-heading,
-.purchase-planner-cart-heading{
+.purchase-planner-section-heading{
   display:flex;
-  align-items:flex-start;
-  gap:10px;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
 }
-.purchase-planner-section-heading h3,
-.purchase-planner-cart-heading h3{
+.purchase-planner-section-heading h3{
   margin:0;
   color:var(--ph-text);
-  font-size:16px;
+  font-size:18px;
 }
 .purchase-planner-section-heading p{
   margin:4px 0 0;
   color:var(--ph-text-soft);
   font-size:12px;
+}
+.purchase-planner-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.purchase-planner-actions .action-btn{
+  width:auto;
+  min-height:40px;
+  white-space:nowrap;
+}
+.purchase-planner-send-email{
+  border:1px solid #2563eb;
+  background:#fff;
+  color:#2563eb;
+}
+.purchase-planner-send-email:hover{
+  background:#eff6ff;
 }
 .purchase-planner-step{
   display:inline-flex;
@@ -1181,21 +1150,14 @@ button.drug-pick-item.is-active{
   border-radius:10px;
   background:#fff;
 }
-.purchase-planner-orders{
-  margin-top:16px;
-  padding:20px;
-  border:1px solid #e4eae7;
-  border-radius:14px;
-  background:#fff;
-  box-shadow:0 4px 18px rgba(25, 55, 45, .04);
-}
 .purchase-po-schedule{
-  margin:0 0 16px;
-  padding:20px;
-  border:1px solid #e4eae7;
-  border-radius:14px;
-  background:#fff;
-  box-shadow:0 4px 18px rgba(25, 55, 45, .04);
+  margin:0;
+  padding:0 0 16px;
+  border:0;
+  border-bottom:1px solid #e8eeeb;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
 }
 .purchase-po-schedule .purchase-planner-orders-heading{
   margin-bottom:14px;
@@ -1283,25 +1245,9 @@ button.drug-pick-item.is-active{
   width:auto;
   white-space:nowrap;
 }
-.purchase-planner-supplier-email{
-  display:block;
-  margin-top:3px;
-  color:var(--ph-text-soft);
-  font-size:11px;
-}
-.purchase-planner-email-error{
-  color:var(--ph-danger);
-}
-#purchasePlannerOrdersTable{
-  min-width:760px;
-}
-.purchase-planner-send-po{
-  width:auto;
-  white-space:nowrap;
-}
 .purchase-planner-filters{
   display:grid;
-  grid-template-columns:repeat(3, minmax(0, 1fr));
+  grid-template-columns:minmax(220px, 1.4fr) repeat(3, minmax(150px, .8fr));
   gap:10px;
   align-items:end;
   width:100%;
@@ -1347,21 +1293,99 @@ button.drug-pick-item.is-active{
   font-size:13px;
   text-align:center;
 }
-.purchase-planner-qty strong,
-.purchase-planner-qty small{
+.purchase-planner-row td > strong,
+.purchase-planner-row td > small{
   display:block;
 }
-.purchase-planner-qty small{
-  margin:2px 0 6px;
+.purchase-planner-row td > small{
+  margin-top:3px;
   color:var(--ph-text-soft);
   font-size:11px;
 }
 #purchasePlannerTable{
-  min-width:900px;
+  min-width:1120px;
 }
-#purchasePlannerTable .purchase-planner-supplier{
+#purchasePlannerTable .purchase-planner-supplier,
+#purchasePlannerTable .purchase-planner-other-supplier{
+  width:100%;
   min-width:190px;
-  max-width:260px;
+  max-width:240px;
+  min-height:36px;
+  padding:5px 8px;
+  border:1px solid #d8e1dc;
+  border-radius:7px;
+  background:#fff;
+  color:var(--ph-text);
+}
+.purchase-planner-supplier-control{
+  display:grid;
+  gap:5px;
+  min-width:190px;
+}
+.purchase-planner-supplier-control select[hidden]{
+  display:none;
+}
+#purchasePlannerTable .purchase-planner-order-qty{
+  width:100px;
+  min-height:36px;
+  padding:5px 8px;
+  border:1px solid #d8e1dc;
+  border-radius:7px;
+  background:#fff;
+  color:var(--ph-text);
+}
+#purchasePlannerTable .purchase-planner-order-qty:disabled{
+  background:#f1f5f9;
+  cursor:not-allowed;
+}
+.purchase-planner-footer{
+  display:flex;
+  justify-content:space-between;
+  gap:10px 20px;
+  color:var(--ph-text-soft);
+  font-size:12px;
+}
+.purchase-planner-footer p{
+  margin:0;
+}
+.purchase-planner-result{
+  padding:12px 14px;
+  border:1px solid #bfdbfe;
+  border-radius:10px;
+  background:#eff6ff;
+  color:#1e3a5f;
+  font-size:13px;
+}
+.purchase-planner-result[hidden]{
+  display:none;
+}
+.purchase-planner-result p{
+  margin:0 0 6px;
+}
+.purchase-planner-result p:last-child{
+  margin-bottom:0;
+}
+.purchase-planner-email-results{
+  display:grid;
+  gap:7px;
+  margin:6px 0 0;
+  padding-left:20px;
+}
+.purchase-planner-email-results li{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.purchase-planner-retry-email{
+  width:auto;
+  min-height:30px;
+  padding:4px 10px;
+  border:1px solid #2563eb;
+  border-radius:7px;
+  background:#fff;
+  color:#2563eb;
+  white-space:nowrap;
 }
 .purchase-planner-pagination{
   display:flex;
@@ -1371,101 +1395,6 @@ button.drug-pick-item.is-active{
   padding:12px 4px 0;
   color:var(--ph-text-soft);
   font-size:13px;
-}
-.purchase-planner-cart{
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  padding:16px;
-  overflow:hidden;
-  border:1px solid var(--ph-border-soft);
-  border-radius:var(--ph-radius-md);
-  background:var(--ph-surface, #fff);
-  box-shadow:0 2px 8px rgba(30,58,52,.06);
-}
-.purchase-planner-cart-heading h3{
-  font-size:15px;
-}
-.purchase-planner-cart-heading p,
-.purchase-planner-cart-stock,
-.purchase-planner-cart-empty{
-  margin:4px 0 0;
-  color:var(--ph-text-soft);
-  font-size:13px;
-}
-.purchase-planner-cart-hint{
-  margin:0;
-  color:var(--ph-text-soft);
-  font-size:12px;
-}
-.purchase-planner-cart-body{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  min-height:70px;
-  max-height:360px;
-  overflow:auto;
-}
-.purchase-planner-cart-item{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  padding:11px;
-  border:1px solid var(--ph-border-soft);
-  border-radius:var(--ph-radius-sm);
-  background:var(--ph-surface-soft, #f8faf9);
-}
-.purchase-planner-cart-item-heading{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:8px;
-}
-.purchase-planner-cart-item-heading strong{
-  color:var(--ph-text);
-  font-size:13px;
-}
-.purchase-planner-remove{
-  flex:0 0 auto;
-  border:0;
-  background:transparent;
-  color:var(--ph-danger, #dc2626);
-  font-size:20px;
-  line-height:1;
-  cursor:pointer;
-}
-.purchase-planner-cart-stock,
-.purchase-planner-cart-item small{
-  color:var(--ph-text-soft);
-  font-size:12px;
-}
-.purchase-planner-cart-supplier{
-  margin:0;
-  color:var(--ph-text);
-  font-size:12px;
-  overflow-wrap:anywhere;
-}
-.purchase-planner-cart-supplier.is-missing{
-  color:var(--ph-danger, #b91c1c);
-  font-weight:600;
-}
-.purchase-planner-cart-item label{
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-  color:var(--ph-text);
-  font-size:12px;
-  font-weight:600;
-}
-.purchase-planner-cart-item input,
-.purchase-planner-cart-item select{
-  width:100%;
-  min-width:0;
-}
-.purchase-planner-cart-warning{
-  margin:0;
-  color:var(--ph-danger, #b91c1c);
-  font-size:12px;
 }
 #createSelectedPurchaseOrders{
   width:100%;
@@ -1479,11 +1408,6 @@ button.drug-pick-item.is-active{
 .purchase-order-review-note{
   color:var(--ph-text-soft);
   font-size:13px;
-}
-#purchaseOrderScheduleDate{
-  display:block;
-  width:100%;
-  margin:6px 0 4px;
 }
 .purchase-order-review-table-wrap{
   max-height:42vh;
@@ -1505,17 +1429,6 @@ button.drug-pick-item.is-active{
 }
 
 @media (max-width: 900px){
-  .purchase-planner-section{
-    grid-template-columns:minmax(0, 1fr);
-  }
-  .purchase-planner-section > .purchase-planner-table-card,
-  .purchase-planner-section > .purchase-planner-cart{
-    grid-column:1;
-    grid-row:auto;
-  }
-  .purchase-planner-section > .purchase-planner-cart{
-    position:static;
-  }
   .purchase-planner-section .purchase-planner-filters{
     grid-template-columns:repeat(3, minmax(0, 1fr));
   }
@@ -1528,16 +1441,22 @@ button.drug-pick-item.is-active{
 }
 
 @media (max-width: 620px){
-  .purchase-po-schedule{ padding:12px; }
+  .purchase-po-schedule{ padding-bottom:12px; }
   .purchase-po-schedule .purchase-planner-orders-heading{ align-items:flex-start; flex-direction:column; }
   .purchase-po-next-run{ white-space:normal; }
-  .purchase-po-schedule-controls{ align-items:stretch; flex-direction:column; }
+  .purchase-po-schedule-controls{ grid-template-columns:minmax(0,1fr); align-items:stretch; }
   .purchase-po-schedule-controls label{ width:100%; }
   .purchase-po-schedule-controls .action-btn{ width:100%; }
-  .purchase-planner-orders{ padding:12px; }
   .purchase-planner-section{ padding:12px; }
-  .purchase-planner-orders-heading{ align-items:flex-start; flex-direction:column; }
-  .purchase-planner-orders-heading .action-btn{ width:100%; }
+  .purchase-planner-section-heading{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .purchase-planner-actions{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .purchase-planner-actions .action-btn{ width:100%; }
   .purchase-planner-filters{
     grid-template-columns:minmax(0,1fr);
   }
@@ -1550,25 +1469,9 @@ button.drug-pick-item.is-active{
     flex:1 1 180px;
     min-width:0;
   }
-  .purchase-planner-layout{
-    grid-template-columns:minmax(0, 1fr);
-  }
-  .purchase-planner-section{
-    grid-template-columns:minmax(0, 1fr);
-    gap:12px;
-    padding:12px;
-  }
-  .purchase-planner-section > .purchase-planner-table-card,
-  .purchase-planner-section > .purchase-planner-cart{
-    grid-column:1;
-    grid-row:auto;
-  }
-  .purchase-planner-section > .purchase-planner-cart{
-    position:static;
-  }
   .purchase-planner-section .purchase-planner-filters{
     grid-template-columns:minmax(0, 1fr);
-    padding:10px;
+    padding:0 0 12px;
   }
   .purchase-po-schedule-controls{
     grid-template-columns:minmax(0, 1fr);
@@ -1577,11 +1480,11 @@ button.drug-pick-item.is-active{
   #purchasePoScheduleStatus{
     grid-column:1;
   }
-  .purchase-planner-cart{
-    position:static;
-    max-height:none;
+  .purchase-planner-footer{
+    flex-direction:column;
   }
-  .purchase-planner-cart-body{
-    max-height:260px;
+  .purchase-planner-email-results li{
+    align-items:flex-start;
+    flex-direction:column;
   }
 }

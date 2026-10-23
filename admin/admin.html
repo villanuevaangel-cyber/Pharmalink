@@ -6,7 +6,7 @@
     <title>PharmaLink System - Admin Portal</title>
     <link rel="icon" href="/assets/pmds-logo.jpg" type="image/jpeg">
     <link rel="stylesheet" href="/assets/theme.css?v=notif-new1">
-    <link rel="stylesheet" href="/admin/css/admin.css?v=po-filters-compact2">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=po-form-flow1">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=seg-mobile1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'"/>
     <style>
@@ -474,7 +474,7 @@
                             <strong id="automation-hourly-text">Checking…</strong>
                         </div>
                         <div class="ad-auto-meta-item">
-                            <span class="ad-auto-label">Auto-PO · Prophet on restock</span>
+                            <span class="ad-auto-label">Scheduled PO emails</span>
                             <strong id="automation-daily-text">Checking…</strong>
                         </div>
                         <div class="ad-auto-meta-item">
@@ -484,7 +484,7 @@
                     </div>
                     <div class="ad-auto-actions">
                         <button type="button" id="runHourlyJobsBtn">Run stock &amp; expiry</button>
-                        <button type="button" id="runDailyJobsBtn">Run auto-PO</button>
+                        <button type="button" id="runDailyJobsBtn">Run daily checks</button>
                     </div>
                     </div>
                 </details>
@@ -961,60 +961,72 @@
 
 <section id="purchase-orders" style="display:none;">
     <div class="dashboard-header">
-        <h2>Purchase Orders</h2>
-        <p>Low stock, forecast, and suggested order quantities.</p>
-    </div>
-    <div class="purchase-po-schedule">
-        <div class="purchase-planner-orders-heading">
-            <div>
-                <h3>PO &amp; email schedule</h3>
-                <p>Creates POs and emails suppliers on schedule.</p>
-            </div>
-            <span id="purchasePoNextRun" class="purchase-po-next-run">Loading schedule...</span>
-        </div>
-        <div class="purchase-po-schedule-controls">
-            <label for="purchasePoFrequency">Repeat
-                <select id="purchasePoFrequency">
-                    <option value="daily">Every day</option>
-                    <option value="weekly" selected>Every week</option>
-                    <option value="monthly">Every month</option>
-                </select>
-            </label>
-            <label id="purchasePoWeekdayGroup" for="purchasePoWeekday">Weekday
-                <select id="purchasePoWeekday">
-                    <option value="0" selected>Monday</option>
-                    <option value="1">Tuesday</option>
-                    <option value="2">Wednesday</option>
-                    <option value="3">Thursday</option>
-                    <option value="4">Friday</option>
-                    <option value="5">Saturday</option>
-                    <option value="6">Sunday</option>
-                </select>
-            </label>
-            <label id="purchasePoMonthdayGroup" for="purchasePoMonthday" hidden>Day of month
-                <select id="purchasePoMonthday"></select>
-            </label>
-            <label for="purchasePoTime">Time (Manila)
-                <input type="time" id="purchasePoTime" value="08:00">
-            </label>
-            <button type="button" id="savePurchasePoSchedule" class="action-btn">Save schedule</button>
-            <span id="purchasePoScheduleStatus" role="status" aria-live="polite"></span>
-        </div>
-        <small class="purchase-po-schedule-note">Unavailable dates use month-end. Retry failed emails in Open POs.</small>
+        <h2>Create Purchase Order (PO)</h2>
+        <p>Review reorder suggestions, choose suppliers and quantities, then save or email the PO.</p>
     </div>
     <div class="purchase-planner-section">
+        <div class="purchase-po-schedule">
+            <div class="purchase-planner-orders-heading">
+                <div>
+                    <h3>Email schedule</h3>
+                    <p>Saved POs are emailed automatically at the scheduled time. You can email a PO now instead.</p>
+                </div>
+                <span id="purchasePoNextRun" class="purchase-po-next-run">Loading schedule...</span>
+            </div>
+            <div class="purchase-po-schedule-controls">
+                <label for="purchasePoFrequency">Repeat
+                    <select id="purchasePoFrequency">
+                        <option value="daily">Every day</option>
+                        <option value="weekly" selected>Every week</option>
+                        <option value="monthly">Every month</option>
+                    </select>
+                </label>
+                <label id="purchasePoWeekdayGroup" for="purchasePoWeekday">Weekday
+                    <select id="purchasePoWeekday">
+                        <option value="0" selected>Monday</option>
+                        <option value="1">Tuesday</option>
+                        <option value="2">Wednesday</option>
+                        <option value="3">Thursday</option>
+                        <option value="4">Friday</option>
+                        <option value="5">Saturday</option>
+                        <option value="6">Sunday</option>
+                    </select>
+                </label>
+                <label id="purchasePoMonthdayGroup" for="purchasePoMonthday" hidden>Day of month
+                    <select id="purchasePoMonthday"></select>
+                </label>
+                <label for="purchasePoTime">Time (Manila)
+                    <input type="time" id="purchasePoTime" value="08:00">
+                </label>
+                <button type="button" id="savePurchasePoSchedule" class="action-btn">Save schedule</button>
+                <span id="purchasePoScheduleStatus" role="status" aria-live="polite"></span>
+            </div>
+            <small class="purchase-po-schedule-note">The schedule only emails POs you save for later. Dates that do not exist in a month use month-end.</small>
+        </div>
         <div class="purchase-planner-section-heading">
-            <span class="purchase-planner-step">1</span>
             <div>
-                <h3>Select medicines</h3>
-                <p>Choose items, then set supplier and quantity.</p>
+                <h3>PO Items</h3>
+                <p id="purchasePlannerSelection">0 items selected</p>
+            </div>
+            <div class="purchase-planner-actions">
+                <button type="button" id="sendEmailPurchaseOrders" class="action-btn purchase-planner-send-email" disabled>
+                    <i class="fas fa-envelope"></i> Send Email
+                </button>
+                <button type="button" id="createSelectedPurchaseOrders" class="action-btn" disabled>
+                    <i class="fas fa-floppy-disk"></i> Save PO
+                </button>
             </div>
         </div>
         <div class="purchase-planner-filters" aria-label="Filter low-stock medicines">
             <label for="purchasePlannerSearch">Search medicine
                 <input type="search" id="purchasePlannerSearch" placeholder="Search medicine name or brand..." autocomplete="off">
             </label>
-            <label for="purchasePlannerStatusFilter">PO status
+            <label for="purchasePlannerCategoryFilter">Category
+                <select id="purchasePlannerCategoryFilter">
+                    <option value="">All categories</option>
+                </select>
+            </label>
+            <label for="purchasePlannerStatusFilter">Status
                 <select id="purchasePlannerStatusFilter">
                     <option value="needs_po">Needs reorder</option>
                     <option value="already_ordered">Already on open PO</option>
@@ -1035,15 +1047,17 @@
                         <tr>
                             <th><input type="checkbox" id="purchasePlannerSelectAll" aria-label="Select all low-stock medicines"></th>
                             <th>Medicine</th>
+                            <th>Category</th>
                             <th>Current qty (pcs)</th>
-                            <th>Short to min. (pcs)</th>
-                            <th>Order suggestion</th>
-                            <th>Pack size</th>
+                            <th>Low stock (pcs)</th>
+                            <th>Suggested</th>
+                            <th>Forecast</th>
                             <th>Supplier</th>
+                            <th>Order qty (pcs)</th>
                         </tr>
                     </thead>
                     <tbody id="purchasePlannerBody">
-                        <tr><td colspan="7" style="text-align:center;padding:16px;">Open this module to load low-stock medicines.</td></tr>
+                        <tr><td colspan="9" style="text-align:center;padding:16px;">Open this module to load low-stock medicines.</td></tr>
                     </tbody>
                 </table>
                 <div class="purchase-planner-pagination" aria-label="Low-stock medicine pages">
@@ -1054,50 +1068,11 @@
                 <p id="purchasePlannerNoResults" class="purchase-planner-no-results" hidden></p>
             </div>
         </div>
-        <aside class="purchase-planner-cart" aria-label="Selected purchase order items">
-            <div class="purchase-planner-cart-heading">
-                <span class="purchase-planner-step">2</span>
-                <div>
-                    <h3><i class="fas fa-cart-shopping"></i> Review order</h3>
-                    <p id="purchasePlannerSelection">0 items selected</p>
-                </div>
-            </div>
-            <p class="purchase-planner-cart-hint">Order in whole boxes, within the medicine's maximum stock.</p>
-            <div id="purchasePlannerCartBody" class="purchase-planner-cart-body">
-                <p class="purchase-planner-cart-empty">Select medicines to add them here.</p>
-            </div>
-            <button type="button" id="createSelectedPurchaseOrders" class="action-btn" disabled>
-                <i class="fas fa-clipboard-check"></i> Review and confirm PO
-            </button>
-        </aside>
-    </div>
-    <div class="purchase-planner-orders">
-        <div class="purchase-planner-orders-heading">
-            <div>
-                <h3>Open POs</h3>
-                <p>Email status and retry. Receive in Deliveries.</p>
-            </div>
-            <button type="button" id="refreshPurchasePlannerOrders" class="action-btn">
-                <i class="fas fa-rotate"></i> Refresh
-            </button>
+        <div class="purchase-planner-footer">
+            <p>Order quantities are whole boxes and respect maximum stock and the 200-piece limit.</p>
+            <span>Save PO to email on schedule, or choose Send Email to email it immediately.</span>
         </div>
-        <div class="table-wrap purchase-planner-table-wrap">
-            <table id="purchasePlannerOrdersTable">
-                <thead>
-                    <tr>
-                        <th>PO</th>
-                        <th>Supplier</th>
-                        <th>PO date</th>
-                        <th>Expected delivery</th>
-                        <th>Email status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="purchasePlannerOrdersBody">
-                    <tr><td colspan="6" style="text-align:center;padding:14px;">Loading purchase orders...</td></tr>
-                </tbody>
-            </table>
-        </div>
+        <div id="purchasePlannerResult" class="purchase-planner-result" role="status" aria-live="polite" hidden></div>
     </div>
 </section>
 
@@ -1107,13 +1082,13 @@
             <h2><i class="fas fa-clipboard-check"></i> Confirm PO</h2>
             <button type="button" class="close" id="closePurchaseOrderReview" aria-label="Close">&times;</button>
         </div>
-        <p class="purchase-order-review-note">Check supplier and quantity. Emails send on schedule.</p>
+        <p id="purchaseOrderReviewNote" class="purchase-order-review-note">Check supplier and quantity. This PO will be emailed on schedule.</p>
         <label for="purchaseOrderExpectedDate" style="margin-top:10px;display:block;">Expected delivery date</label>
         <input type="date" id="purchaseOrderExpectedDate">
         <small class="purchase-order-review-note">Optional estimate. Confirm the date with the supplier.</small>
         <div id="purchaseOrderReviewBody"></div>
         <button type="button" id="confirmCreatePurchaseOrders" class="action-btn">
-            <i class="fas fa-file-circle-plus"></i> Confirm and create PO(s)
+            <i class="fas fa-file-circle-plus"></i> Save PO(s)
         </button>
     </div>
 </div>
@@ -5681,7 +5656,9 @@ window.loadSalesAnalytics = loadSalesAnalytics;
                 const recipients = mail.recipients || [];
                 const last = mail.last_result || {};
                 if (hourlyEl) hourlyEl.textContent = hourly ? ('Last run ' + fmtAutomationAt(hourly.at)) : 'Waiting for first pass';
-                if (dailyEl) dailyEl.textContent = daily ? ('Last run ' + fmtAutomationAt(daily.at)) : 'Sends when stock needs restock';
+                if (dailyEl) dailyEl.textContent = daily
+                    ? ('Last check ' + fmtAutomationAt(daily.at))
+                    : 'Emails admin-created POs on schedule';
                 if (emailEl) {
                     if (!recipients.length) {
                         emailEl.textContent = 'No admin email saved. Add one on the admin account.';
@@ -5727,17 +5704,12 @@ window.loadSalesAnalytics = loadSalesAnalytics;
                     else if (mail.error) emailNote = ' Email was not sent: ' + mail.error;
                     else emailNote = ' No new low-stock or expiry alerts to email.';
                 }
-                alert((mode === 'daily' ? 'Auto purchase-order pass finished.' : 'Stock status and expiry scan finished.') + emailNote);
+                alert((mode === 'daily' ? 'Daily checks finished.' : 'Stock status and expiry scan finished.') + emailNote);
             })
             .catch(err => alert('Automation error: ' + err.message));
     }
     document.getElementById('runHourlyJobsBtn')?.addEventListener('click', () => runAutomation('hourly'));
-    document.getElementById('runDailyJobsBtn')?.addEventListener('click', () => {
-        const msg = 'Create automatic Pending purchase orders from current sales trends? Consignment medicines are included when the supplier is returnable or non-returnable. Existing open POs for the same drugs are skipped. The order stays Pending until you receive the delivery.';
-        const go = function (ok) { if (ok) runAutomation('daily'); };
-        if (window.phConfirm) window.phConfirm(msg).then(go);
-        else go(confirm(msg));
-    });
+    document.getElementById('runDailyJobsBtn')?.addEventListener('click', () => runAutomation('daily'));
     function dashPanelOpen(name) {
         const panel = document.querySelector('#dashboard .ad-dash-panel[data-ad-panel="' + name + '"]');
         return !!(panel && panel.classList.contains('active'));
@@ -5817,23 +5789,24 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
 <script>
 (() => {
     const body = document.getElementById('purchasePlannerBody');
-    const cartBody = document.getElementById('purchasePlannerCartBody');
     const selectAll = document.getElementById('purchasePlannerSelectAll');
     const createButton = document.getElementById('createSelectedPurchaseOrders');
+    const sendEmailButton = document.getElementById('sendEmailPurchaseOrders');
     const reviewModal = document.getElementById('purchaseOrderReviewModal');
     const reviewBody = document.getElementById('purchaseOrderReviewBody');
     const expectedDate = document.getElementById('purchaseOrderExpectedDate');
     const confirmButton = document.getElementById('confirmCreatePurchaseOrders');
+    const reviewNote = document.getElementById('purchaseOrderReviewNote');
+    const resultContainer = document.getElementById('purchasePlannerResult');
     const selectionLabel = document.getElementById('purchasePlannerSelection');
     const previousPageButton = document.getElementById('purchasePlannerPrev');
     const nextPageButton = document.getElementById('purchasePlannerNext');
     const pageInfo = document.getElementById('purchasePlannerPageInfo');
     const plannerSearch = document.getElementById('purchasePlannerSearch');
+    const plannerCategoryFilter = document.getElementById('purchasePlannerCategoryFilter');
     const plannerStatusFilter = document.getElementById('purchasePlannerStatusFilter');
     const plannerSupplierFilter = document.getElementById('purchasePlannerSupplierFilter');
     const noResults = document.getElementById('purchasePlannerNoResults');
-    const confirmedOrdersBody = document.getElementById('purchasePlannerOrdersBody');
-    const refreshOrdersButton = document.getElementById('refreshPurchasePlannerOrders');
     const poFrequency = document.getElementById('purchasePoFrequency');
     const poWeekday = document.getElementById('purchasePoWeekday');
     const poMonthday = document.getElementById('purchasePoMonthday');
@@ -5847,7 +5820,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     let plannerPage = 1;
     let activeSuppliers = [];
     let currentPoSchedule = null;
-    const cartOverrides = new Map();
+    let submissionMode = 'scheduled';
     if (poMonthday && !poMonthday.options.length) {
         poMonthday.innerHTML = Array.from({ length: 31 }, (_, index) =>
             `<option value="${index + 1}">${index + 1}</option>`
@@ -5936,7 +5909,6 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             if (!response.ok || !result.success) throw new Error(result.message || 'Could not save PO schedule.');
             currentPoSchedule = result.schedule;
             await loadPoSchedule();
-            await loadConfirmedPurchaseOrders();
             if (poScheduleStatus) {
                 poScheduleStatus.textContent = 'Schedule saved. New schedule starts at its next occurrence.';
                 poScheduleStatus.classList.remove('is-error');
@@ -5978,16 +5950,18 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
 
     function applyPlannerFilters() {
         const search = (plannerSearch?.value || '').trim().toLowerCase();
+        const category = (plannerCategoryFilter?.value || '').toLowerCase();
         const status = plannerStatusFilter?.value || 'needs_po';
         const supplierId = plannerSupplierFilter?.value || '';
         const rows = Array.from(body?.querySelectorAll('.purchase-planner-row') || []);
         rows.forEach((row) => {
             const medicine = row.querySelector('.purchase-planner-medicine')?.textContent || '';
-            const selectedSupplier = row.querySelector('.purchase-planner-supplier')?.value || '';
+            const selectedSupplier = String(selectedSupplierId(row) || '');
             const matchesSearch = !search || medicine.toLowerCase().includes(search);
+            const matchesCategory = !category || row.dataset.category === category;
             const matchesStatus = status === 'all' || row.dataset.poStatus === status;
             const matchesSupplier = !supplierId || selectedSupplier === supplierId;
-            row.dataset.filterHidden = matchesSearch && matchesStatus && matchesSupplier ? 'false' : 'true';
+            row.dataset.filterHidden = matchesSearch && matchesCategory && matchesStatus && matchesSupplier ? 'false' : 'true';
         });
         plannerPage = 1;
         updatePlannerPagination();
@@ -6000,34 +5974,41 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     }
 
     function supplierOptions(drugId, preferredId) {
-        const linked = suppliersForDrug(drugId);
-        const other = activeSuppliers.filter((supplier) =>
-            !linked.some((candidate) => Number(candidate.supplier_id) === Number(supplier.supplier_id))
+        const preferred = activeSuppliers.find((supplier) =>
+            Number(supplier.supplier_id) === Number(preferredId)
         );
-        const option = (supplier) =>
-            `<option value="${Number(supplier.supplier_id)}"${Number(supplier.supplier_id) === Number(preferredId) ? ' selected' : ''}>${escapePlanner(supplier.supplier_name)}</option>`;
-        const linkedOptions = linked.map(option).join('');
-        const otherOptions = other.map(option).join('');
-        return `<option value="">Choose supplier</option>
-            ${linkedOptions ? `<optgroup label="Usual suppliers">${linkedOptions}</optgroup>` : ''}
-            ${otherOptions ? `<optgroup label="Other active suppliers">${otherOptions}</optgroup>` : ''}`;
-    }
-
-    function rememberCartOverrides() {
-        cartBody?.querySelectorAll('.purchase-planner-cart-item').forEach((item) => {
-            const drugId = Number(item.dataset.drugId);
-            const quantity = item.querySelector('.purchase-planner-cart-qty')?.value;
-            cartOverrides.set(drugId, { quantity });
-        });
+        const linked = suppliersForDrug(drugId);
+        const fallback = linked.find((supplier) =>
+            Number(supplier.supplier_id) !== Number(preferredId)
+        );
+        const mainSupplier = preferred || fallback;
+        const mainOption = mainSupplier
+            ? `<option value="${Number(mainSupplier.supplier_id)}" selected>${escapePlanner(mainSupplier.supplier_name)}</option>`
+            : '<option value="">Choose supplier</option>';
+        const otherOptions = activeSuppliers
+            .filter((supplier) => Number(supplier.supplier_id) !== Number(mainSupplier?.supplier_id))
+            .map((supplier) => `<option value="${Number(supplier.supplier_id)}">${escapePlanner(supplier.supplier_name)}</option>`)
+            .join('');
+        return `<div class="purchase-planner-supplier-control">
+            <select class="purchase-planner-supplier" aria-label="Usual supplier for medicine">${mainOption}<option value="__other__">Other...</option></select>
+            <select class="purchase-planner-other-supplier" aria-label="Choose another supplier" hidden>
+                <option value="">Choose another supplier</option>${otherOptions}
+            </select>
+        </div>`;
     }
 
     function selectedSupplierId(row) {
-        return Number(row?.querySelector('.purchase-planner-supplier')?.value) || 0;
+        const mainSelect = row?.querySelector('.purchase-planner-supplier');
+        const value = mainSelect?.value || '';
+        if (value === '__other__') {
+            return Number(row?.querySelector('.purchase-planner-other-supplier')?.value) || 0;
+        }
+        return Number(value) || 0;
     }
 
     function selectedSupplierName(row) {
-        const select = row?.querySelector('.purchase-planner-supplier');
-        return select?.value ? (select.selectedOptions?.[0]?.textContent || '') : '';
+        const supplierId = selectedSupplierId(row);
+        return activeSuppliers.find((supplier) => Number(supplier.supplier_id) === supplierId)?.supplier_name || '';
     }
 
     function updatePlannerSelectionState() {
@@ -6037,96 +6018,79 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             row.dataset.filterHidden !== 'true' && !row.querySelector('.purchase-planner-select')?.disabled
         );
         if (createButton) createButton.disabled = selected.length === 0;
+        if (sendEmailButton) sendEmailButton.disabled = selected.length === 0;
         if (selectionLabel) selectionLabel.textContent = `${selected.length} item${selected.length === 1 ? '' : 's'} selected`;
         if (selectAll) selectAll.checked = visibleRows.length > 0
             && visibleRows.every((row) => row.querySelector('.purchase-planner-select')?.checked);
         updatePlannerPagination();
     }
 
-    function renderPurchaseCart() {
-        if (!cartBody) return;
-        rememberCartOverrides();
-        const selected = selectedPlannerRows();
-        if (!selected.length) {
-            cartBody.innerHTML = '<p class="purchase-planner-cart-empty">Select low-stock medicines to add them here.</p>';
-            updatePlannerSelectionState();
-            return;
-        }
-        cartBody.innerHTML = selected.map((row) => {
-            const drugId = Number(row.dataset.drugId);
-            const packSize = Number(row.dataset.pcsPerBox) || 1;
-            const maxQty = Number(row.dataset.maxOrderQty) || 0;
-            const suggestedQty = Number(row.dataset.suggestedQty) || 0;
-            const label = row.querySelector('.purchase-planner-medicine')?.textContent || `Medicine #${drugId}`;
-            const current = Number(row.dataset.currentQty) || 0;
-            const needed = Number(row.dataset.neededQty) || 0;
-            const saved = cartOverrides.get(drugId) || {};
-            const suggestedBoxes = Math.floor(suggestedQty / packSize);
-            const supplier = selectedSupplierName(row);
-            return `<article class="purchase-planner-cart-item" data-drug-id="${drugId}">
-                <div class="purchase-planner-cart-item-heading">
-                    <strong>${escapePlanner(label)}</strong>
-                    <button type="button" class="purchase-planner-remove" aria-label="Remove ${escapePlanner(label)} from PO cart">&times;</button>
-                </div>
-                <p class="purchase-planner-cart-stock">Current ${current} pcs · Short to min. ${needed} pcs · Suggested order ${suggestedQty} pcs</p>
-                <p class="purchase-planner-cart-supplier${supplier ? '' : ' is-missing'}"><strong>Supplier:</strong> ${escapePlanner(supplier || 'Choose a supplier in the table')}</p>
-                ${maxQty > 0
-                    ? `<label>Final order (pcs) <input type="number" class="purchase-planner-cart-qty" min="${packSize}" max="${maxQty}" step="${packSize}" value="${escapePlanner(saved.quantity || suggestedQty)}" aria-label="Final order quantity for ${escapePlanner(label)}"></label>
-                       <small>${suggestedBoxes} suggested box${suggestedBoxes === 1 ? '' : 'es'} · ${packSize} pcs per box</small>`
-                    : '<p class="purchase-planner-cart-warning">No full box fits under this medicine’s maximum stock/order limit. Adjust its package size or maximum stock in Maintenance.</p>'}
-            </article>`;
-        }).join('');
-        updatePlannerSelectionState();
-    }
-
     function selectedPurchaseItems() {
-        return Array.from(cartBody?.querySelectorAll('.purchase-planner-cart-item') || []).map((cartItem) => {
-            const row = body.querySelector(`.purchase-planner-row[data-drug-id="${cartItem.dataset.drugId}"]`);
+        return selectedPlannerRows().map((row) => {
+            const input = row.querySelector('.purchase-planner-order-qty');
             return {
-                cartItem,
                 row,
-                drug_id: Number(cartItem.dataset.drugId),
+                input,
+                drug_id: Number(row.dataset.drugId),
                 supplier_id: selectedSupplierId(row),
-                quantity_pieces: Number(cartItem.querySelector('.purchase-planner-cart-qty')?.value) || 0,
+                quantity_pieces: Number(input?.value) || 0,
             };
         });
     }
 
-    function showPurchaseOrderReview() {
+    function showPurchaseOrderReview(mode = 'scheduled') {
+        submissionMode = mode;
         const items = selectedPurchaseItems();
         if (!items.length) {
             alert('Select at least one medicine to review.');
             return;
         }
         const invalid = items.find((item) => {
-            const input = item.cartItem.querySelector('.purchase-planner-cart-qty');
             const packSize = Number(item.row?.dataset.pcsPerBox) || 1;
-            const maxQty = Number(input?.max) || 0;
             return !item.supplier_id
-                || !input
+                || !item.input
                 || !Number.isInteger(item.quantity_pieces)
                 || item.quantity_pieces < packSize
-                || item.quantity_pieces > maxQty
+                || item.quantity_pieces > Number(item.input?.max || 0)
                 || item.quantity_pieces % packSize !== 0;
         });
         if (invalid) {
-            const input = invalid.cartItem.querySelector('.purchase-planner-cart-qty');
-            const supplier = invalid.row?.querySelector('.purchase-planner-supplier');
-            if (!input) {
+            const supplier = invalid.row?.querySelector('.purchase-planner-other-supplier');
+            if (!invalid.input) {
                 alert('This medicine cannot be ordered as a full box within its maximum stock limit. Update its package size or maximum stock in Maintenance first.');
             } else if (!invalid.supplier_id) {
                 alert('Choose a supplier for every selected medicine in the table.');
-                supplier?.focus();
+                (supplier?.hidden ? invalid.row?.querySelector('.purchase-planner-supplier') : supplier)?.focus();
             } else {
-                alert('Enter a valid final quantity in whole boxes for every selected medicine.');
-                input.focus();
+                alert('Enter a valid order quantity in whole boxes for every selected medicine.');
+                invalid.input.focus();
             }
             return;
+        }
+        if (mode === 'send_now') {
+            const missingEmail = items.find((item) => {
+                const supplier = activeSuppliers.find((entry) => Number(entry.supplier_id) === item.supplier_id);
+                return !String(supplier?.email || '').includes('@');
+            });
+            if (missingEmail) {
+                alert('Add a valid email address to every selected supplier before using Send Email.');
+                return;
+            }
         }
         const today = manilaTodayYmd();
         if (expectedDate) {
             expectedDate.value = '';
             expectedDate.min = today;
+        }
+        if (reviewNote) {
+            reviewNote.textContent = mode === 'send_now'
+                ? 'This creates the PO and emails each supplier immediately.'
+                : `This PO will be saved and emailed on schedule: ${formatPoSchedule(currentPoSchedule)}.`;
+        }
+        if (confirmButton) {
+            confirmButton.innerHTML = mode === 'send_now'
+                ? '<i class="fas fa-envelope"></i> Create and Send Email'
+                : '<i class="fas fa-file-circle-plus"></i> Save PO(s)';
         }
         reviewBody.innerHTML = `<div class="purchase-order-review-table-wrap"><table>
             <thead><tr><th>Medicine</th><th>Supplier</th><th>Supplier email</th><th>Final qty</th></tr></thead>
@@ -6146,87 +6110,17 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         if (reviewModal) reviewModal.style.display = 'flex';
     }
 
-    function loadConfirmedPurchaseOrders() {
-        if (!confirmedOrdersBody) return Promise.resolve();
-        confirmedOrdersBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:14px;">Loading purchase orders...</td></tr>';
-        return fetch('/api/admin/purchase-orders?status=open', { credentials: 'same-origin' })
-            .then(async (response) => {
-                const orders = await response.json();
-                if (!response.ok) throw new Error(orders.message || 'Could not load purchase orders.');
-                return Array.isArray(orders) ? orders : [];
-            })
-            .then((orders) => {
-                if (!orders.length) {
-                    confirmedOrdersBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:14px;">No open purchase orders.</td></tr>';
-                    return;
-                }
-                confirmedOrdersBody.innerHTML = orders.map((po) => {
-                    const sent = !!po.sent_to_supplier_at;
-                    const sending = !!po.send_started_at && !sent && !po.send_error;
-                    const poDate = String(po.order_date || '').slice(0, 10);
-                    let emailStatus;
-                    let action;
-                    if (sent) {
-                        emailStatus = `Emailed ${escapePlanner(String(po.sent_to_supplier_at).slice(0, 16).replace('T', ' '))}`;
-                        action = `<button type="button" class="purchase-planner-send-po action-btn" data-po-id="${Number(po.po_id)}" data-resend="true">Resend email</button>`;
-                    } else if (sending) {
-                        emailStatus = 'Email sending in progress';
-                        action = '<button type="button" class="action-btn" disabled>Sending...</button>';
-                    } else if (po.send_error) {
-                        emailStatus = `<span class="purchase-planner-email-error">Email failed: ${escapePlanner(po.send_error)}</span>`;
-                        action = `<button type="button" class="purchase-planner-send-po action-btn" data-po-id="${Number(po.po_id)}">Retry email</button>`;
-                    } else {
-                        emailStatus = `Queued for ${escapePlanner(formatPoSchedule(currentPoSchedule))}`;
-                        action = `<button type="button" class="purchase-planner-send-po action-btn" data-po-id="${Number(po.po_id)}">Send now</button>`;
-                    }
-                    return `<tr>
-                        <td>${escapePlanner(po.po_number)}</td>
-                        <td>${escapePlanner(po.supplier_name)}<small class="purchase-planner-supplier-email">${escapePlanner(po.supplier_email || 'No supplier email on file')}</small></td>
-                        <td>${escapePlanner(poDate)}</td>
-                        <td>${escapePlanner(po.expected_date || 'To be confirmed')}</td>
-                        <td>${emailStatus}</td>
-                        <td>${action}</td>
-                    </tr>`;
-                }).join('');
-            })
-            .catch((error) => {
-                console.error('Purchase order status load failed:', error);
-                confirmedOrdersBody.innerHTML = `<tr><td colspan="6" class="purchase-planner-email-error" style="text-align:center;padding:14px;">${escapePlanner(error.message || 'Could not load purchase orders.')}</td></tr>`;
-            });
-    }
-
-    confirmedOrdersBody?.addEventListener('click', async (event) => {
-        const button = event.target.closest('.purchase-planner-send-po');
-        if (!button) return;
-        const resend = button.dataset.resend === 'true';
-        if (resend && !confirm('This PO was already emailed. Send it again?')) return;
-        button.disabled = true;
-        try {
-            const response = await fetch(`/api/admin/purchase-orders/${Number(button.dataset.poId)}/send`, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ resend }),
-            });
-            const result = await response.json();
-            alert(result.message || (response.ok ? 'Supplier email sent.' : 'Could not email the supplier.'));
-        } catch (error) {
-            alert(error.message || 'Could not email the supplier.');
-        } finally {
-            await loadConfirmedPurchaseOrders();
-        }
-    });
-    refreshOrdersButton?.addEventListener('click', loadConfirmedPurchaseOrders);
-
     async function loadPurchasePlanner() {
         if (!body) return;
-        body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:16px;">Loading low-stock medicines...</td></tr>';
+        body.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:16px;">Loading low-stock medicines...</td></tr>';
         try {
             const [suggestionResponse, supplierResponse] = await Promise.all([
                 fetch('/api/admin/reorder-suggestions', { credentials: 'same-origin' }),
                 fetch('/api/admin/suppliers', { credentials: 'same-origin' }),
             ]);
-            if (!suggestionResponse.ok || !supplierResponse.ok) throw new Error('Could not load low-stock medicines or suppliers.');
+            if (!suggestionResponse.ok || !supplierResponse.ok) {
+                throw new Error('Could not load low-stock medicines or suppliers.');
+            }
             const [suggestionData, supplierData] = await Promise.all([
                 suggestionResponse.json(),
                 supplierResponse.json(),
@@ -6234,6 +6128,8 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
             activeSuppliers = (Array.isArray(supplierData) ? supplierData : [])
                 .filter((supplier) => String(supplier.status || '').toLowerCase() === 'active')
                 .sort((a, b) => String(a.supplier_name || '').localeCompare(String(b.supplier_name || '')));
+            const suggestions = (suggestionData.suggestions || [])
+                .filter((item) => item.action === 'increase' && item.auto_po !== false);
             if (plannerSupplierFilter) {
                 const selectedSupplier = plannerSupplierFilter.value;
                 plannerSupplierFilter.innerHTML = '<option value="">All suppliers</option>' + activeSuppliers.map((supplier) =>
@@ -6241,128 +6137,159 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 ).join('');
                 plannerSupplierFilter.value = selectedSupplier;
             }
-            const forecastDays = Number(suggestionData.assumptions?.target_coverage_days) || 30;
-            const suggestions = (suggestionData.suggestions || [])
-                .filter((item) => item.action === 'increase' && item.auto_po !== false);
+            if (plannerCategoryFilter) {
+                const selectedCategory = plannerCategoryFilter.value;
+                const categories = [...new Set(suggestions.map((item) => String(item.category || 'Uncategorized')))]
+                    .sort((a, b) => a.localeCompare(b));
+                plannerCategoryFilter.innerHTML = '<option value="">All categories</option>' + categories.map((category) =>
+                    `<option value="${escapePlanner(category.toLowerCase())}">${escapePlanner(category)}</option>`
+                ).join('');
+                plannerCategoryFilter.value = selectedCategory;
+            }
             if (!suggestions.length) {
                 plannerPage = 1;
-                body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:16px;">No medicines currently need reordering.</td></tr>';
-                renderPurchaseCart();
+                body.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:16px;">No medicines currently need reordering.</td></tr>';
+                updatePlannerSelectionState();
                 return;
             }
+            const forecastDays = Number(suggestionData.assumptions?.target_coverage_days) || 30;
             plannerPage = 1;
             body.innerHTML = suggestions.map((item) => {
                 const pcsPerBox = Math.max(1, Number(item.units_per_box) || 1);
                 const maxOrderQty = Math.max(0, Number(item.max_order_qty) || 0);
                 const quantity = Math.min(maxOrderQty, Math.max(0, Number(item.suggested_po_qty) || 0));
                 const current = Number(item.current_stock || 0);
-                const needed = Math.max(0, Number(item.minimum_stock || 0) - current);
+                const minimum = Number(item.minimum_stock || 0);
+                const needed = Math.max(0, minimum - current);
                 const forecastUnits = item.forecast_units == null
                     ? (item.demand_source === 'recent_average'
                         ? Math.round(Number(item.avg_daily_sales || 0) * forecastDays)
-                const orderBoxes = Math.floor(quantity / pcsPerBox);
                         : null)
                     : Number(item.forecast_units);
-                const noDemandForecast = forecastUnits === 0;
-                const forecastLabel = forecastUnits == null
-                    ? 'Demand data unavailable'
-                    : item.demand_source === 'prophet'
-                        ? `${forecastDays}-day forecast`
-                        : noDemandForecast
-                            ? `No completed sales in the last ${forecastDays} days`
-                            : 'Based on recent sales';
                 const forecastText = forecastUnits == null
                     ? 'No forecast'
-                    : noDemandForecast
-                        ? 'Projected sales: 0 pcs'
-                        : `Projected sales: ~${forecastUnits.toLocaleString()} pcs`;
+                    : `${forecastUnits.toLocaleString()} pcs / ${forecastDays} days`;
                 const suggestedSupplierId = Number(item.suggested_supplier_id) || 0;
                 const label = `${escapePlanner(item.generic_name)}${item.brand_name ? ` (${escapePlanner(item.brand_name)})` : ''} - ${escapePlanner(item.dosage)} ${escapePlanner(item.form)}`;
                 const openPoNumbers = String(item.open_po_numbers || '').trim();
                 const alreadyOrdered = Boolean(openPoNumbers);
-                const openPoNote = alreadyOrdered
-                    ? `<small class="purchase-planner-open-po">Already on open PO: ${escapePlanner(openPoNumbers)}</small>`
-                    : '';
-                const poStatus = alreadyOrdered
-                    ? 'already_ordered'
-                    : notOrderable
-                        ? 'not_orderable'
-                        : 'needs_po';
-                const notOrderable = maxOrderQty < pcsPerBox;
-                return `<tr class="purchase-planner-row"
-                    data-drug-id="${Number(item.drug_id)}"
-                    data-po-status="${poStatus}"
-                    data-pcs-per-box="${pcsPerBox}"
-                    data-max-order-qty="${maxOrderQty}"
+                const notOrderable = maxOrderQty < pcsPerBox || quantity < pcsPerBox;
+                const poStatus = alreadyOrdered ? 'already_ordered' : notOrderable ? 'not_orderable' : 'needs_po';
                 const checkboxDisabled = alreadyOrdered || notOrderable;
                 const checkboxTitle = alreadyOrdered
                     ? `Already ordered on ${openPoNumbers}`
                     : notOrderable
                         ? 'No full box fits within the maximum stock limit'
                         : '';
-                    data-suggested-qty="${quantity}"
-                    data-current-qty="${current}"
-                    data-needed-qty="${needed}"
-                    data-suggested-supplier-id="${suggestedSupplierId}">
+                const category = String(item.category || 'Uncategorized');
+                const categoryKey = category.toLowerCase();
+                return `<tr class="purchase-planner-row"
+                    data-drug-id="${Number(item.drug_id)}"
+                    data-category="${escapePlanner(categoryKey)}"
+                    data-po-status="${poStatus}"
+                    data-pcs-per-box="${pcsPerBox}"
+                    data-max-order-qty="${maxOrderQty}">
                     <td><input type="checkbox" class="purchase-planner-select" aria-label="Select ${label}" ${checkboxDisabled ? `disabled title="${escapePlanner(checkboxTitle)}"` : ''}></td>
-                    <td class="purchase-planner-medicine"><span>${label}</span>${openPoNote}</td>
+                    <td class="purchase-planner-medicine"><span>${label}</span>${alreadyOrdered ? `<small class="purchase-planner-open-po">Open PO: ${escapePlanner(openPoNumbers)}</small>` : ''}</td>
+                    <td>${escapePlanner(category)}</td>
                     <td>${current.toLocaleString()}</td>
-                    <td>${needed.toLocaleString()}</td>
-                    <td class="purchase-planner-qty">
-                        <small>${forecastLabel}</small>
-                        <strong>${quantity.toLocaleString()} pcs</strong>
-                        <small>${orderBoxes.toLocaleString()} box${orderBoxes === 1 ? '' : 'es'} · ${forecastText}</small>
-                    </td>
-                    <td>${pcsPerBox.toLocaleString()} pcs/box</td>
-                    <td><select class="purchase-planner-supplier" aria-label="Supplier for ${label}">${supplierOptions(item.drug_id, suggestedSupplierId)}</select></td>
+                    <td><strong>${needed.toLocaleString()}</strong><small>to minimum ${minimum.toLocaleString()}</small></td>
+                    <td><strong>${quantity.toLocaleString()} pcs</strong><small>${Math.floor(quantity / pcsPerBox).toLocaleString()} box${Math.floor(quantity / pcsPerBox) === 1 ? '' : 'es'}</small></td>
+                    <td>${escapePlanner(forecastText)}<small>${item.demand_source === 'prophet' ? 'Forecast' : 'Recent sales'}</small></td>
+                    <td>${supplierOptions(item.drug_id, suggestedSupplierId)}</td>
+                    <td><input type="number" class="purchase-planner-order-qty" min="${pcsPerBox}" max="${maxOrderQty}" step="${pcsPerBox}" value="${quantity}" aria-label="Order quantity in pieces for ${label}" ${checkboxDisabled ? 'disabled' : ''}></td>
                 </tr>`;
             }).join('');
             applyPlannerFilters();
-            renderPurchaseCart();
+            updatePlannerSelectionState();
         } catch (error) {
             console.error('Purchase planner load failed:', error);
-            body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--ph-danger);padding:16px;">${escapePlanner(error.message || 'Failed to load purchase suggestions.')}</td></tr>`;
-            renderPurchaseCart();
+            body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--ph-danger);padding:16px;">${escapePlanner(error.message || 'Failed to load purchase suggestions.')}</td></tr>`;
+            updatePlannerSelectionState();
         }
     }
 
+    function showPurchaseResult(created, emailResults, mode, skipped) {
+        if (!resultContainer) return;
+        const lines = [];
+        if (created.length) {
+            lines.push(`<p><strong>${created.length} PO${created.length === 1 ? '' : 's'} created:</strong> ${created.map((po) => `${escapePlanner(po.po_number)} · ${escapePlanner(po.supplier_name)}`).join(', ')}.</p>`);
+        }
+        if (mode === 'scheduled' && created.length) {
+            lines.push(`<p>Queued for automatic email: ${escapePlanner(formatPoSchedule(currentPoSchedule))}.</p>`);
+        }
+        if (mode === 'send_now') {
+            lines.push('<p>Supplier email results:</p>');
+            lines.push(`<ul class="purchase-planner-email-results">${emailResults.map((result) =>
+                `<li><span>${escapePlanner(result.po_number || `PO-${String(result.po_id).padStart(5, '0')}`)}: ${escapePlanner(result.message || (result.success ? 'Sent.' : 'Email failed.'))}</span>${result.success ? '' : `<button type="button" class="purchase-planner-retry-email" data-po-id="${Number(result.po_id)}">Retry email</button>`}</li>`
+            ).join('')}</ul>`);
+        }
+        if (skipped.length) {
+            lines.push(`<p>Not created: ${skipped.map((item) => `${escapePlanner(item.name)} — ${escapePlanner(item.reason)}`).join('; ')}</p>`);
+        }
+        resultContainer.innerHTML = lines.join('');
+        resultContainer.hidden = false;
+    }
+
+    resultContainer?.addEventListener('click', async (event) => {
+        const button = event.target.closest('.purchase-planner-retry-email');
+        if (!button) return;
+        button.disabled = true;
+        button.textContent = 'Sending...';
+        try {
+            const response = await fetch(`/api/admin/purchase-orders/${Number(button.dataset.poId)}/send`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || 'Could not email the supplier.');
+            button.replaceWith(document.createTextNode('Email sent.'));
+        } catch (error) {
+            button.disabled = false;
+            button.textContent = 'Retry email';
+            button.title = error.message || 'Could not email the supplier.';
+        }
+    });
+
     if (body) {
         body.addEventListener('change', (event) => {
-            if (event.target.closest('.purchase-planner-supplier')) {
+            const mainSupplier = event.target.closest('.purchase-planner-supplier');
+            const otherSupplier = event.target.closest('.purchase-planner-other-supplier');
+            if (mainSupplier) {
+                const row = mainSupplier.closest('.purchase-planner-row');
+                const otherSelect = row?.querySelector('.purchase-planner-other-supplier');
+                if (otherSelect) {
+                    const choosingOther = mainSupplier.value === '__other__';
+                    otherSelect.hidden = !choosingOther;
+                    if (!choosingOther) otherSelect.value = '';
+                    if (choosingOther) otherSelect.focus();
+                }
                 applyPlannerFilters();
-                renderPurchaseCart();
+                updatePlannerSelectionState();
+            } else if (otherSupplier) {
+                applyPlannerFilters();
+                updatePlannerSelectionState();
             } else if (event.target.closest('.purchase-planner-select')) {
-                renderPurchaseCart();
+                updatePlannerSelectionState();
             }
+        });
+        body.addEventListener('input', (event) => {
+            if (event.target.closest('.purchase-planner-order-qty')) updatePlannerSelectionState();
         });
     }
     plannerSearch?.addEventListener('input', applyPlannerFilters);
+    plannerCategoryFilter?.addEventListener('change', applyPlannerFilters);
     plannerStatusFilter?.addEventListener('change', applyPlannerFilters);
     plannerSupplierFilter?.addEventListener('change', applyPlannerFilters);
-    cartBody?.addEventListener('click', (event) => {
-        const removeButton = event.target.closest('.purchase-planner-remove');
-        if (!removeButton) return;
-        const cartItem = removeButton.closest('.purchase-planner-cart-item');
-        const row = body.querySelector(`.purchase-planner-row[data-drug-id="${cartItem?.dataset.drugId}"]`);
-        const checkbox = row?.querySelector('.purchase-planner-select');
-        if (checkbox) checkbox.checked = false;
-        renderPurchaseCart();
-    });
-    cartBody?.addEventListener('input', () => {
-        rememberCartOverrides();
-        updatePlannerSelectionState();
-    });
-    cartBody?.addEventListener('change', () => {
-        rememberCartOverrides();
-        updatePlannerSelectionState();
-    });
     selectAll?.addEventListener('change', () => {
         body?.querySelectorAll('.purchase-planner-row').forEach((row) => {
             if (row.dataset.filterHidden === 'true') return;
             const checkbox = row.querySelector('.purchase-planner-select');
             if (checkbox && !checkbox.disabled) checkbox.checked = selectAll.checked;
         });
-        renderPurchaseCart();
+        updatePlannerSelectionState();
     });
     previousPageButton?.addEventListener('click', () => {
         plannerPage -= 1;
@@ -6372,7 +6299,8 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
         plannerPage += 1;
         updatePlannerPagination();
     });
-    createButton?.addEventListener('click', showPurchaseOrderReview);
+    createButton?.addEventListener('click', () => showPurchaseOrderReview('scheduled'));
+    sendEmailButton?.addEventListener('click', () => showPurchaseOrderReview('send_now'));
     document.getElementById('closePurchaseOrderReview')?.addEventListener('click', () => {
         if (reviewModal) reviewModal.style.display = 'none';
     });
@@ -6399,6 +6327,7 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                 body: JSON.stringify({
                     items,
                     expected_date: expectedDate?.value || null,
+                    send_now: submissionMode === 'send_now',
                 }),
             });
             const result = await response.json();
@@ -6410,18 +6339,13 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
                     .filter(Boolean)
                     .join('\n'));
             }
-            const created = result.created || [];
-            const skipped = result.skipped || [];
-            let message = created.length
-                ? `Created ${created.map((po) => `${po.po_number} (${po.supplier_name}, ${po.item_count} item(s))`).join(', ')}.`
-                : 'No purchase orders were created.';
-            if (skipped.length) message += `\nSkipped: ${skipped.map((item) => `${item.name}: ${item.reason}`).join('; ')}`;
-            if (result.email_scheduled) {
-                message += `\n\nOpen unsent POs will be emailed on the global schedule: ${formatPoSchedule(currentPoSchedule)}.`;
-            }
-            alert(message);
+            showPurchaseResult(
+                result.created || [],
+                result.email_results || [],
+                submissionMode,
+                result.skipped || [],
+            );
             if (reviewModal) reviewModal.style.display = 'none';
-            loadConfirmedPurchaseOrders();
             await loadPurchasePlanner();
         } catch (error) {
             alert(error.message || 'Could not create purchase orders.');
@@ -6432,13 +6356,13 @@ document.querySelectorAll('#dashboard .ad-dash-tab').forEach((btn) => {
     });
     document.querySelector('.nav-item[data-target="purchase-orders"]')?.addEventListener('click', () => {
         loadPurchasePlanner();
-        loadPoSchedule().then(loadConfirmedPurchaseOrders);
+        loadPoSchedule();
     });
     document.addEventListener('DOMContentLoaded', () => {
         const section = document.getElementById('purchase-orders');
         if (section && section.style.display !== 'none') {
             loadPurchasePlanner();
-            loadPoSchedule().then(loadConfirmedPurchaseOrders);
+            loadPoSchedule();
         }
     });
 })();

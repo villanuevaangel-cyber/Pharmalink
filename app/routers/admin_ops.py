@@ -1134,6 +1134,9 @@ async def create_pos_from_reorder(request: Request):
     data = await request.json()
     requested_items = data.get("items")
     if requested_items is not None:
+        send_now = data.get("send_now", False)
+        if not isinstance(send_now, bool):
+            return JSONResponse({"success": False, "message": "Invalid PO email option."}, status_code=400)
         if not isinstance(requested_items, list) or not requested_items:
             return JSONResponse({"success": False, "message": "Select at least one low-stock medicine."}, status_code=400)
         raw_order_date = data.get("order_date")
@@ -1205,20 +1208,36 @@ async def create_pos_from_reorder(request: Request):
             raise_alerts=False,
             order_date=order_date,
             expected_date=expected_date,
-            send_on_schedule=True,
+            send_on_schedule=not send_now,
         )
         if result["skipped"] and not result["created"]:
             return JSONResponse(
                 {"success": False, "message": "No purchase orders were created.", "skipped": result["skipped"]},
                 status_code=409,
             )
-        schedule = get_po_schedule()
+        email_results = []
+        if send_now:
+            actor = actor_display_name(request, fallback="Admin")
+            for po in result["created"]:
+                email_result = await run_in_threadpool(send_po_to_supplier, int(po["po_id"]), actor)
+                email_results.append({
+                    "po_id": int(po["po_id"]),
+                    "po_number": po["po_number"],
+                    "success": bool(email_result.get("success")),
+                    "message": email_result.get("message") or (
+                        f"{po['po_number']} emailed to {po['supplier_name']}."
+                        if email_result.get("success")
+                        else "Could not email the supplier."
+                    ),
+                })
+        schedule = get_po_schedule() if not send_now else None
         return {
             "success": True,
             "created": result["created"],
             "skipped": result["skipped"],
-            "email_scheduled": bool(result["created"]),
+            "email_scheduled": bool(result["created"]) and not send_now,
             "email_schedule": schedule,
+            "email_results": email_results,
         }
 
     try:
