@@ -2632,12 +2632,14 @@ function openBarcodeScanner(mode = 'cart') {
     scannerMode = mode;
     const modal = document.getElementById('barcodeScannerModal');
     const statusEl = document.getElementById('barcodeScannerStatus');
+    const titleEl = modal?.querySelector('.pos-scan-head h3');
     if (!modal) return;
     modal.style.display = 'flex';
+    if (titleEl) titleEl.textContent = mode === 'pwd_qr' ? 'Scan PWD ID' : mode === 'payment_ref' ? 'Scan Payment QR' : 'Scan Product Barcode';
     if (statusEl) statusEl.textContent = mode === 'payment_ref'
         ? 'Point the camera at the customer\'s GCash/Maya QR…'
         : mode === 'pwd_qr'
-            ? 'Point the camera at the PWD ID QR code…'
+            ? 'Point the camera at the PWD ID QR code.'
             : 'Point the camera at a barcode…';
 
     if (typeof ZXing === 'undefined') {
@@ -2659,7 +2661,22 @@ function openBarcodeScanner(mode = 'cart') {
             setTimeout(() => { barcodeScanCooldown = false; }, 2000); // debounce repeated frames of the same code
         }
     }).catch(err => {
-        if (statusEl) statusEl.textContent = '❌ Camera access failed: ' + err.message;
+        if (typeof stopPwdFrameScan === 'function') stopPwdFrameScan();
+        try { barcodeReader?.reset(); } catch (resetError) { console.warn('Could not reset the camera scanner.', resetError); }
+        barcodeReader = null;
+        const errorName = String(err?.name || '');
+        const errorMessage = String(err?.message || err || '');
+        let message = 'Camera could not start. Check camera settings and try again.';
+        if (!window.isSecureContext) {
+            message = 'Camera needs HTTPS. Open this page using its secure address.';
+        } else if (/NotAllowed|Permission|denied|permission/i.test(`${errorName} ${errorMessage}`)) {
+            message = 'Camera permission denied. Allow camera access in the site settings, then reload. You can type or paste the PWD ID instead.';
+        } else if (/NotFound|DevicesNotFound/i.test(`${errorName} ${errorMessage}`)) {
+            message = 'No camera found. Connect a camera or type/paste the PWD ID.';
+        } else if (/NotReadable|TrackStart|in use/i.test(`${errorName} ${errorMessage}`)) {
+            message = 'Camera is busy in another app. Close it and try again.';
+        }
+        if (statusEl) statusEl.textContent = `❌ ${message}`;
     });
 }
 
