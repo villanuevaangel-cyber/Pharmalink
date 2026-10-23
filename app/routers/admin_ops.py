@@ -332,8 +332,8 @@ async def update_checkout_rates(request: Request):
         settings = save_checkout_rate(kind, data.get("percent"))
     except (TypeError, ValueError) as exc:
         return {"success": False, "message": str(exc) if str(exc) else "Enter a percent from 0 to 100."}
-    label = "PWD discount" if kind == "sc_pwd" else "VAT"
-    saved = settings["sc_pwd_percent"] if kind == "sc_pwd" else settings["vat_percent"]
+    label = {"sc_pwd": "PWD discount", "senior": "Senior Citizen discount"}.get(kind, "VAT")
+    saved = settings[{"sc_pwd": "sc_pwd_percent", "senior": "senior_percent"}.get(kind, "vat_percent")]
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             _log(cur, request, "Update Checkout Rate", f"Set {label} to {saved:.2f}%.")

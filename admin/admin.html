@@ -1580,7 +1580,7 @@
             <div class="um-card-head">
                 <div>
                     <h3>Checkout rates</h3>
-                    <p>PWD discount removes VAT, then applies this rate.</p>
+                    <p>PWD and Senior Citizen discounts remove VAT, then apply their own rate.</p>
                 </div>
             </div>
             <div class="table-wrap">
@@ -1591,6 +1591,11 @@
                             <td>PWD discount</td>
                             <td><span class="maint-pct"><input type="number" id="scPwdPercent" step="0.1" min="0" max="100" value="20"> <span>%</span></span></td>
                             <td><button type="button" class="save-checkout-rate" data-rate="sc_pwd" style="background:#4BAA8B;color:#fff;border:none;border-radius:4px;padding:5px 12px;cursor:pointer;">Save</button></td>
+                        </tr>
+                        <tr>
+                            <td>Senior Citizen discount</td>
+                            <td><span class="maint-pct"><input type="number" id="seniorPercent" step="0.1" min="0" max="100" value="20"> <span>%</span></span></td>
+                            <td><button type="button" class="save-checkout-rate" data-rate="senior" style="background:#4BAA8B;color:#fff;border:none;border-radius:4px;padding:5px 12px;cursor:pointer;">Save</button></td>
                         </tr>
                         <tr>
                             <td>VAT</td>

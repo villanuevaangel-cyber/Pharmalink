@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import random
+import re
 import subprocess
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -25,12 +26,24 @@ from app.payments import CASHIER_PAYMENT_KEYS, CUSTOMER_EWALLET_KEYS
 from app.paymongo import PayMongoError, create_qrph_payment, retrieve_payment, require_paid_checkout
 from app.profile_photos import resolve_photo_url, staff_photo_url
 from app.pwd_verification import (
+    DOH_PWD_REGISTRY_URL,
     PwdVerificationProviderError,
     PwdVerificationResult,
     PwdVerificationUnavailableError,
+    classify_id_text,
     create_pwd_verification_proof,
+    detect_pwd_qr_type,
+    extract_pwd_id_number,
     is_valid_pwd_verification_proof,
+    extract_holder_name,
     validate_pwd_qr_payload,
+)
+from app.senior_verification import (
+    SENIOR_MIN_AGE,
+    describe_birth_check,
+    extract_birth_date,
+    is_senior_age,
+    parse_iso_date,
 )
 from app.stock import allocate_expiring_first, drug_id_for_lot, restore_order_stock, sellable_quantity, split_money, sync_stock_status_for_drug
 from app.validation import prepare_profile_fields
@@ -309,6 +322,35 @@ async def _authenticate_pwd_qr(request: Request, qr_payload: str) -> PwdVerifica
     return result
 
 
+def _pwd_id_type_message(id_type: str | None, from_image: bool = False) -> str:
+    if id_type == "philsys":
+        return (
+            "This is a PhilSys National ID, not a PWD ID. It cannot be used for the "
+            "PWD discount. Please scan the PWD ID."
+        )
+    if id_type == "tin":
+        return (
+            "This is a TIN ID, not a PWD ID. It cannot be used for the PWD discount. "
+            "Please scan the PWD ID."
+        )
+    if id_type == "other":
+        return "This is not a PWD ID. Only a valid PWD ID can be used for the PWD discount."
+    if id_type == "pwd_card":
+        return (
+            "This looks like a PWD ID but the ID number could not be read. "
+            "Type the PWD ID number in the field."
+        )
+    if from_image:
+        return (
+            "Could not read this ID. Use a clearer photo, or type the PWD ID number. "
+            "Only PWD IDs are accepted."
+        )
+    return (
+        "No valid PWD ID number found. Scan the PWD ID QR code or type the PWD ID "
+        "number (format 00-0000-000-0000000)."
+    )
+
+
 @router.get("/pwd/verification-status")
 def cashier_pwd_verification_status(request: Request):
     if not require_staff(request):
@@ -321,7 +363,13 @@ def cashier_pwd_verification_status(request: Request):
         and isinstance(signing_key, str)
         and bool(signing_key)
     )
-    return {"success": True, "available": available}
+    manual = bool(getattr(provider, "requires_manual_confirmation", False))
+    return {
+        "success": True,
+        "available": available,
+        "manual_confirmation": manual,
+        "registry_url": DOH_PWD_REGISTRY_URL,
+    }
 
 
 @router.post("/pwd/verify")
@@ -364,6 +412,40 @@ async def cashier_verify_pwd_qr(request: Request):
             {"success": False, "verified": False, "message": "The PWD ID could not be verified right now."},
             status_code=502,
         )
+    provider = getattr(request.app.state, "pwd_verification_provider", None)
+    needs_confirmation = bool(getattr(provider, "requires_manual_confirmation", False))
+    id_type = detect_pwd_qr_type(qr_payload) if needs_confirmation else None
+    if not result.authenticated and needs_confirmation:
+        message = _pwd_id_type_message(id_type)
+        return {
+            "success": True,
+            "verified": False,
+            "id_type": id_type,
+            "message": message,
+            "id_number": None,
+            "holder_name": None,
+        }
+    holder_name = result.holder_name
+    if needs_confirmation and result.authenticated:
+        typed_name = data.get("holder_name")
+        if typed_name is not None:
+            if not isinstance(typed_name, str) or len(typed_name.strip()) > 120:
+                return JSONResponse(
+                    {"success": False, "verified": False, "message": "The name on the ID is too long."},
+                    status_code=400,
+                )
+            holder_name = typed_name.strip() or holder_name
+    if result.authenticated and needs_confirmation and data.get("manual_confirmed") is not True:
+        return {
+            "success": True,
+            "verified": False,
+            "needs_confirmation": True,
+            "id_type": id_type,
+            "message": "PWD ID number format is valid. Check it in the DOH PWD Registry and the "
+                       "physical card, then tick the confirmation box.",
+            "id_number": result.id_number,
+            "holder_name": holder_name,
+        }
     if result.authenticated:
         signing_key = getattr(request.app.state, "pwd_verification_signing_key", "")
         if not isinstance(signing_key, str) or not signing_key:
@@ -380,14 +462,214 @@ async def cashier_verify_pwd_qr(request: Request):
             staff_id,
             signing_key,
             id_number=result.id_number,
-            holder_name=result.holder_name,
+            holder_name=holder_name,
         )
     return {
         "success": True,
         "verified": result.authenticated,
-        "message": "PWD ID authenticated." if result.authenticated else "PWD ID was not authenticated.",
+        "id_type": id_type,
+        "message": (
+            ("PWD ID confirmed by pharmacist." if needs_confirmation else "PWD ID authenticated.")
+            if result.authenticated else "PWD ID was not authenticated."
+        ),
         "id_number": result.id_number if result.authenticated else None,
-        "holder_name": result.holder_name if result.authenticated else None,
+        "holder_name": holder_name if result.authenticated else None,
+    }
+
+
+def _ocr_pwd_image_text(raw: bytes) -> str | None:
+    """OCR an ID photo with the project's existing OCR engines. None = no OCR engine."""
+    import tempfile
+    from PIL import Image
+    import io
+
+    from app.routers.customer import _extract_prescription_text
+
+    image = Image.open(io.BytesIO(raw))
+    image = image.convert("RGB")
+    longest = max(image.size)
+    if longest > 1600:
+        scale = 1600 / longest
+        image = image.resize((max(1, int(image.width * scale)), max(1, int(image.height * scale))))
+    tmp = tempfile.NamedTemporaryFile(prefix="pharmalink_pwdid_", suffix=".png", delete=False)
+    tmp_path = Path(tmp.name)
+    try:
+        tmp.close()
+        image.save(tmp_path, "PNG")
+        return _extract_prescription_text(tmp_path)
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# Senior Citizen discount: read the date of birth from an ID, eligible at 60+.
+# ---------------------------------------------------------------------------
+def _senior_result(dob, ambiguous=False, holder_name=None):
+    today = _manila_now().date()
+    result = {"success": True, **describe_birth_check(dob, today, ambiguous)}
+    result["holder_name"] = holder_name
+    return result
+
+
+def _senior_not_found(from_image: bool):
+    return {
+        "success": True,
+        "dob": None,
+        "age": None,
+        "eligible": False,
+        "message": (
+            "No date of birth found on this ID. Use a clearer photo, or type the date of birth."
+            if from_image
+            else "No date of birth found. Type the date of birth as shown on the ID."
+        ),
+        "holder_name": None,
+    }
+
+
+@router.post("/senior/check")
+async def cashier_senior_check(request: Request):
+    """Check a typed date of birth, or find the date of birth inside scanned QR/text."""
+    if not require_staff(request):
+        return _unauthorized()
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse({"success": False, "message": "Invalid request."}, status_code=400)
+    if not isinstance(data, dict):
+        return JSONResponse({"success": False, "message": "Invalid request."}, status_code=400)
+    today = _manila_now().date()
+    typed = data.get("dob")
+    if typed is not None:
+        dob = parse_iso_date(typed)
+        if dob is None or dob > today or dob.year < 1900:
+            return JSONResponse({"success": False, "message": "Enter a valid date of birth."}, status_code=400)
+        return _senior_result(dob)
+    text = data.get("text")
+    if not isinstance(text, str) or not text.strip() or len(text) > 8192:
+        return JSONResponse({"success": False, "message": "Nothing to read."}, status_code=400)
+    found = extract_birth_date(text, today)
+    if found is None:
+        return _senior_not_found(False)
+    return _senior_result(found.dob, found.ambiguous, extract_holder_name(text))
+
+
+@router.post("/senior/scan-image")
+async def cashier_senior_scan_image(request: Request):
+    """Read a photo of an ID (camera frame or upload) and look only for the date of birth."""
+    if not require_staff(request):
+        return _unauthorized()
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse({"success": False, "message": "Invalid image request."}, status_code=400)
+    image_value = data.get("image") if isinstance(data, dict) else None
+    if (
+        not isinstance(image_value, str)
+        or not image_value.startswith("data:image/")
+        or "," not in image_value
+        or len(image_value) > 9_000_000
+    ):
+        return JSONResponse({"success": False, "message": "Invalid or too large image."}, status_code=400)
+    import base64
+    import binascii
+
+    try:
+        raw = base64.b64decode(image_value.split(",", 1)[1], validate=False)
+        if not raw or len(raw) > 6_500_000:
+            raise ValueError
+        from starlette.concurrency import run_in_threadpool
+
+        text = await run_in_threadpool(_ocr_pwd_image_text, raw)
+    except (binascii.Error, ValueError, OSError):
+        return JSONResponse({"success": False, "message": "The image could not be read."}, status_code=400)
+    except Exception:
+        logger.warning("Senior ID image OCR failed.", exc_info=False)
+        return JSONResponse({"success": False, "message": "The image could not be read."}, status_code=502)
+    if text is None:
+        return JSONResponse(
+            {
+                "success": False,
+                "message": "Text reading (OCR) is not available on this server. Type the date of birth.",
+            },
+            status_code=503,
+        )
+    found = extract_birth_date(text, _manila_now().date())
+    if found is None:
+        return _senior_not_found(True)
+    return _senior_result(found.dob, found.ambiguous)
+
+
+@router.post("/pwd/scan-image")
+async def cashier_pwd_scan_image(request: Request):
+    """Read a photo of an ID (camera frame or upload) and tell what kind of ID it is."""
+    staff_id = require_staff(request)
+    if not staff_id:
+        return _unauthorized()
+    request.session.pop("pwd_verification", None)
+    provider = getattr(request.app.state, "pwd_verification_provider", None)
+    if provider is None or not getattr(provider, "requires_manual_confirmation", False):
+        return JSONResponse(
+            {"success": False, "verified": False, "message": "PWD verification is turned off."},
+            status_code=503,
+        )
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse({"success": False, "message": "Invalid image request."}, status_code=400)
+    image_value = data.get("image") if isinstance(data, dict) else None
+    if (
+        not isinstance(image_value, str)
+        or not image_value.startswith("data:image/")
+        or "," not in image_value
+        or len(image_value) > 9_000_000
+    ):
+        return JSONResponse({"success": False, "message": "Invalid or too large image."}, status_code=400)
+    import base64
+    import binascii
+
+    try:
+        raw = base64.b64decode(image_value.split(",", 1)[1], validate=False)
+        if not raw or len(raw) > 6_500_000:
+            raise ValueError
+        from starlette.concurrency import run_in_threadpool
+
+        text = await run_in_threadpool(_ocr_pwd_image_text, raw)
+    except (binascii.Error, ValueError, OSError):
+        return JSONResponse({"success": False, "message": "The image could not be read."}, status_code=400)
+    except Exception:
+        logger.warning("PWD ID image OCR failed.", exc_info=False)
+        return JSONResponse({"success": False, "message": "The image could not be read."}, status_code=502)
+    if text is None:
+        return JSONResponse(
+            {
+                "success": False,
+                "message": "Text reading (OCR) is not available on this server. Type the PWD ID number.",
+            },
+            status_code=503,
+        )
+    id_type = classify_id_text(text)
+    id_number = extract_pwd_id_number(text) if id_type == "pwd" else None
+    if id_type == "pwd" and id_number:
+        return {
+            "success": True,
+            "verified": False,
+            "needs_confirmation": True,
+            "id_type": "pwd",
+            "message": "PWD ID number read from the photo. Make sure it matches the card, check it "
+                       "in the DOH PWD Registry, then tick the confirmation box.",
+            "id_number": id_number,
+            "holder_name": None,
+        }
+    return {
+        "success": True,
+        "verified": False,
+        "id_type": id_type,
+        "message": _pwd_id_type_message(id_type, from_image=True),
+        "id_number": None,
+        "holder_name": None,
     }
 
 
@@ -1197,10 +1479,48 @@ async def create_sale(request: Request):
         return JSONResponse({"status": "error", "message": "Cart is empty."}, status_code=400)
 
     sc_pwd_applied = payload.get("sc_pwd_applied") is True
+    senior_applied = sc_pwd_applied and payload.get("discount_kind") == "senior"
     discount_id_type = None
     discount_id_number = None
     discount_id_holder = None
-    if sc_pwd_applied:
+    if senior_applied:
+        # Senior Citizen: eligibility is the age on the ID's date of birth (60 and above),
+        # checked again here. The date of birth itself is not stored.
+        senior_dob = parse_iso_date(payload.get("senior_dob"))
+        if senior_dob is None or not is_senior_age(senior_dob, _manila_now().date()):
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": f"Senior Citizen discount needs a valid date of birth showing age {SENIOR_MIN_AGE} or above.",
+                },
+                status_code=400,
+            )
+        if payload.get("senior_confirmed") is not True:
+            return JSONResponse(
+                {"status": "error", "message": "Confirm the Senior Citizen ID before applying the discount."},
+                status_code=400,
+            )
+        senior_id_number = payload.get("senior_id_number")
+        senior_holder_name = payload.get("senior_holder_name")
+        if senior_id_number is not None and (
+            not isinstance(senior_id_number, str)
+            or (senior_id_number.strip() and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9\-/ ]{2,39}", senior_id_number.strip()))
+        ):
+            return JSONResponse(
+                {"status": "error", "message": "The Senior Citizen ID number is invalid."},
+                status_code=400,
+            )
+        if senior_holder_name is not None and (
+            not isinstance(senior_holder_name, str) or len(senior_holder_name) > 120
+        ):
+            return JSONResponse(
+                {"status": "error", "message": "The name on the Senior Citizen ID is too long."},
+                status_code=400,
+            )
+        discount_id_type = "Senior"
+        discount_id_number = (senior_id_number or "").strip() or None
+        discount_id_holder = (senior_holder_name or "").strip() or None
+    elif sc_pwd_applied:
         try:
             qr_payload = validate_pwd_qr_payload(payload.get("pwd_qr_payload"))
         except ValueError as exc:
@@ -1446,7 +1766,7 @@ async def create_sale(request: Request):
                     )
                     if cur.fetchone():
                         warning = (
-                            "Warning: This PWD ID number was already used on another sale today. "
+                            f"Warning: This {'Senior Citizen' if senior_applied else 'PWD'} ID number was already used on another sale today. "
                             "Please verify the original ID and eligibility."
                         )
                 sale_params = (
@@ -1539,8 +1859,12 @@ async def create_sale(request: Request):
                     sync_stock_status_for_drug(cur, drug_id)
 
                 details = f"Sale #{sale_id} - total ₱{total_amount:.2f}, {len(items)} item(s)."
-                if sc_pwd_applied:
-                    details += " PWD ID authenticated by the configured verification provider."
+                if senior_applied:
+                    details += f" Senior Citizen ID checked (age {SENIOR_MIN_AGE}+) and confirmed by the cashier/pharmacist."
+                    if discount_id_number:
+                        details += f" ID {_mask_discount_id(discount_id_number)}."
+                elif sc_pwd_applied:
+                    details += " PWD ID format-checked and confirmed by the cashier/pharmacist (DOH PWD Registry)."
                     if discount_id_number:
                         details += f" ID {_mask_discount_id(discount_id_number)}."
                 if points_redeemed > 0:
