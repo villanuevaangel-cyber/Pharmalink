@@ -6,7 +6,7 @@
     <title>PharmaLink - Customer Portal</title>
     <link rel="icon" href="/assets/pmds-logo.jpg" type="image/jpeg">
     <link rel="stylesheet" href="/assets/theme.css?v=notif-new1">
-    <link rel="stylesheet" href="/customer/css/customer.css?v=rx-prescription-layout3">
+    <link rel="stylesheet" href="/customer/css/customer.css?v=rx-prescription-layout4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -197,22 +197,24 @@
     <input type="file" id="prescriptionFile" name="prescription_file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" required>
     <div class="rx-layout rx-layout--single">
         <div class="upload-box rx-drop rx-panel" id="rxDropzone">
-            <div class="rx-panel-heading">
-                <div class="rx-drop-icon"><i class="fas fa-file-prescription"></i></div>
-                <div>
-                    <h3>Prescription</h3>
-                    <p>Upload a photo or PDF.</p>
+            <div class="rx-upload-row">
+                <div class="rx-panel-heading">
+                    <div class="rx-drop-icon"><i class="fas fa-file-prescription"></i></div>
+                    <div>
+                        <h3>Prescription</h3>
+                        <p>Upload a photo or PDF.</p>
+                    </div>
+                </div>
+                <div class="rx-file-actions">
+                    <label for="prescriptionFile" class="rx-choose"><i class="fas fa-folder-open"></i> Choose file</label>
+                    <button type="button" id="rxCameraBtn" class="rx-choose"><i class="fas fa-camera"></i> Take photo</button>
                 </div>
             </div>
-            <div class="rx-file-actions">
-                <label for="prescriptionFile" class="rx-choose"><i class="fas fa-folder-open"></i> Choose file</label>
-                <button type="button" id="rxCameraBtn" class="rx-choose"><i class="fas fa-camera"></i> Take photo</button>
-            </div>
-            <div class="rx-upload-footer">
+            <div class="rx-status-row">
                 <p class="rx-filename" id="rxFileName">No prescription selected</p>
                 <button type="submit" class="rx-upload"><i class="fas fa-magnifying-glass"></i> Check stock</button>
+                <p class="rx-store-check-note"><i class="fas fa-circle-info"></i> Bring the original prescription for pharmacist review.</p>
             </div>
-            <p class="rx-store-check-note"><i class="fas fa-circle-info"></i> Bring the original prescription for pharmacist review.</p>
             <div class="rx-filters rx-filters--compact" aria-label="Filter prescription history by date">
                 <span class="rx-filter-caption">History dates</span>
                 <label>From
@@ -223,7 +225,6 @@
                 </label>
                 <button type="button" id="rxApplyFilter" class="rx-filter-btn"><i class="fas fa-filter"></i> Apply</button>
             </div>
-        </div>
     </div>
     <p id="prescriptionUploadMsg" class="rx-msg" role="status" aria-live="polite"></p>
 </form>
@@ -250,6 +251,11 @@
             </tbody>
         </table>
     </div>
+    <nav class="rx-pagination" id="rx-pagination" aria-label="Prescription history pages" hidden>
+        <button type="button" id="rx-prev" class="rx-page-btn"><i class="fas fa-chevron-left"></i> Prev</button>
+        <span id="rx-page-info" aria-live="polite">Page 1 of 1</span>
+        <button type="button" id="rx-next" class="rx-page-btn">Next <i class="fas fa-chevron-right"></i></button>
+    </nav>
 </div>
 <div id="rxViewOverlay" class="rx-modal" style="display:none;">
     <div class="rx-modal-card rx-view-card" role="dialog" aria-modal="true" aria-labelledby="rxViewTitle">
@@ -459,6 +465,6 @@
     </script>
     <script src="/assets/theme.js?v=load1"></script>
     <script src="/assets/profile-validate.js?v=pv4"></script>
-    <script src="/customer/js/customer-boot.js?v=rx-history-actions2"></script>
+    <script src="/customer/js/customer-boot.js?v=rx-history-pagination1"></script>
 </body>
 </html>

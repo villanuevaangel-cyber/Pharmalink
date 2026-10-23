@@ -353,6 +353,11 @@
         const msg = document.getElementById('prescriptionUploadMsg');
         const tbody = document.getElementById('prescriptionHistoryBody');
         if (!form || !tbody) return;
+        const rxPagination = document.getElementById('rx-pagination');
+        const rxPageInfo = document.getElementById('rx-page-info');
+        const rxPrev = document.getElementById('rx-prev');
+        const rxNext = document.getElementById('rx-next');
+        const rxPageSize = 10;
 
         function escapeHtml(str) {
             const div = document.createElement('div');
@@ -435,6 +440,7 @@
             return '<span class="rx-pill rx-pill-bad">Out of stock</span>';
         }
         let rxRows = [];
+        let rxPage = 1;
         function rxDay(p) {
             if (p.created_at_day) return String(p.created_at_day).slice(0, 10);
             return String(p.created_at || '').slice(0, 10);
@@ -456,17 +462,33 @@
             if (to && day && day > to) return false;
             return true;
         }
+        function paintRxPagination(total) {
+            const pages = Math.max(1, Math.ceil(total / rxPageSize));
+            rxPage = Math.min(Math.max(rxPage, 1), pages);
+            if (rxPagination) rxPagination.hidden = total === 0;
+            if (rxPageInfo) {
+                const first = total ? (rxPage - 1) * rxPageSize + 1 : 0;
+                const last = Math.min(rxPage * rxPageSize, total);
+                rxPageInfo.textContent = `Showing ${first}–${last} of ${total} · Page ${rxPage} of ${pages}`;
+            }
+            if (rxPrev) rxPrev.disabled = rxPage <= 1;
+            if (rxNext) rxNext.disabled = rxPage >= pages;
+            return (rxPage - 1) * rxPageSize;
+        }
         function renderHistoryTable() {
             const rows = rxRows.filter(inDateRange);
             if (!rxRows.length) {
+                paintRxPagination(0);
                 tbody.innerHTML = '<tr><td colspan="5" class="rx-empty-cell"><div class="rx-empty"><i class="fas fa-file-medical"></i><h4>No prescriptions</h4><p>Uploaded prescriptions appear here.</p></div></td></tr>';
                 return;
             }
             if (!rows.length) {
+                paintRxPagination(0);
                 tbody.innerHTML = '<tr><td colspan="5" class="rx-empty-cell">No prescriptions in this date range.</td></tr>';
                 return;
             }
-            tbody.innerHTML = rows.map((p) => {
+            const start = paintRxPagination(rows.length);
+            tbody.innerHTML = rows.slice(start, start + rxPageSize).map((p) => {
                 const canView = p.file_available && p.view_url;
                 const matches = Array.isArray(p.availability_summary) ? p.availability_summary : [];
                 const canAdd = matches.some(canAddMatch);
@@ -601,7 +623,23 @@
             const section = document.getElementById('prescription');
             if (section && section.classList.contains('active')) loadHistory();
         }, 30000);
-        document.getElementById('rxApplyFilter')?.addEventListener('click', renderHistoryTable);
+        document.getElementById('rxApplyFilter')?.addEventListener('click', () => {
+            rxPage = 1;
+            renderHistoryTable();
+        });
+        rxPrev?.addEventListener('click', () => {
+            if (rxPage > 1) {
+                rxPage -= 1;
+                renderHistoryTable();
+            }
+        });
+        rxNext?.addEventListener('click', () => {
+            const filteredCount = rxRows.filter(inDateRange).length;
+            if (rxPage < Math.ceil(filteredCount / rxPageSize)) {
+                rxPage += 1;
+                renderHistoryTable();
+            }
+        });
         document.getElementById('rxViewClose')?.addEventListener('click', closeRxView);
         document.getElementById('rxViewOverlay')?.addEventListener('click', (e) => {
             if (e.target && e.target.id === 'rxViewOverlay') closeRxView();
