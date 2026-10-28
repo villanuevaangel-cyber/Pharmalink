@@ -44,7 +44,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=txn-short1';
+        script.src = '/customer/js/customer.js?v=rx-cart-shortcut2';
         document.body.appendChild(script);
     });
 
@@ -415,17 +415,13 @@
                 else window.alert(wait);
                 return;
             }
-            const ok = window.addRxMatchToCart({
+            window.addRxMatchToCart({
                 lot_id: btn.getAttribute('data-lot-id'),
                 name: btn.getAttribute('data-name'),
                 price: btn.getAttribute('data-price'),
                 drug_id: btn.getAttribute('data-drug-id'),
                 stock: btn.getAttribute('data-stock')
             });
-            if (ok) {
-                const added = (btn.getAttribute('data-name') || 'Item') + ' added to cart.';
-                if (typeof window.phAlert === 'function') window.phAlert(added);
-            }
         }
         function renderAvailability(p) {
             if (p.ocr_status === 'unavailable') return '<span class="rx-pill rx-pill-muted">OCR not installed</span>';
@@ -589,17 +585,13 @@
                 else window.alert(wait);
                 return;
             }
-            const ok = window.addRxMatchToCart({
+            window.addRxMatchToCart({
                 lot_id: m.lot_id,
                 name: matchLabel(m),
                 price: m.price,
                 drug_id: m.drug_id,
                 stock: m.stock
             });
-            if (ok) {
-                const added = (matchLabel(m) || 'Item') + ' added to cart.';
-                if (typeof window.phAlert === 'function') window.phAlert(added);
-            }
         }
         function handleRxTableClick(e) {
             const viewBtn = e.target.closest('.rx-view-btn');

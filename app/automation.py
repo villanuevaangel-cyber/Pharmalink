@@ -1674,28 +1674,31 @@ def create_auto_purchase_orders(
 
 
 def run_weekly_po_job() -> dict:
-    """Run the scheduled forecast-based PO batch, then email open unsent POs."""
+    """Email POs explicitly queued for the configured schedule."""
     with _restock_lock:
         try:
-            result = create_auto_purchase_orders(
-                use_forecast=True,
-                require_prophet=False,
-                email_suppliers=False,
-                notes=(
-                    "Scheduled automatic order. PharmaLink batched medicines at or below the forecast-based reorder "
-                    "point on the scheduled order day, capped at maximum stock."
-                ),
-            )
             email_result = send_scheduled_purchase_order_emails()
-            result["emailed"] = email_result["sent"]
-            result["not_sent"] = email_result["failed"]
-            result["email_results"] = email_result["results"]
+            result = {
+                "created": [],
+                "skipped": 0,
+                "needed": 0,
+                "emailed": email_result["sent"],
+                "not_sent": email_result["failed"],
+                "email_results": email_result["results"],
+            }
             with get_conn() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     scan_stock_alerts(cur)
         except Exception:
             logger.exception("weekly PO job failed")
-            result = {"created": [], "skipped": 0, "needed": 0, "emailed": 0, "not_sent": 0, "error": "failed"}
+            result = {
+                "created": [],
+                "skipped": 0,
+                "needed": 0,
+                "emailed": 0,
+                "not_sent": 0,
+                "error": "failed",
+            }
         stamp = {"at": datetime.now(MANILA).isoformat(), **result}
         _last_run["weekly_po"] = stamp
         _last_run["daily"] = stamp
@@ -1704,7 +1707,7 @@ def run_weekly_po_job() -> dict:
 
 
 def run_po_schedule_if_due() -> dict:
-    """Run the configured recurring PO batch once when its scheduled time arrives."""
+    """Send queued POs once when the configured recurring schedule is due."""
     with get_conn() as lock_conn:
         locked = False
         try:
@@ -1757,20 +1760,18 @@ def run_po_schedule_if_due() -> dict:
 
 
 def send_scheduled_purchase_order_emails() -> dict:
-    """Send unsent open POs during the configured recurring PO run."""
+    """Send unsent open POs explicitly queued for the configured schedule."""
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
                 SELECT po.po_id
                 FROM purchase_orders po
-                WHERE po.sent_to_supplier_at IS NULL
+                WHERE po.send_on_schedule IS TRUE
+                  AND po.sent_to_supplier_at IS NULL
                   AND po.send_error IS NULL
                   AND po.status IN ('Pending', 'Partially Received')
-                  AND (
-                      po.send_on_schedule IS NOT TRUE
-                      OR po.order_date <= (NOW() AT TIME ZONE 'Asia/Manila')::date
-                  )
+                  AND po.order_date <= (NOW() AT TIME ZONE 'Asia/Manila')::date
                   AND (
                       po.send_started_at IS NULL
                       OR po.send_started_at < NOW() - INTERVAL '15 minutes'
@@ -1995,9 +1996,19 @@ def run_startup_jobs() -> dict:
 
 def run_daily_jobs() -> dict:
     hourly = run_hourly_jobs()
-    pos = create_auto_purchase_orders()
     mail = email_alert_digest()
-    result = {"hourly": hourly, "purchase_orders": pos, "email": mail}
+    result = {
+        "hourly": hourly,
+        "purchase_orders": {
+            "created": [],
+            "skipped": 0,
+            "needed": 0,
+            "emailed": 0,
+            "not_sent": 0,
+            "deferred": "Purchase orders are created by an admin and emailed on the configured schedule.",
+        },
+        "email": mail,
+    }
     _last_run["daily"] = {"at": datetime.now(MANILA).isoformat(), **result}
     logger.info("daily jobs: %s", json.dumps(result, default=str))
     return result
@@ -2118,7 +2129,7 @@ def last_run_status() -> dict:
     return {
         "scheduler": "running" if _scheduler and _scheduler.running else "stopped",
         "timezone": "Asia/Manila",
-        "auto_po_mode": "scheduled",
+        "auto_po_mode": "admin-created-scheduled-email",
         "auto_po_schedule": po_schedule,
         "auto_po_email_supplier": True,
         "last_run": _last_run,

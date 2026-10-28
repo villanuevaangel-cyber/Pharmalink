@@ -6,7 +6,7 @@
     <title>PharmaLink System - Cashier/Pharmacist Dashboard</title>
     <link rel="icon" href="/assets/pmds-logo.jpg" type="image/jpeg">
     <link rel="stylesheet" href="/assets/theme.css?v=notif-new1">
-    <link rel="stylesheet" href="/cashier/css/cashier.css?v=no-oos1">
+    <link rel="stylesheet" href="/cashier/css/cashier.css?v=pwd-senior2">
     <link rel="stylesheet" href="/shared/css/segmentation.css?v=palette-w4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
@@ -281,15 +281,27 @@
                     </label>
                 </div>
                 <div id="scPwdDetails" class="pwd-discount-details" hidden>
-                    <label for="pwdQrPayload">UPWDIS PWD ID QR code</label>
-                    <textarea id="pwdQrPayload" rows="3" maxlength="8192" autocomplete="off"
-                        placeholder="Scan the QR code or paste its contents here"></textarea>
+                    <input type="hidden" id="pwdQrPayload">
                     <div class="pwd-qr-actions">
-                        <button type="button" id="scanPwdQrBtn">Scan PWD ID QR</button>
-                        <button type="button" id="verifyPwdQrBtn">Verify PWD ID</button>
+                        <button type="button" id="openPwdModalBtn">Scan / enter PWD ID</button>
                     </div>
                     <p id="pwdVerificationStatus" class="pwd-verification-status" role="status" aria-live="polite">
-                        PWD discount is applied only after successful authentication.
+                        PWD discount is applied only after the PWD ID is checked and confirmed.
+                    </p>
+                </div>
+
+                <div class="pos-scpwd">
+                    <label for="seniorToggle">
+                        <input type="checkbox" id="seniorToggle">
+                        <span id="seniorLabel">Senior Citizen Discount (20%)</span>
+                    </label>
+                </div>
+                <div id="seniorDetails" class="senior-discount-details" hidden>
+                    <div class="pwd-qr-actions">
+                        <button type="button" id="openSeniorModalBtn">Scan / upload Senior ID</button>
+                    </div>
+                    <p id="seniorStatus" class="pwd-verification-status" role="status" aria-live="polite">
+                        Senior Citizen discount is applied only after the ID shows age 60 or above and is confirmed.
                     </p>
                 </div>
 
@@ -350,6 +362,81 @@
             <p id="ewalletPayStatus" class="pos-ewallet-hint">Creating the payment QR...</p>
         </div>
         <button type="button" id="regenPaymentRefBtn">New QR</button>
+    </div>
+</div>
+
+<div id="pwdModal" class="pwd-modal" hidden role="dialog" aria-modal="true" aria-labelledby="pwdModalTitle">
+    <div class="pwd-modal-card">
+        <div class="pwd-modal-head">
+            <h3 id="pwdModalTitle">PWD ID Verification</h3>
+            <span id="closePwdModal" role="button" aria-label="Close">&times;</span>
+        </div>
+        <p id="pwdModalBanner" class="pwd-banner" data-state="info" role="status" aria-live="polite">
+            Scan the PWD ID QR code or type the PWD ID number.
+        </p>
+        <div class="pwd-modal-field">
+            <label for="pwdModalId">PWD ID Number</label>
+            <input type="text" id="pwdModalId" maxlength="8192" autocomplete="off" placeholder="00-0000-000-0000000">
+        </div>
+        <div class="pwd-modal-field">
+            <label for="pwdModalName">Name on ID (optional)</label>
+            <input type="text" id="pwdModalName" maxlength="120" autocomplete="off" placeholder="As printed on the card">
+        </div>
+        <p class="pwd-modal-type">Detected ID: <strong id="pwdModalType">-</strong></p>
+        <div class="pwd-modal-actions">
+            <button type="button" id="pwdModalScanBtn">Scan ID</button>
+            <button type="button" id="pwdModalUploadBtn">Upload ID photo</button>
+        </div>
+        <input type="file" id="pwdModalFile" accept="image/*" hidden>
+        <div class="pwd-modal-actions">
+            <button type="button" id="pwdModalRegistryBtn" disabled>Open DOH PWD Registry</button>
+        </div>
+        <label class="pwd-confirm-label">
+            <input type="checkbox" id="pwdManualConfirm" disabled>
+            <span>I checked this ID in the DOH PWD Registry and the physical card is valid (not expired, photo matches).</span>
+        </label>
+        <div class="pwd-modal-footer">
+            <button type="button" id="pwdModalCancelBtn">Cancel</button>
+            <button type="button" id="pwdModalApplyBtn" disabled>Apply PWD Discount</button>
+        </div>
+    </div>
+</div>
+
+<div id="seniorModal" class="pwd-modal" hidden role="dialog" aria-modal="true" aria-labelledby="seniorModalTitle">
+    <div class="pwd-modal-card">
+        <div class="pwd-modal-head">
+            <h3 id="seniorModalTitle">Senior Citizen ID Check</h3>
+            <span id="closeSeniorModal" role="button" aria-label="Close">&times;</span>
+        </div>
+        <p id="seniorModalBanner" class="pwd-banner" data-state="info" role="status" aria-live="polite">
+            Scan or upload the Senior Citizen ID (or any ID with the birth date), or type the date of birth.
+        </p>
+        <div class="pwd-modal-actions">
+            <button type="button" id="seniorModalScanBtn">Scan ID</button>
+            <button type="button" id="seniorModalUploadBtn">Upload ID photo</button>
+        </div>
+        <input type="file" id="seniorModalFile" accept="image/*" hidden>
+        <div class="pwd-modal-field">
+            <label for="seniorModalDob">Date of Birth</label>
+            <input type="date" id="seniorModalDob" min="1900-01-01">
+        </div>
+        <p class="pwd-modal-type">Age: <strong id="seniorModalAge">-</strong></p>
+        <div class="pwd-modal-field">
+            <label for="seniorModalId">ID Number (optional)</label>
+            <input type="text" id="seniorModalId" maxlength="40" autocomplete="off" placeholder="OSCA / Senior Citizen ID number">
+        </div>
+        <div class="pwd-modal-field">
+            <label for="seniorModalName">Name on ID (optional)</label>
+            <input type="text" id="seniorModalName" maxlength="120" autocomplete="off" placeholder="As printed on the card">
+        </div>
+        <label class="pwd-confirm-label">
+            <input type="checkbox" id="seniorManualConfirm" disabled>
+            <span>I checked the physical ID: it is valid (not expired), the photo matches, and the birth date matches the date above.</span>
+        </label>
+        <div class="pwd-modal-footer">
+            <button type="button" id="seniorModalCancelBtn">Cancel</button>
+            <button type="button" id="seniorModalApplyBtn" disabled>Apply Senior Discount</button>
+        </div>
     </div>
 </div>
 
@@ -712,6 +799,7 @@
 let cart = []; 
 let TAX_RATE = 0.12;
 let SC_PWD_RATE = 0.20;
+let SENIOR_RATE = 0.20;
 const POINTS_TO_PESO_RATE_DEFAULT = 0.30;
 let POINTS_TO_PESO_RATE = POINTS_TO_PESO_RATE_DEFAULT;
 let taxLabel;
@@ -808,6 +896,19 @@ let pwdVerificationSucceeded = false;
 let pwdVerificationSequence = 0;
 let pwdVerifiedIdNumber = null;
 let pwdVerifiedHolderName = null;
+let pwdRegistryUrl = 'https://pwd.doh.gov.ph/tbl_pwd_id_verificationlist.php';
+let pwdParsedIdNumber = null;
+let pwdModalCheckTimer = null;
+
+const PWD_TYPE_LABELS = {
+    pwd: 'PWD ID',
+    pwd_card: 'PWD ID (number not readable)',
+    philsys: 'PhilSys National ID (not accepted)',
+    tin: 'TIN ID (not accepted)',
+    other: 'Other ID (not accepted)',
+    unreadable: 'Could not read the ID',
+    unknown: 'Not a PWD ID'
+};
 
 function updateScPwdDetailsVisibility() {
     const enabled = !!document.getElementById('scPwdToggle')?.checked;
@@ -822,95 +923,681 @@ function setPwdVerificationStatus(message, state = 'info') {
     status.dataset.state = state;
 }
 
-function resetPwdVerification(message = 'QR changed. Verify the PWD ID before applying the discount.') {
+function setPwdModalBanner(message, state = 'info') {
+    const banner = document.getElementById('pwdModalBanner');
+    if (!banner) return;
+    banner.textContent = message;
+    banner.dataset.state = state;
+}
+
+function setPwdModalType(idType) {
+    const label = document.getElementById('pwdModalType');
+    if (label) label.textContent = idType ? (PWD_TYPE_LABELS[idType] || PWD_TYPE_LABELS.unknown) : '-';
+}
+
+function setPwdModalControls(idFound) {
+    const registryBtn = document.getElementById('pwdModalRegistryBtn');
+    const confirm = document.getElementById('pwdManualConfirm');
+    const applyBtn = document.getElementById('pwdModalApplyBtn');
+    if (registryBtn) registryBtn.disabled = !idFound;
+    if (confirm) {
+        confirm.disabled = !idFound;
+        if (!idFound) confirm.checked = false;
+    }
+    if (applyBtn) applyBtn.disabled = !(idFound && confirm && confirm.checked);
+}
+
+function resetPwdModalFields() {
+    clearTimeout(pwdModalCheckTimer);
+    const idInput = document.getElementById('pwdModalId');
+    const nameInput = document.getElementById('pwdModalName');
+    const hidden = document.getElementById('pwdQrPayload');
+    if (idInput) idInput.value = '';
+    if (nameInput) nameInput.value = '';
+    if (hidden) hidden.value = '';
+    pwdParsedIdNumber = null;
+    setPwdModalType(null);
+    setPwdModalControls(false);
+    setPwdModalBanner('Scan the PWD ID QR code or type the PWD ID number.', 'info');
+}
+
+function resetPwdVerification(message = 'Scan or enter the PWD ID to verify it.') {
     pwdVerificationSequence += 1;
     pwdVerificationSucceeded = false;
     pwdVerifiedIdNumber = null;
     pwdVerifiedHolderName = null;
-    const verifyButton = document.getElementById('verifyPwdQrBtn');
-    if (verifyButton) verifyButton.disabled = false;
+    pwdParsedIdNumber = null;
     setPwdVerificationStatus(message);
     if (typeof updateCart === 'function') updateCart();
 }
 
-function clearPwdVerification(message = 'Scan or enter the PWD ID QR code to authenticate it.') {
-    const input = document.getElementById('pwdQrPayload');
-    if (input) input.value = '';
+function openPwdModal() {
+    const modal = document.getElementById('pwdModal');
+    if (!modal) return;
+    modal.hidden = false;
+    document.getElementById('pwdModalId')?.focus();
+}
+
+function closePwdModal() {
+    const modal = document.getElementById('pwdModal');
+    if (modal) modal.hidden = true;
+}
+
+function startFreshPwdModal() {
+    resetPwdVerification('Scan or enter the PWD ID to verify it.');
+    resetPwdModalFields();
+    openPwdModal();
+}
+
+function cancelPwdModal() {
+    closePwdModal();
+    if (!pwdVerificationSucceeded) clearPwdVerification();
+}
+
+function clearPwdVerification(message = 'Scan or enter the PWD ID to verify it.') {
+    closePwdModal();
+    resetPwdModalFields();
     resetPwdVerification(message);
     const toggle = document.getElementById('scPwdToggle');
     if (toggle) toggle.checked = false;
     updateScPwdDetailsVisibility();
 }
 
-function handleScannedPwdQr(qrPayload) {
-    const input = document.getElementById('pwdQrPayload');
-    if (!input) return;
-    input.value = qrPayload;
-    resetPwdVerification('QR scanned. Checking with the authorized verification provider...');
-    verifyPwdQr();
-    closeBarcodeScanner();
+function openDohRegistry() {
+    if (pwdParsedIdNumber && navigator.clipboard) {
+        navigator.clipboard.writeText(pwdParsedIdNumber).catch(() => {});
+    }
+    window.open(pwdRegistryUrl, '_blank', 'noopener');
 }
 
-async function verifyPwdQr() {
-    const input = document.getElementById('pwdQrPayload');
-    const verifyButton = document.getElementById('verifyPwdQrBtn');
-    const qrPayload = input?.value.trim() || '';
-    if (!qrPayload) {
-        setPwdVerificationStatus('Scan or enter the PWD ID QR code first.');
-        input?.focus();
-        return;
-    }
+async function requestPwdCheck(payload, confirmed) {
+    const response = await fetch('/api/cashier/pwd/verify', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            qr_payload: payload,
+            manual_confirmed: confirmed === true,
+            holder_name: document.getElementById('pwdModalName')?.value.trim() || null
+        })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || 'PWD ID verification is unavailable.');
+    return data;
+}
 
+// Shows the server's answer in the popup (autofill if it is a PWD ID, validation error otherwise).
+function applyPwdCheckResponse(data, payload, fromScan) {
+    const idInput = document.getElementById('pwdModalId');
+    const hidden = document.getElementById('pwdQrPayload');
+    setPwdModalType(data.id_type || 'unknown');
+    if (data.needs_confirmation && typeof data.id_number === 'string') {
+        pwdParsedIdNumber = data.id_number;
+        if (hidden) hidden.value = payload;
+        if (idInput && idInput.value.trim() !== data.id_number) idInput.value = data.id_number;
+        const nameInput = document.getElementById('pwdModalName');
+        if (nameInput && data.holder_name && !nameInput.value.trim()) nameInput.value = data.holder_name;
+        setPwdModalBanner(data.message, 'ok');
+        setPwdModalControls(true);
+    } else {
+        if (fromScan && idInput) idInput.value = '';
+        setPwdModalBanner(data.message || 'This is not a valid PWD ID.', 'error');
+        setPwdModalControls(false);
+    }
+}
+
+// Checks scanned/typed text and autofills the popup. fromScan: text came from the camera/scanner.
+async function evaluatePwdInput(rawText, fromScan = false) {
+    const payload = (rawText || '').trim();
     const sequence = ++pwdVerificationSequence;
-    if (verifyButton) verifyButton.disabled = true;
+    const idInput = document.getElementById('pwdModalId');
+    const hidden = document.getElementById('pwdQrPayload');
     pwdVerificationSucceeded = false;
     pwdVerifiedIdNumber = null;
     pwdVerifiedHolderName = null;
-    setPwdVerificationStatus('Checking the PWD ID with the authorized verification provider...');
+    pwdParsedIdNumber = null;
+    if (hidden) hidden.value = '';
+    setPwdModalControls(false);
     if (typeof updateCart === 'function') updateCart();
-
+    if (fromScan && idInput) idInput.value = '';
+    if (!payload) {
+        setPwdModalType(null);
+        setPwdModalBanner('Scan the PWD ID QR code or type the PWD ID number.', 'info');
+        return;
+    }
+    setPwdModalBanner('Checking the ID...', 'info');
     try {
-        const response = await fetch('/api/cashier/pwd/verify', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ qr_payload: qrPayload })
-        });
-        const data = await response.json();
-        if (sequence !== pwdVerificationSequence || input.value.trim() !== qrPayload) return;
-        if (!response.ok) {
-            throw new Error(data.message || 'PWD ID verification is unavailable.');
+        const data = await requestPwdCheck(payload, false);
+        if (sequence !== pwdVerificationSequence) return;
+        applyPwdCheckResponse(data, payload, fromScan);
+    } catch (err) {
+        if (sequence !== pwdVerificationSequence) return;
+        setPwdModalBanner(err.message || 'PWD ID check failed.', 'error');
+        setPwdModalControls(false);
+    }
+}
+
+// ---- ID photo reading (camera frames and uploads): works for IDs without a readable QR ----
+async function postPwdImage(dataUrl) {
+    const response = await fetch('/api/cashier/pwd/scan-image', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || 'The ID photo could not be read.');
+    return data;
+}
+
+function showPwdImageResult(data) {
+    closeBarcodeScanner();
+    resetPwdVerification('Scan or enter the PWD ID to verify it.');
+    resetPwdModalFields();
+    openPwdModal();
+    applyPwdCheckResponse(data, typeof data.id_number === 'string' ? data.id_number : '', true);
+}
+
+function showPwdUnreadable(message) {
+    closeBarcodeScanner();
+    resetPwdVerification('Scan or enter the PWD ID to verify it.');
+    resetPwdModalFields();
+    openPwdModal();
+    setPwdModalType('unreadable');
+    setPwdModalBanner(
+        message || 'Could not read this ID. Only a PWD ID is accepted (not a National ID or TIN ID). ' +
+            'Try a clearer photo, or type the PWD ID number.',
+        'error'
+    );
+}
+
+function fileToResizedDataUrl(file, maxSide = 1600) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(url);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not open the image.')); };
+        img.src = url;
+    });
+}
+
+async function handlePwdPhotoFile(file) {
+    if (!file) return;
+    resetPwdVerification('Scan or enter the PWD ID to verify it.');
+    resetPwdModalFields();
+    setPwdModalBanner('Reading the ID photo...', 'info');
+    const sequence = pwdVerificationSequence;
+    try {
+        const dataUrl = await fileToResizedDataUrl(file);
+        const data = await postPwdImage(dataUrl);
+        if (sequence !== pwdVerificationSequence) return;
+        applyPwdCheckResponse(data, typeof data.id_number === 'string' ? data.id_number : '', true);
+    } catch (err) {
+        if (sequence !== pwdVerificationSequence) return;
+        setPwdModalType('unreadable');
+        setPwdModalBanner(err.message || 'The ID photo could not be read.', 'error');
+    }
+}
+
+// While the camera scanner is open for a PWD ID: if no QR is decoded, read the card itself.
+const PWD_FRAME_FIRST_DELAY_MS = 2500;
+const PWD_FRAME_INTERVAL_MS = 3000;
+const PWD_FRAME_MAX_ATTEMPTS = 5;
+let pwdFrameScanTimer = null;
+let pwdFrameScanToken = 0;
+let pwdFrameAttempts = 0;
+let pwdFrameLastCard = null;
+
+function stopPwdFrameScan() {
+    pwdFrameScanToken += 1;
+    clearTimeout(pwdFrameScanTimer);
+    pwdFrameScanTimer = null;
+}
+
+function startPwdFrameScan() {
+    stopPwdFrameScan();
+    pwdFrameAttempts = 0;
+    pwdFrameLastCard = null;
+    const token = pwdFrameScanToken;
+    pwdFrameScanTimer = setTimeout(() => pwdFrameScanTick(token), PWD_FRAME_FIRST_DELAY_MS);
+}
+
+async function pwdFrameScanTick(token) {
+    if (token !== pwdFrameScanToken || scannerMode !== 'pwd_qr') return;
+    const statusEl = document.getElementById('barcodeScannerStatus');
+    const video = document.getElementById('barcodeScannerVideo');
+    const schedule = () => {
+        if (token !== pwdFrameScanToken) return;
+        pwdFrameScanTimer = setTimeout(() => pwdFrameScanTick(token), PWD_FRAME_INTERVAL_MS);
+    };
+    if (!video || !video.videoWidth) { schedule(); return; }
+    if (pwdFrameAttempts >= PWD_FRAME_MAX_ATTEMPTS) {
+        if (pwdFrameLastCard) showPwdImageResult(pwdFrameLastCard);
+        else showPwdUnreadable();
+        return;
+    }
+    pwdFrameAttempts += 1;
+    if (statusEl) statusEl.textContent = 'No QR read yet. Reading the ID text... hold the ID steady.';
+    try {
+        const scale = Math.min(1, 1600 / Math.max(video.videoWidth, video.videoHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        const data = await postPwdImage(canvas.toDataURL('image/jpeg', 0.85));
+        if (token !== pwdFrameScanToken) return;
+        if (data.id_type === 'pwd_card') {
+            pwdFrameLastCard = data;   // PWD card seen but number unreadable: keep trying
+        } else if (data.id_type && data.id_type !== 'unknown') {
+            showPwdImageResult(data);
+            return;
         }
-        pwdVerificationSucceeded = data.verified === true;
-        if (pwdVerificationSucceeded) {
+    } catch (err) {
+        if (token !== pwdFrameScanToken) return;
+        if (/not available|turned off/i.test(err.message || '')) {
+            showPwdUnreadable(err.message);
+            return;
+        }
+    }
+    schedule();
+}
+
+function handlePwdModalIdInput() {
+    // Typing/USB scanner: invalidate immediately, re-check shortly after typing stops.
+    pwdVerificationSequence += 1;
+    pwdVerificationSucceeded = false;
+    pwdVerifiedIdNumber = null;
+    pwdVerifiedHolderName = null;
+    pwdParsedIdNumber = null;
+    const hidden = document.getElementById('pwdQrPayload');
+    if (hidden) hidden.value = '';
+    setPwdModalControls(false);
+    if (typeof updateCart === 'function') updateCart();
+    clearTimeout(pwdModalCheckTimer);
+    const value = document.getElementById('pwdModalId')?.value || '';
+    setPwdModalType(null);
+    setPwdModalBanner(value.trim() ? 'Checking the ID...' : 'Scan the PWD ID QR code or type the PWD ID number.', 'info');
+    pwdModalCheckTimer = setTimeout(() => evaluatePwdInput(value, false), 450);
+}
+
+function handleScannedPwdQr(qrPayload) {
+    closeBarcodeScanner();
+    resetPwdVerification('Scan or enter the PWD ID to verify it.');
+    openPwdModal();
+    evaluatePwdInput(qrPayload, true);
+}
+
+async function applyPwdModal() {
+    const payload = document.getElementById('pwdQrPayload')?.value.trim() || '';
+    const applyBtn = document.getElementById('pwdModalApplyBtn');
+    if (!payload || !pwdParsedIdNumber) return;
+    const sequence = ++pwdVerificationSequence;
+    if (applyBtn) applyBtn.disabled = true;
+    try {
+        const data = await requestPwdCheck(payload, true);
+        if (sequence !== pwdVerificationSequence) return;
+        if (data.verified === true) {
+            pwdVerificationSucceeded = true;
             pwdVerifiedIdNumber = typeof data.id_number === 'string' ? data.id_number : null;
             pwdVerifiedHolderName = typeof data.holder_name === 'string' ? data.holder_name : null;
             const toggle = document.getElementById('scPwdToggle');
             if (toggle) toggle.checked = true;
-            setPwdVerificationStatus('PWD ID authenticated. The PWD discount is ready.', 'verified');
+            closePwdModal();
+            const shown = pwdVerifiedIdNumber
+                ? (typeof maskDiscountId === 'function' ? maskDiscountId(pwdVerifiedIdNumber) : pwdVerifiedIdNumber)
+                : '';
+            setPwdVerificationStatus(`PWD ID confirmed${shown ? ': ' + shown : ''}. The PWD discount is ready.`, 'verified');
+            updateScPwdDetailsVisibility();
         } else {
-            setPwdVerificationStatus(data.message || 'PWD ID was not authenticated.', 'rejected');
+            setPwdModalBanner(data.message || 'The PWD ID was not confirmed.', 'error');
+            setPwdModalControls(false);
         }
         if (typeof updateCart === 'function') updateCart();
     } catch (err) {
-        if (sequence === pwdVerificationSequence) {
-            pwdVerificationSucceeded = false;
-            setPwdVerificationStatus(err.message || 'PWD ID verification failed.', 'error');
-            if (typeof updateCart === 'function') updateCart();
-        }
-    } finally {
-        if (verifyButton && sequence === pwdVerificationSequence) verifyButton.disabled = false;
+        if (sequence !== pwdVerificationSequence) return;
+        setPwdModalBanner(err.message || 'PWD ID confirmation failed.', 'error');
+        setPwdModalControls(true);
     }
 }
 
+// ===== SENIOR CITIZEN DISCOUNT (ID scan/upload -> date of birth -> age 60+) =====
+const SENIOR_MIN_AGE = 60;
+let seniorConfirmed = false;
+let seniorVerifiedDob = null;
+let seniorVerifiedIdNumber = null;
+let seniorVerifiedHolderName = null;
+let seniorEligibleDob = null;       // date in the popup that is old enough (not yet confirmed)
+let seniorCheckSequence = 0;
+
+function seniorAgeFromIso(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    if (!m) return null;
+    const y = +m[1], mo = +m[2], d = +m[3];
+    const test = new Date(y, mo - 1, d);
+    if (test.getFullYear() !== y || test.getMonth() !== mo - 1 || test.getDate() !== d) return null;
+    const now = new Date();
+    if (test > now || y < 1900) return null;
+    let age = now.getFullYear() - y;
+    if (now.getMonth() < mo - 1 || (now.getMonth() === mo - 1 && now.getDate() < d)) age -= 1;
+    return age;
+}
+
+function updateSeniorDetailsVisibility() {
+    const enabled = !!document.getElementById('seniorToggle')?.checked;
+    const panel = document.getElementById('seniorDetails');
+    if (panel) panel.hidden = !enabled;
+}
+
+function setSeniorStatus(message, state = 'info') {
+    const status = document.getElementById('seniorStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.dataset.state = state;
+}
+
+function setSeniorModalBanner(message, state = 'info') {
+    const banner = document.getElementById('seniorModalBanner');
+    if (!banner) return;
+    banner.textContent = message;
+    banner.dataset.state = state;
+}
+
+function setSeniorModalControls(eligible) {
+    const confirm = document.getElementById('seniorManualConfirm');
+    const applyBtn = document.getElementById('seniorModalApplyBtn');
+    if (confirm) {
+        confirm.disabled = !eligible;
+        if (!eligible) confirm.checked = false;
+    }
+    if (applyBtn) applyBtn.disabled = !(eligible && confirm && confirm.checked);
+}
+
+// Re-reads the date in the popup, shows the age, and enables the confirmation only if 60+.
+function refreshSeniorModalFromDob() {
+    const iso = document.getElementById('seniorModalDob')?.value || '';
+    const ageEl = document.getElementById('seniorModalAge');
+    seniorEligibleDob = null;
+    if (!iso) {
+        if (ageEl) ageEl.textContent = '-';
+        setSeniorModalControls(false);
+        return;
+    }
+    const age = seniorAgeFromIso(iso);
+    if (age === null) {
+        if (ageEl) ageEl.textContent = '-';
+        setSeniorModalBanner('Enter a valid date of birth.', 'error');
+        setSeniorModalControls(false);
+        return;
+    }
+    if (ageEl) ageEl.textContent = `${age} years old`;
+    if (age >= SENIOR_MIN_AGE) {
+        seniorEligibleDob = iso;
+        setSeniorModalBanner(`Age ${age}: eligible for the Senior Citizen discount. Check the physical ID, then tick the confirmation box.`, 'ok');
+        setSeniorModalControls(true);
+    } else {
+        setSeniorModalBanner(`Age ${age}: below ${SENIOR_MIN_AGE}, not eligible for the Senior Citizen discount.`, 'error');
+        setSeniorModalControls(false);
+    }
+}
+
+function resetSeniorModalFields() {
+    seniorCheckSequence += 1;
+    ['seniorModalDob', 'seniorModalId', 'seniorModalName'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    const dobInput = document.getElementById('seniorModalDob');
+    if (dobInput) dobInput.max = new Date().toISOString().slice(0, 10);
+    const ageEl = document.getElementById('seniorModalAge');
+    if (ageEl) ageEl.textContent = '-';
+    seniorEligibleDob = null;
+    setSeniorModalControls(false);
+    setSeniorModalBanner('Scan or upload the Senior Citizen ID (or any ID with the birth date), or type the date of birth.', 'info');
+}
+
+function resetSeniorDiscount(message = 'Senior Citizen discount is applied only after the ID shows age 60 or above and is confirmed.') {
+    seniorConfirmed = false;
+    seniorVerifiedDob = null;
+    seniorVerifiedIdNumber = null;
+    seniorVerifiedHolderName = null;
+    seniorEligibleDob = null;
+    setSeniorStatus(message);
+    if (typeof updateCart === 'function') updateCart();
+}
+
+function openSeniorModal() {
+    const modal = document.getElementById('seniorModal');
+    if (!modal) return;
+    modal.hidden = false;
+    document.getElementById('seniorModalDob')?.focus();
+}
+
+function closeSeniorModal() {
+    const modal = document.getElementById('seniorModal');
+    if (modal) modal.hidden = true;
+}
+
+function clearSeniorDiscount(message) {
+    closeSeniorModal();
+    stopSeniorFrameScan();
+    resetSeniorModalFields();
+    resetSeniorDiscount(message);
+    const toggle = document.getElementById('seniorToggle');
+    if (toggle) toggle.checked = false;
+    updateSeniorDetailsVisibility();
+}
+
+function startFreshSeniorModal() {
+    resetSeniorDiscount();
+    resetSeniorModalFields();
+    openSeniorModal();
+}
+
+function cancelSeniorModal() {
+    closeSeniorModal();
+    if (!seniorConfirmed) clearSeniorDiscount();
+}
+
+// Shows the server's reading of an ID (date of birth, age, eligibility) in the popup.
+function applySeniorCheckResponse(data) {
+    const dobInput = document.getElementById('seniorModalDob');
+    if (data && typeof data.dob === 'string' && data.dob) {
+        if (dobInput) dobInput.value = data.dob;
+        const nameInput = document.getElementById('seniorModalName');
+        if (nameInput && data.holder_name && !nameInput.value.trim()) nameInput.value = data.holder_name;
+        refreshSeniorModalFromDob();
+        const age = seniorAgeFromIso(data.dob);
+        if (age !== null && data.message) {
+            setSeniorModalBanner(data.message, age >= SENIOR_MIN_AGE ? 'ok' : 'error');
+        }
+    } else {
+        if (dobInput) dobInput.value = '';
+        refreshSeniorModalFromDob();
+        setSeniorModalBanner((data && data.message) || 'No date of birth found. Type the date of birth.', 'error');
+    }
+}
+
+async function postSeniorImage(dataUrl) {
+    const response = await fetch('/api/cashier/senior/scan-image', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || 'The ID photo could not be read.');
+    return data;
+}
+
+async function postSeniorText(text) {
+    const response = await fetch('/api/cashier/senior/check', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || 'The ID could not be checked.');
+    return data;
+}
+
+function showSeniorImageResult(data) {
+    closeBarcodeScanner();
+    resetSeniorDiscount();
+    resetSeniorModalFields();
+    openSeniorModal();
+    applySeniorCheckResponse(data);
+}
+
+function showSeniorUnreadable(message) {
+    closeBarcodeScanner();
+    resetSeniorDiscount();
+    resetSeniorModalFields();
+    openSeniorModal();
+    setSeniorModalBanner(
+        message || 'Could not read the date of birth. Try a clearer photo, or type the date of birth.',
+        'error'
+    );
+}
+
+async function handleSeniorPhotoFile(file) {
+    if (!file) return;
+    resetSeniorDiscount();
+    resetSeniorModalFields();
+    setSeniorModalBanner('Reading the ID photo...', 'info');
+    const sequence = seniorCheckSequence;
+    try {
+        const dataUrl = await fileToResizedDataUrl(file);
+        const data = await postSeniorImage(dataUrl);
+        if (sequence !== seniorCheckSequence) return;
+        applySeniorCheckResponse(data);
+    } catch (err) {
+        if (sequence !== seniorCheckSequence) return;
+        setSeniorModalBanner(err.message || 'The ID photo could not be read.', 'error');
+    }
+}
+
+// Camera: ZXing reads a QR if there is one (PhilSys); otherwise the ID text is read every few seconds.
+const SENIOR_FRAME_FIRST_DELAY_MS = 2500;
+const SENIOR_FRAME_INTERVAL_MS = 3000;
+const SENIOR_FRAME_MAX_ATTEMPTS = 5;
+let seniorFrameScanTimer = null;
+let seniorFrameScanToken = 0;
+let seniorFrameAttempts = 0;
+
+function stopSeniorFrameScan() {
+    seniorFrameScanToken += 1;
+    clearTimeout(seniorFrameScanTimer);
+    seniorFrameScanTimer = null;
+}
+
+function startSeniorFrameScan() {
+    stopSeniorFrameScan();
+    seniorFrameAttempts = 0;
+    const token = seniorFrameScanToken;
+    seniorFrameScanTimer = setTimeout(() => seniorFrameScanTick(token), SENIOR_FRAME_FIRST_DELAY_MS);
+}
+
+async function seniorFrameScanTick(token) {
+    if (token !== seniorFrameScanToken || scannerMode !== 'senior_id') return;
+    const statusEl = document.getElementById('barcodeScannerStatus');
+    const video = document.getElementById('barcodeScannerVideo');
+    const schedule = () => {
+        if (token !== seniorFrameScanToken) return;
+        seniorFrameScanTimer = setTimeout(() => seniorFrameScanTick(token), SENIOR_FRAME_INTERVAL_MS);
+    };
+    if (!video || !video.videoWidth) { schedule(); return; }
+    if (seniorFrameAttempts >= SENIOR_FRAME_MAX_ATTEMPTS) {
+        showSeniorUnreadable();
+        return;
+    }
+    seniorFrameAttempts += 1;
+    if (statusEl) statusEl.textContent = 'Reading the ID text... hold the ID steady so the birth date is clear.';
+    try {
+        const scale = Math.min(1, 1600 / Math.max(video.videoWidth, video.videoHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        const data = await postSeniorImage(canvas.toDataURL('image/jpeg', 0.85));
+        if (token !== seniorFrameScanToken) return;
+        if (data && typeof data.dob === 'string' && data.dob) {
+            showSeniorImageResult(data);
+            return;
+        }
+    } catch (err) {
+        if (token !== seniorFrameScanToken) return;
+        if (/not available/i.test(err.message || '')) {
+            showSeniorUnreadable(err.message);
+            return;
+        }
+    }
+    schedule();
+}
+
+async function handleScannedSeniorQr(text) {
+    closeBarcodeScanner();
+    resetSeniorDiscount();
+    resetSeniorModalFields();
+    openSeniorModal();
+    setSeniorModalBanner('Reading the date of birth...', 'info');
+    const sequence = seniorCheckSequence;
+    try {
+        const data = await postSeniorText(text);
+        if (sequence !== seniorCheckSequence) return;
+        applySeniorCheckResponse(data);
+    } catch (err) {
+        if (sequence !== seniorCheckSequence) return;
+        setSeniorModalBanner(err.message || 'The ID could not be checked.', 'error');
+    }
+}
+
+function applySeniorModal() {
+    const iso = seniorEligibleDob;
+    const confirm = document.getElementById('seniorManualConfirm');
+    if (!iso || !confirm?.checked || seniorAgeFromIso(iso) < SENIOR_MIN_AGE) return;
+    seniorConfirmed = true;
+    seniorVerifiedDob = iso;
+    seniorVerifiedIdNumber = (document.getElementById('seniorModalId')?.value || '').trim() || null;
+    seniorVerifiedHolderName = (document.getElementById('seniorModalName')?.value || '').trim() || null;
+    const toggle = document.getElementById('seniorToggle');
+    if (toggle) toggle.checked = true;
+    closeSeniorModal();
+    setSeniorStatus(`Senior Citizen ID confirmed (age ${seniorAgeFromIso(iso)}). The Senior discount is ready.`, 'verified');
+    updateSeniorDetailsVisibility();
+    if (typeof updateCart === 'function') updateCart();
+}
+
 function getScPwdSaleData() {
+    if (document.getElementById('seniorToggle')?.checked) {
+        if (!seniorConfirmed || !seniorVerifiedDob) {
+            alert('Scan the Senior Citizen ID and confirm it before applying the discount.');
+            return null;
+        }
+        return {
+            sc_pwd_applied: true,
+            discount_kind: 'senior',
+            senior_dob: seniorVerifiedDob,
+            senior_confirmed: true,
+            senior_id_number: seniorVerifiedIdNumber,
+            senior_holder_name: seniorVerifiedHolderName
+        };
+    }
     const enabled = !!document.getElementById('scPwdToggle')?.checked;
     if (!enabled) {
         return { sc_pwd_applied: false, pwd_qr_payload: null };
     }
     const qrPayload = document.getElementById('pwdQrPayload')?.value.trim() || '';
     if (!pwdVerificationSucceeded || !qrPayload) {
-        alert('Authenticate the PWD ID QR code before applying the discount.');
+        alert('Verify and confirm the PWD ID before applying the discount.');
         return null;
     }
     return {
@@ -926,6 +1613,9 @@ function applyCheckoutRates(data) {
     if (data && Number.isFinite(Number(data.sc_pwd_percent))) SC_PWD_RATE = Number(data.sc_pwd_percent) / 100;
     const scLabel = document.getElementById('scPwdLabel');
     if (scLabel) scLabel.textContent = `PWD Discount (${formatCheckoutPercent(SC_PWD_RATE)}%)`;
+    if (data && Number.isFinite(Number(data.senior_percent))) SENIOR_RATE = Number(data.senior_percent) / 100;
+    const seniorLabel = document.getElementById('seniorLabel');
+    if (seniorLabel) seniorLabel.textContent = `Senior Citizen Discount (${formatCheckoutPercent(SENIOR_RATE)}%)`;
     const label = document.getElementById('taxLabel');
     if (label) label.textContent = `Tax (${formatCheckoutPercent(TAX_RATE)}%):`;
     if (typeof updateCart === 'function') updateCart();
@@ -1219,6 +1909,7 @@ function switchPOSMode(mode) {
 window.clearCart = function() {
     if (cart.length === 0) {
         clearPwdVerification();
+        clearSeniorDiscount();
         updateScPwdDetailsVisibility();
         savePosDraft();
         return;
@@ -1282,6 +1973,7 @@ window.clearCart = function() {
     if (applyPointsToggle) applyPointsToggle.checked = false;
 
     clearPwdVerification();
+    clearSeniorDiscount();
     updateScPwdDetailsVisibility();
     savePosDraft();
 
@@ -1375,7 +2067,9 @@ function printReceipt(responseData, saleData, printWindow) {
         : `
             <tr><td class="right">PAYMENT METHOD:</td><td class="right">${paymentMethodDisplay}</td></tr>
             ${saleData.payment_reference ? `<tr><td class="right">REF NO.:</td><td class="right">${saleData.payment_reference}</td></tr>` : ''}`;
-    const discountIdLineHtml = saleData.sc_pwd_applied
+    const discountIdLineHtml = saleData.sc_pwd_applied && saleData.discount_kind === 'senior'
+        ? `<tr><td class="right">Senior Citizen Discount:</td><td class="right">${saleData.senior_id_number ? `Senior Citizen, ID No.: ${maskDiscountId(saleData.senior_id_number)}` : 'Senior Citizen ID confirmed'}</td></tr>`
+        : saleData.sc_pwd_applied
         ? `<tr><td class="right">PWD Discount:</td><td class="right">${saleData.discount_id_number ? `PWD, ID No.: ${maskDiscountId(saleData.discount_id_number)}` : 'PWD ID authenticated'}</td></tr>`
         : '';
 
@@ -1742,7 +2436,8 @@ const row = `
 cartTable.innerHTML += row;
     });
     
-    const scPwdChecked = document.getElementById("scPwdToggle").checked && pwdVerificationSucceeded;
+    const seniorChecked = !!(document.getElementById("seniorToggle")?.checked && seniorConfirmed);
+    const scPwdChecked = (document.getElementById("scPwdToggle").checked && pwdVerificationSucceeded) || seniorChecked;
     let scDiscount = 0;
     let vatExemptSale = 0;
     let taxAmount = 0;
@@ -1753,7 +2448,7 @@ cartTable.innerHTML += row;
         vatExemptSale = subtotalBeforeDiscount / (1 + TAX_RATE);
 
         // Step 2: Compute 20% SC/PWD discount
-        scDiscount = vatExemptSale * SC_PWD_RATE;
+        scDiscount = vatExemptSale * (seniorChecked ? SENIOR_RATE : SC_PWD_RATE);
 
         // Step 3: Amount collectible after SC discount
         totalAfterDiscount = vatExemptSale - scDiscount;
@@ -2338,30 +3033,92 @@ document.addEventListener("DOMContentLoaded", function() {
     scPwdToggle.addEventListener("change", () => {
         if (!scPwdToggle.checked) {
             clearPwdVerification();
-        } else if (!pwdVerificationSucceeded) {
-            const qrPayload = document.getElementById('pwdQrPayload')?.value.trim() || '';
-            if (qrPayload) {
-                verifyPwdQr();
-            } else {
-                setPwdVerificationStatus('Scan or enter the PWD ID QR code to authenticate it first.');
-            }
+        } else {
+            clearSeniorDiscount();   // PWD and Senior discounts cannot be combined
+            if (!pwdVerificationSucceeded) startFreshPwdModal();
         }
         updateScPwdDetailsVisibility();
         updateCart();
     });
-    const pwdQrPayload = document.getElementById('pwdQrPayload');
-    pwdQrPayload?.addEventListener('input', () => resetPwdVerification());
-    pwdQrPayload?.addEventListener('change', verifyPwdQr);
-    document.getElementById('verifyPwdQrBtn')?.addEventListener('click', verifyPwdQr);
-    document.getElementById('scanPwdQrBtn')?.addEventListener('click', () => openBarcodeScanner('pwd_qr'));
+    document.getElementById('openPwdModalBtn')?.addEventListener('click', startFreshPwdModal);
+
+    // ===== SENIOR CITIZEN TOGGLE + POPUP =====
+    const seniorToggle = document.getElementById('seniorToggle');
+    seniorToggle?.addEventListener('change', () => {
+        if (!seniorToggle.checked) {
+            clearSeniorDiscount();
+        } else {
+            clearPwdVerification();   // PWD and Senior discounts cannot be combined
+            seniorToggle.checked = true;
+            if (!seniorConfirmed) startFreshSeniorModal();
+        }
+        updateSeniorDetailsVisibility();
+        updateCart();
+    });
+    document.getElementById('openSeniorModalBtn')?.addEventListener('click', startFreshSeniorModal);
+    document.getElementById('seniorModalScanBtn')?.addEventListener('click', () => openBarcodeScanner('senior_id'));
+    document.getElementById('seniorModalUploadBtn')?.addEventListener('click', () => {
+        const fileInput = document.getElementById('seniorModalFile');
+        if (fileInput) { fileInput.value = ''; fileInput.click(); }
+    });
+    document.getElementById('seniorModalFile')?.addEventListener('change', (e) => {
+        handleSeniorPhotoFile(e.target.files && e.target.files[0]);
+    });
+    document.getElementById('seniorModalDob')?.addEventListener('input', refreshSeniorModalFromDob);
+    document.getElementById('seniorModalDob')?.addEventListener('change', refreshSeniorModalFromDob);
+    document.getElementById('seniorManualConfirm')?.addEventListener('change', () => {
+        const confirm = document.getElementById('seniorManualConfirm');
+        const applyBtn = document.getElementById('seniorModalApplyBtn');
+        if (applyBtn) applyBtn.disabled = !(confirm?.checked && seniorEligibleDob);
+    });
+    document.getElementById('seniorModalApplyBtn')?.addEventListener('click', applySeniorModal);
+    document.getElementById('seniorModalCancelBtn')?.addEventListener('click', cancelSeniorModal);
+    document.getElementById('closeSeniorModal')?.addEventListener('click', cancelSeniorModal);
+    document.getElementById('seniorModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'seniorModal') cancelSeniorModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        const modal = document.getElementById('seniorModal');
+        if (e.key === 'Escape' && modal && !modal.hidden) cancelSeniorModal();
+    });
+    document.getElementById('pwdModalScanBtn')?.addEventListener('click', () => openBarcodeScanner('pwd_qr'));
+    document.getElementById('pwdModalRegistryBtn')?.addEventListener('click', openDohRegistry);
+    document.getElementById('pwdModalUploadBtn')?.addEventListener('click', () => {
+        const fileInput = document.getElementById('pwdModalFile');
+        if (fileInput) { fileInput.value = ''; fileInput.click(); }
+    });
+    document.getElementById('pwdModalFile')?.addEventListener('change', (e) => {
+        handlePwdPhotoFile(e.target.files && e.target.files[0]);
+    });
+    document.getElementById('pwdModalId')?.addEventListener('input', handlePwdModalIdInput);
+    document.getElementById('pwdModalId')?.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        clearTimeout(pwdModalCheckTimer);
+        evaluatePwdInput(e.target.value, false);
+    });
+    document.getElementById('pwdManualConfirm')?.addEventListener('change', () => {
+        const confirm = document.getElementById('pwdManualConfirm');
+        const applyBtn = document.getElementById('pwdModalApplyBtn');
+        if (applyBtn) applyBtn.disabled = !(confirm?.checked && pwdParsedIdNumber);
+    });
+    document.getElementById('pwdModalApplyBtn')?.addEventListener('click', applyPwdModal);
+    document.getElementById('pwdModalCancelBtn')?.addEventListener('click', cancelPwdModal);
+    document.getElementById('closePwdModal')?.addEventListener('click', cancelPwdModal);
+    document.getElementById('pwdModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'pwdModal') cancelPwdModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        const modal = document.getElementById('pwdModal');
+        if (e.key === 'Escape' && modal && !modal.hidden) cancelPwdModal();
+    });
     fetch('/api/cashier/pwd/verification-status', { credentials: 'same-origin' })
         .then((response) => response.json())
         .then((data) => {
-            if (data.available) {
-                setPwdVerificationStatus('Scan or enter the PWD ID QR code to authenticate it.');
-            } else {
+            if (typeof data.registry_url === 'string') pwdRegistryUrl = data.registry_url;
+            if (!data.available) {
                 setPwdVerificationStatus(
-                    'Authorized UPWDIS verification is not configured. PWD discount cannot be applied.',
+                    'PWD verification is turned off (PWD_VERIFICATION_MODE). PWD discount cannot be applied.',
                     'error'
                 );
             }
@@ -2552,7 +3309,7 @@ document.querySelectorAll(".add-btn").forEach(btn => {
 // max-stock check, cart push/increment, and visual stock update.
 let barcodeReader = null;
 let barcodeScanCooldown = false;
-let scannerMode = 'cart'; // 'cart', 'payment_ref', or 'pwd_qr'
+let scannerMode = 'cart'; // 'cart', 'payment_ref', 'pwd_qr', or 'senior_id'
 
 function addProductFromLookup(p, statusEl) {
     const lotId = String(p.lot_inventory_id);
@@ -2635,11 +3392,13 @@ function openBarcodeScanner(mode = 'cart') {
     const titleEl = modal?.querySelector('.pos-scan-head h3');
     if (!modal) return;
     modal.style.display = 'flex';
-    if (titleEl) titleEl.textContent = mode === 'pwd_qr' ? 'Scan PWD ID' : mode === 'payment_ref' ? 'Scan Payment QR' : 'Scan Product Barcode';
+    if (titleEl) titleEl.textContent = mode === 'pwd_qr' ? 'Scan PWD ID' : mode === 'senior_id' ? 'Scan Senior Citizen ID' : mode === 'payment_ref' ? 'Scan Payment QR' : 'Scan Product Barcode';
     if (statusEl) statusEl.textContent = mode === 'payment_ref'
         ? 'Point the camera at the customer\'s GCash/Maya QR…'
+        : mode === 'senior_id'
+            ? 'Point the camera at the Senior Citizen ID so the birth date is clear…'
         : mode === 'pwd_qr'
-            ? 'Point the camera at the PWD ID QR code.'
+            ? 'Point the camera at the PWD ID (its QR code or the whole card)…'
             : 'Point the camera at a barcode…';
 
     if (typeof ZXing === 'undefined') {
@@ -2655,6 +3414,8 @@ function openBarcodeScanner(mode = 'cart') {
                 handleScannedPaymentRef(result.getText());
             } else if (scannerMode === 'pwd_qr') {
                 handleScannedPwdQr(result.getText());
+            } else if (scannerMode === 'senior_id') {
+                handleScannedSeniorQr(result.getText());
             } else {
                 addToCartByBarcode(result.getText());
             }
@@ -2662,6 +3423,7 @@ function openBarcodeScanner(mode = 'cart') {
         }
     }).catch(err => {
         if (typeof stopPwdFrameScan === 'function') stopPwdFrameScan();
+        if (typeof stopSeniorFrameScan === 'function') stopSeniorFrameScan();
         try { barcodeReader?.reset(); } catch (resetError) { console.warn('Could not reset the camera scanner.', resetError); }
         barcodeReader = null;
         const errorName = String(err?.name || '');
@@ -2678,9 +3440,13 @@ function openBarcodeScanner(mode = 'cart') {
         }
         if (statusEl) statusEl.textContent = `❌ ${message}`;
     });
+    if (mode === 'pwd_qr') startPwdFrameScan();
+    if (mode === 'senior_id') startSeniorFrameScan();
 }
 
 function closeBarcodeScanner() {
+    if (typeof stopPwdFrameScan === 'function') stopPwdFrameScan();
+    if (typeof stopSeniorFrameScan === 'function') stopSeniorFrameScan();
     if (barcodeReader) {
         try { barcodeReader.reset(); } catch (e) { /* ignore */ }
         barcodeReader = null;
@@ -2798,6 +3564,11 @@ function finishEwalletSale() {
         pwd_qr_payload: pending.pwd_qr_payload,
         pwd_id_number: pending.pwd_id_number,
         pwd_holder_name: pending.pwd_holder_name,
+        discount_kind: pending.discount_kind,
+        senior_dob: pending.senior_dob,
+        senior_confirmed: pending.senior_confirmed,
+        senior_id_number: pending.senior_id_number,
+        senior_holder_name: pending.senior_holder_name,
         items: pending.items
     };
     postCashierSale(saleData, null, false, 0, pending.paymentMethod, paymentReference);

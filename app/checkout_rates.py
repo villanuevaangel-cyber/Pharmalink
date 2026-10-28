@@ -3,8 +3,10 @@ from psycopg2.extras import RealDictCursor
 from app.db import fetch_one, get_conn
 
 DEFAULT_SC_PWD_PERCENT = 20.0
+DEFAULT_SENIOR_PERCENT = 20.0
 DEFAULT_VAT_PERCENT = 12.0
 SC_PWD_KEY = "sc_pwd_discount_percent"
+SENIOR_KEY = "senior_discount_percent"
 VAT_KEY = "vat_percent"
 
 
@@ -27,6 +29,7 @@ def ensure_checkout_rates(conn) -> None:
             """,
             [
                 (SC_PWD_KEY, f"{DEFAULT_SC_PWD_PERCENT:.2f}"),
+                (SENIOR_KEY, f"{DEFAULT_SENIOR_PERCENT:.2f}"),
                 (VAT_KEY, f"{DEFAULT_VAT_PERCENT:.2f}"),
             ],
         )
@@ -54,6 +57,7 @@ def _read_percent(key: str, default: float, label: str) -> float:
 def get_checkout_rates() -> dict:
     return {
         "sc_pwd_percent": _read_percent(SC_PWD_KEY, DEFAULT_SC_PWD_PERCENT, "PWD discount"),
+        "senior_percent": _read_percent(SENIOR_KEY, DEFAULT_SENIOR_PERCENT, "Senior Citizen discount"),
         "vat_percent": _read_percent(VAT_KEY, DEFAULT_VAT_PERCENT, "VAT"),
     }
 
@@ -61,6 +65,8 @@ def get_checkout_rates() -> dict:
 def save_checkout_rate(kind: str, raw) -> dict:
     if kind == "sc_pwd":
         key, label = SC_PWD_KEY, "PWD discount"
+    elif kind == "senior":
+        key, label = SENIOR_KEY, "Senior Citizen discount"
     elif kind == "vat":
         key, label = VAT_KEY, "VAT"
     else:
