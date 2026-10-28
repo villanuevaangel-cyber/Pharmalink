@@ -1165,7 +1165,11 @@ function displayOrderDetails(data) {
     }
 
     document.getElementById('cartMobileBar')?.addEventListener('click', () => {
-        document.getElementById('cart-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const productsTab = document.querySelector('.nav-item[data-target="products"]');
+        if (productsTab && !productsTab.classList.contains('active')) productsTab.click();
+        window.requestAnimationFrame(() => {
+            document.getElementById('cart-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
     });
 
     if (checkoutBtn) checkoutBtn.addEventListener('click', submitOrder);

@@ -1037,17 +1037,19 @@ body.customer-guest #customerNotificationBell{ display:none !important; }
     justify-self:end; font-weight:800; text-align:right; white-space:nowrap;
 }
 #products .add-btn.is-added{ background:#4BAA8B !important; }
-#products .cart-mobile-bar{
+#cartMobileBar{
     display:none;
     align-items:center; justify-content:space-between; gap:12px;
-    width:auto; margin:0; padding:12px 16px;
+    width:min(340px, calc(100vw - 48px)); margin:0; padding:12px 16px;
     border:none; border-radius:14px;
     background:#1E3A34; color:#fff;
     box-shadow:0 8px 24px rgba(30,58,52,.28);
     font-weight:700; font-size:13px; text-align:left;
+    position:fixed; right:24px; bottom:16px; z-index:80; cursor:pointer;
 }
-#products .cart-mobile-bar strong{ font-size:15px; white-space:nowrap; }
-#products .cart-mobile-bar span{
+#cartMobileBar:not([hidden]){ display:flex; }
+#cartMobileBar strong{ font-size:15px; white-space:nowrap; }
+#cartMobileBar span{
     min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 #products label[for="checkoutPaymentMethod"]{
@@ -1077,18 +1079,15 @@ body.customer-guest #customerNotificationBell{ display:none !important; }
     #products .products-container{ flex-wrap:wrap; }
     #products #cart-panel{ flex:1 1 100%; max-width:none; position:static; }
     #products.has-cart-bar{ padding-bottom:78px; }
-    #products .cart-mobile-bar:not([hidden]){
-        display:flex;
-        position:fixed;
+    #cartMobileBar:not([hidden]){
+        width:auto;
         left:88px;
         right:12px;
-        bottom:12px;
-        z-index:80;
     }
     .toast{ left:88px; right:12px; bottom:78px; }
 }
 @media (max-width: 960px) and (min-width: 901px){
-    #products .cart-mobile-bar:not([hidden]),
+    #cartMobileBar:not([hidden]),
     .toast{ left:262px; }
 }
 @media (max-width: 900px){
@@ -1113,6 +1112,6 @@ body.customer-guest #customerNotificationBell{ display:none !important; }
     }
 }
 @media (max-width: 900px){
-    #products .cart-mobile-bar:not([hidden]),
+    #cartMobileBar:not([hidden]),
     .toast{ left:12px; right:12px; }
 }

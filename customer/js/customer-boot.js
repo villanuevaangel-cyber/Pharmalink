@@ -44,7 +44,7 @@
         }
 
         const script = document.createElement('script');
-        script.src = '/customer/js/customer.js?v=txn-short1';
+        script.src = '/customer/js/customer.js?v=rx-cart-shortcut1';
         document.body.appendChild(script);
     });
 
